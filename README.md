@@ -1,0 +1,50 @@
+# NTS Radio
+
+A native macOS menu-bar app for [NTS Radio](https://www.nts.live) — the two live
+channels and the Infinite Mixtapes, in a SwiftUI dial that lives in your menu bar.
+
+## Features
+
+- **Live channels** — NTS 1 and 2, with now-playing info.
+- **Infinite Mixtapes** — all of NTS's 24/7 genre streams, picked from a radial
+  cover-art dial.
+- Play / pause, mute, and volume from a compact now-playing bar.
+- Tracklist view for the current source.
+- Native menu-bar agent — no Dock icon, no window clutter.
+
+## Requirements
+
+- macOS 14 (Sonoma) or later
+- Xcode 16+ / Swift 6 (to build)
+
+## Build & run
+
+The app lives in `mac/` (a Swift package). From the repo root:
+
+```
+make dev       # run from source (fast iteration)
+make build     # compile the release binary
+make app       # assemble "NTS Radio.app"
+make install   # build and install to /Applications
+make deploy    # build a distributable .dmg
+```
+
+Each target delegates to `mac/`; you can also run `make <target>` from inside
+`mac/` directly.
+
+To quit the app, open its Settings (the gear) and choose **Quit NTS Radio** — a
+menu-bar-only app has no app menu.
+
+## Project layout
+
+```
+mac/         # the SwiftUI menu-bar app (Swift package)
+  Sources/NTSRadio/
+    Model/   # catalog, AVPlayer engine, NTS API, app state
+    Views/   # menu-bar icon, dial, channel rail, now-playing bar, settings
+mixtapes/    # cached mixtape catalog (manifest + cover art), bundled into the .app
+```
+
+## License
+
+MIT — see [LICENSE](LICENSE).

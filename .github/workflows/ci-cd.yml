@@ -1,0 +1,56 @@
+name: CI/CD
+on:
+  pull_request: {}
+  push:
+    branches:
+      - main
+    tags:
+      - v*.*.*
+
+jobs:
+  build:
+    name: Build native app
+    runs-on: macos-14
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Set version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" mac/Info.plist
+
+      - name: Build .dmg
+        run: make -C mac dmg
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nts-radio-dmg
+          path: mac/build/NTS Radio.dmg
+
+  release:
+    name: Release
+    needs: [build]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: nts-radio-dmg
+          path: dist
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/NTS Radio.dmg
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.github_token }}

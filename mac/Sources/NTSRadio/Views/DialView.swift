@@ -1,0 +1,152 @@
+import SwiftUI
+
+/// The radial mixtape dial. Fixed 620×580 design canvas (= popover width − rail),
+/// center (310,290) — matching the prototype's geometry constants, generalised
+/// from 10 to N mixtapes (pitch = 360/N).
+///
+/// Wedges are drawn as non-interactive visuals; a single hit layer over the
+/// dial maps cursor position → angle → wedge index. (Stacking N full-size
+/// interactive wedges doesn't work: SwiftUI hit-testing doesn't fall through
+/// from the topmost sibling to the ones beneath, so only the last-drawn wedge
+/// would respond.)
+struct DialView: View {
+    @EnvironmentObject var model: AppModel
+
+    private let cx: CGFloat = 310
+    private let cy: CGFloat = 290
+    private let iconRing: CGFloat = 206
+    private let iconSize: CGFloat = 56
+    private let hubRadius: CGFloat = 113   // dead zone: the hub assembly
+
+    private var tapes: [Mixtape] { model.catalog.mixtapes }
+    private var pitch: Double { tapes.isEmpty ? 36 : 360.0 / Double(tapes.count) }
+    private var half: Double { pitch / 2 }
+
+    private func centerAngle(_ i: Int) -> Double { -90 + Double(i) * pitch }
+
+    var body: some View {
+        ZStack {
+            Theme.stageInner
+
+            // Cover-art wedges (visual only)
+            ForEach(Array(tapes.enumerated()), id: \.element.id) { i, tape in
+                let lit = isLit(i)
+                LocalImage(url: tape.coverURL)
+                    .scaledToFill()
+                    .frame(width: 620, height: 580)
+                    .clipShape(sector(i))
+                    .saturation(lit ? 1 : 0.35)
+                    .brightness(lit ? 0 : -0.22)
+                    .allowsHitTesting(false)
+            }
+
+            // Single hit layer (under the hub, over the wedges)
+            Color.clear
+                .contentShape(Rectangle())
+                .onContinuousHover { phase in
+                    switch phase {
+                    case .active(let loc): model.hoverIndex = wedgeIndex(at: loc)
+                    case .ended: model.hoverIndex = nil
+                    }
+                }
+                .gesture(SpatialTapGesture().onEnded { ev in
+                    if let i = wedgeIndex(at: ev.location) { model.select(.mixtape(i)) }
+                })
+
+            // Monochrome symbol ring (visual only)
+            ForEach(Array(tapes.enumerated()), id: \.element.id) { i, tape in
+                let lit = isLit(i)
+                let a = centerAngle(i) * .pi / 180
+                LocalImage(url: tape.iconURL)
+                    .scaledToFill()
+                    .frame(width: iconSize, height: iconSize)
+                    .clipShape(Circle())
+                    .saturation(lit ? 1 : 0.5)
+                    .brightness(lit ? 0 : -0.1)
+                    .scaleEffect(lit ? 1.1 : 1)
+                    .position(x: cx + iconRing * cos(a), y: cy + iconRing * sin(a))
+                    .allowsHitTesting(false)
+            }
+
+            hub.position(x: cx, y: cy)
+        }
+        .frame(width: 620, height: 580)
+        .background(Theme.stage)
+        .clipped()
+    }
+
+    /// Map a point in dial space to a wedge index (nil inside the hub zone).
+    private func wedgeIndex(at p: CGPoint) -> Int? {
+        guard !tapes.isEmpty else { return nil }
+        let dx = p.x - cx, dy = p.y - cy
+        if hypot(dx, dy) < hubRadius { return nil }
+        var rel = (atan2(dy, dx) * 180 / .pi - (-90)).truncatingRemainder(dividingBy: 360)
+        if rel < 0 { rel += 360 }
+        return (Int((rel / pitch).rounded()) % tapes.count + tapes.count) % tapes.count
+    }
+
+    private func isLit(_ i: Int) -> Bool {
+        if model.hoverIndex == i { return true }
+        if case .mixtape(let s) = model.selection { return s == i && model.hoverIndex == nil }
+        return false
+    }
+
+    private func sector(_ i: Int) -> Sector {
+        Sector(centerX: cx, centerY: cy,
+               startDeg: centerAngle(i) - half,
+               endDeg: centerAngle(i) + half)
+    }
+
+    private var centerLabel: String {
+        if let h = model.hoverIndex, tapes.indices.contains(h) { return tapes[h].title.uppercased() }
+        return model.displayName
+    }
+
+    private var pointerRotation: Double {
+        if case .mixtape(let s) = model.selection { return Double(s) * pitch }
+        return 0
+    }
+
+    private var hub: some View {
+        ZStack {
+            // Selection pointer
+            ZStack(alignment: .top) {
+                Color.clear
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(model.accent)
+                    .frame(width: 3, height: 18)
+                    .padding(.top, 6)
+            }
+            .frame(width: 226, height: 226)
+            .rotationEffect(.degrees(pointerRotation))
+            .opacity(model.isLive ? 0 : 1)
+            .allowsHitTesting(false)
+            .animation(.spring(response: 0.45, dampingFraction: 0.6), value: pointerRotation)
+
+            // Inner ring
+            Circle()
+                .fill(Theme.stageInner)
+                .overlay(Circle().stroke(Theme.hairline(0.14), lineWidth: 1))
+                .frame(width: 190, height: 190)
+                .allowsHitTesting(false)
+
+            // Play / pause hub
+            Button { model.togglePlay() } label: {
+                VStack(spacing: 9) {
+                    Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 17))
+                        .foregroundStyle(Theme.popover.opacity(0.88))
+                    ChipText(text: centerLabel, font: Theme.display(16, .heavy), fg: Theme.hubInk)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 150)
+                }
+            }
+            .buttonStyle(.plain)
+            .frame(width: 166, height: 166)
+            .background(Circle().fill(Theme.hubInk))
+            .clipShape(Circle())
+            .shadow(color: .black.opacity(0.5), radius: 11, y: 6)
+        }
+        .frame(width: 226, height: 226)
+    }
+}

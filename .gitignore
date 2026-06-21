@@ -1,0 +1,9 @@
+.DS_Store
+mac/.build/
+mac/build/
+.playwright-mcp/
+tmp/
+
+# Mixtape loop animations — large, and not used by the app yet (the dial uses
+# cover art + icons). Kept on disk; fetch/track later if a feature needs them.
+mixtapes/*/animation_*.mp4
