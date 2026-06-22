@@ -7,9 +7,10 @@ struct Mixtape: Identifiable, Hashable {
     let title: String
     let subtitle: String
     let streamURL: URL
-    let coverURL: URL?   // local cached colour cover (dial wedge)
-    let iconURL: URL?    // local cached monochrome symbol (ring icon)
-    let hue: Double      // accent hue, matching the prototype where it had one
+    let coverURL: URL?      // remote still (picture_large) — wedge poster
+    let iconURL: URL?       // remote monochrome symbol (ring icon)
+    let animationURL: URL?  // remote looping mp4 — played in wedge when active
+    let hue: Double         // accent hue, matching the prototype where it had one
 
     var id: String { alias }
     var accent: Color { Color(h: hue, s: 68, l: 54) }
@@ -29,6 +30,7 @@ struct Channel: Identifiable, Hashable {
     var host: String = ""
     var genre: String = ""
     var startEnd: String = ""
+    var background: URL? = nil   // current program's full-bleed artwork
 
     var id: Int { number }
 
@@ -56,15 +58,17 @@ struct Channel: Identifiable, Hashable {
 
 @MainActor
 final class Catalog {
-    let mixtapes: [Mixtape]
+    /// Populated dynamically from the NTS catalog endpoint (seeded from the
+    /// on-disk cache for instant/offline first paint, then refreshed live).
+    var mixtapes: [Mixtape]
     var channels: [Channel]
 
     static let shared = Catalog()
 
-    /// Per-alias accent hues. First 10 match the prototype's `MIX` hues; the
-    /// remaining 6 are assigned across the wheel.
+    /// Per-alias accent hues, kept as overrides for the known mixtapes. Any
+    /// alias not listed here gets a fallback hue distributed around the wheel.
     private static let hues: [String: Double] = [
-        "poolside": 195, "slow-focus": 275, "low-key": 35, "memory-lane": 50,
+        "poolside": 195, "slow-focus": 275, "100-percent-hip-hop": 35, "memory-lane": 50,
         "4-to-the-floor": 330, "island-time": 140, "the-tube": 210, "sheet-music": 18,
         "feelings": 350, "expansions": 45,
         "rap-house": 285, "labyrinth": 255, "sweat": 15, "otaku": 320,
@@ -72,60 +76,30 @@ final class Catalog {
     ]
 
     init() {
-        self.mixtapes = Catalog.loadMixtapes()
+        self.mixtapes = []   // filled by AppModel: cache seed → live refresh
         self.channels = [
             Channel(number: 1, artHue: 235, accent: Theme.ch1, accentText: Theme.ch1Text, city: "LONDON"),
             Channel(number: 2, artHue: 22,  accent: Theme.ch2, accentText: Theme.ch2Text, city: "LOS ANGELES"),
         ]
     }
 
-    /// Where the mixtape catalog lives. In a packaged `.app` it's bundled into
-    /// Resources/mixtapes (portable); in dev (`swift run`) it resolves to the
-    /// repo's mixtapes/ dir relative to this source file.
-    static var mixtapesDir: URL {
-        let fm = FileManager.default
-        if let res = Bundle.main.resourceURL?.appendingPathComponent("mixtapes"),
-           fm.fileExists(atPath: res.appendingPathComponent("manifest.json").path) {
-            return res
-        }
-        return URL(fileURLWithPath: #filePath)      // .../mac/Sources/NTSRadio/Model/Catalog.swift
-            .deletingLastPathComponent()            // Model
-            .deletingLastPathComponent()            // NTSRadio
-            .deletingLastPathComponent()            // Sources
-            .deletingLastPathComponent()            // mac
-            .deletingLastPathComponent()            // repo root
-            .appendingPathComponent("mixtapes")
-    }
-
-    private struct ManifestEntry: Decodable {
-        let alias: String
-        let title: String
-        let subtitle: String
-        let stream: Stream
-        struct Stream: Decodable { let hls_aac: String; let hls_mp3: String }
-    }
-
-    private static func loadMixtapes() -> [Mixtape] {
-        let dir = mixtapesDir
-        let manifestURL = dir.appendingPathComponent("manifest.json")
-        guard let data = try? Data(contentsOf: manifestURL),
-              let entries = try? JSONDecoder().decode([ManifestEntry].self, from: data)
-        else { return [] }
-
-        return entries.compactMap { e in
-            guard let stream = URL(string: e.stream.hls_aac) else { return nil }
-            let mdir = dir.appendingPathComponent(e.alias)
-            let cover = mdir.appendingPathComponent("cover_large.jpeg")
-            let icon  = mdir.appendingPathComponent("icon_white.png")
-            let fm = FileManager.default
+    /// Map a fetched (or cached) feed into the in-memory catalog. Entries with
+    /// an unparseable stream URL are dropped; unknown aliases get a hue spread
+    /// evenly across the wheel by position.
+    static func build(from feed: [NTSAPI.MixtapeFeed]) -> [Mixtape] {
+        let n = feed.count
+        return feed.enumerated().compactMap { i, e in
+            guard let stream = URL(string: e.streamURL) else { return nil }
+            let fallbackHue = Double(i) * 360.0 / Double(n)   // n >= 1 inside this closure
             return Mixtape(
                 alias: e.alias,
                 title: e.title,
                 subtitle: e.subtitle,
                 streamURL: stream,
-                coverURL: fm.fileExists(atPath: cover.path) ? cover : nil,
-                iconURL:  fm.fileExists(atPath: icon.path)  ? icon  : nil,
-                hue: hues[e.alias] ?? 200
+                coverURL: e.pictureLarge.flatMap { URL(string: $0) },
+                iconURL: e.iconWhite.flatMap { URL(string: $0) },
+                animationURL: (e.animationLarge ?? e.animationThumb).flatMap { URL(string: $0) },
+                hue: hues[e.alias] ?? fallbackHue
             )
         }
     }

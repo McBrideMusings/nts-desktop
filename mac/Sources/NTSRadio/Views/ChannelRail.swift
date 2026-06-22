@@ -26,7 +26,7 @@ private struct ChannelCard: View {
 
     var body: some View {
         ZStack {
-            channel.art
+            cardArt
                 .saturation(active ? 1 : 0.08)
                 .brightness(active ? 0 : -0.28)
 
@@ -55,6 +55,28 @@ private struct ChannelCard: View {
         .background(Theme.stage)
         .clipped()
         .contentShape(Rectangle())
+    }
+
+    /// The current program's full-bleed artwork (downloaded live, disk-cached) —
+    /// shown only while this channel is active (playing/selected). Otherwise, and
+    /// until the image loads, falls back to the procedural gradient.
+    @ViewBuilder private var cardArt: some View {
+        if active, let bg = channel.background {
+            // Color.clear takes the card's slot size; the fill image rides in an
+            // overlay so scaledToFill can't inflate the card's layout past the
+            // rail, then we clip the overflow.
+            Color.clear
+                .overlay {
+                    AsyncImage(url: bg) { img in
+                        img.resizable().scaledToFill()
+                    } placeholder: {
+                        channel.art
+                    }
+                }
+                .clipped()
+        } else {
+            channel.art
+        }
     }
 
     private var liveChip: some View {

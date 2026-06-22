@@ -18,7 +18,7 @@ dev: ## Run the app from source (fast iteration)
 build: ## Compile the release binary
 	swift build -c $(CONFIG)
 
-app: build ## Assemble the .app bundle (mixtapes + fonts bundled, portable)
+app: build ## Assemble the .app bundle (fonts bundled, mixtapes fetched live)
 	rm -rf "$(APP_BUNDLE)"
 	mkdir -p "$(APP_BUNDLE)/Contents/MacOS" "$(APP_BUNDLE)/Contents/Resources"
 	cp Info.plist "$(APP_BUNDLE)/Contents/Info.plist"
@@ -26,8 +26,6 @@ app: build ## Assemble the .app bundle (mixtapes + fonts bundled, portable)
 	# SwiftPM resource bundle (Archivo font) — placed where Bundle.module looks
 	cp -R "$(BUILD_DIR)/$(RES_BUNDLE)" "$(APP_BUNDLE)/Contents/Resources/" 2>/dev/null || true
 	cp -R "$(BUILD_DIR)/$(RES_BUNDLE)" "$(APP_BUNDLE)/Contents/MacOS/" 2>/dev/null || true
-	# Bundle the mixtape catalog so the app is portable off this machine
-	cp -R ../mixtapes "$(APP_BUNDLE)/Contents/Resources/mixtapes"
 	# Icon (reuse the existing NTS icon)
 	cp "$(ICON_SRC)" "$(APP_BUNDLE)/Contents/Resources/AppIcon.icns" 2>/dev/null || true
 	# Ad-hoc sign so it launches cleanly locally

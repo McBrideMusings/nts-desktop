@@ -8,6 +8,7 @@ enum NTSAPI {
         let show: String
         let startEnd: String
         let genre: String
+        let background: String?   // current program's full-bleed artwork
     }
 
     private struct Response: Decodable {
@@ -23,8 +24,63 @@ enum NTSAPI {
             let embeds: Embeds?
         }
         struct Embeds: Decodable { let details: Details? }
-        struct Details: Decodable { let genres: [Genre]? }
+        struct Details: Decodable { let genres: [Genre]?; let media: Media? }
         struct Genre: Decodable { let value: String? }
+        struct Media: Decodable { let background_large: String? }
+    }
+
+    // MARK: - Infinite mixtapes
+
+    /// One mixtape as served by NTS's public catalog endpoint. Codable so the
+    /// fetched feed can be cached to disk for instant/offline first paint.
+    struct MixtapeFeed: Codable {
+        let alias: String
+        let title: String
+        let subtitle: String
+        let streamURL: String
+        let pictureLarge: String?
+        let iconWhite: String?
+        let animationLarge: String?
+        let animationThumb: String?
+    }
+
+    private struct MixtapeResponse: Decodable {
+        let results: [Entry]
+        struct Entry: Decodable {
+            let mixtape_alias: String
+            let title: String?
+            let subtitle: String?
+            let audio_stream_endpoint_hls_aac: String?
+            let media: Media?
+        }
+        struct Media: Decodable {
+            let picture_large: String?
+            let icon_white: String?
+            let animation_large_landscape: String?
+            let animation_thumb: String?
+        }
+    }
+
+    /// Fetch the live infinite-mixtapes catalog. Entries without a usable stream
+    /// URL are dropped; everything else is best-effort optional.
+    static func mixtapes() async throws -> [MixtapeFeed] {
+        let url = URL(string: "https://www.nts.live/api/v2/mixtapes")!
+        let (data, _) = try await URLSession.shared.data(from: url)
+        let decoded = try JSONDecoder().decode(MixtapeResponse.self, from: data)
+
+        return decoded.results.compactMap { e -> MixtapeFeed? in
+            guard let stream = e.audio_stream_endpoint_hls_aac else { return nil }
+            return MixtapeFeed(
+                alias: e.mixtape_alias,
+                title: e.title ?? e.mixtape_alias,
+                subtitle: e.subtitle ?? "",
+                streamURL: stream,
+                pictureLarge: e.media?.picture_large,
+                iconWhite: e.media?.icon_white,
+                animationLarge: e.media?.animation_large_landscape,
+                animationThumb: e.media?.animation_thumb
+            )
+        }
     }
 
     static func live() async throws -> [LiveUpdate] {
@@ -37,7 +93,8 @@ enum NTSAPI {
             let show = now.broadcast_title ?? ""
             let genre = now.embeds?.details?.genres?.first?.value ?? ""
             let startEnd = timeRange(now.start_timestamp, now.end_timestamp)
-            return LiveUpdate(channel: ch, show: show, startEnd: startEnd, genre: genre)
+            let background = now.embeds?.details?.media?.background_large
+            return LiveUpdate(channel: ch, show: show, startEnd: startEnd, genre: genre, background: background)
         }
     }
 

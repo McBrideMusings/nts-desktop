@@ -42,8 +42,11 @@ mac/         # the SwiftUI menu-bar app (Swift package)
   Sources/NTSRadio/
     Model/   # catalog, AVPlayer engine, NTS API, app state
     Views/   # menu-bar icon, dial, channel rail, now-playing bar, settings
-mixtapes/    # cached mixtape catalog (manifest + cover art), bundled into the .app
 ```
+
+The infinite-mixtapes dial is built at runtime from NTS's public catalog
+(`https://www.nts.live/api/v2/mixtapes`) — names, art, icons, and looping
+animations are fetched live and disk-cached for offline/instant launch.
 
 ## License
 
