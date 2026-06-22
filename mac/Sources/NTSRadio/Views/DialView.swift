@@ -62,7 +62,7 @@ struct DialView: View {
                     }
                 }
                 .gesture(SpatialTapGesture().onEnded { ev in
-                    if let i = wedgeIndex(at: ev.location) { model.select(.mixtape(i)) }
+                    if let i = wedgeIndex(at: ev.location) { model.select(.mixtape(tapes[i].alias)) }
                 })
 
             // Monochrome symbol ring (always visible — how you see/aim at each
@@ -103,14 +103,14 @@ struct DialView: View {
 
     private func isLit(_ i: Int) -> Bool {
         if model.hoverIndex == i { return true }
-        if case .mixtape(let s) = model.selection { return s == i && model.hoverIndex == nil }
+        if model.hoverIndex == nil, tapes.indices.contains(i) { return model.currentMixtape?.alias == tapes[i].alias }
         return false
     }
 
     /// The mixtape currently playing (full-bleed video backdrop), if any.
     private var playingMixtape: Mixtape? {
-        guard model.isPlaying, case .mixtape(let i) = model.selection, tapes.indices.contains(i) else { return nil }
-        return tapes[i]
+        guard model.isPlaying, case .mixtape = model.selection else { return nil }
+        return model.currentMixtape
     }
 
     /// The dial stage shows a full-bleed video only while a mixtape plays; for a
@@ -154,7 +154,10 @@ struct DialView: View {
     }
 
     private var pointerRotation: Double {
-        if case .mixtape(let s) = model.selection { return Double(s) * pitch }
+        if let alias = model.currentMixtape?.alias,
+           let idx = tapes.firstIndex(where: { $0.alias == alias }) {
+            return Double(idx) * pitch
+        }
         return 0
     }
 

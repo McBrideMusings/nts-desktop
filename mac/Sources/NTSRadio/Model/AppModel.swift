@@ -2,8 +2,12 @@ import SwiftUI
 import Combine
 
 enum Selection: Equatable {
-    case mixtape(Int)
+    case mixtape(String)   // mixtape alias — stable across catalog rebuilds
     case channel(Int)
+
+    /// Sentinel meaning "the first mixtape", used before the catalog has loaded
+    /// (its alias isn't known yet at init).
+    static let firstMixtape = Selection.mixtape("")
 }
 
 @MainActor
@@ -11,7 +15,7 @@ final class AppModel: ObservableObject {
     let catalog = Catalog.shared
     let engine = PlayerEngine()
 
-    @Published var selection: Selection = .mixtape(0)
+    @Published var selection: Selection = .firstMixtape
     @Published var muted = false { didSet { engine.apply(volume: volume, muted: muted) } }
     @Published var volume: Double = 72 { didSet { engine.apply(volume: volume, muted: muted) } }
     @Published var showTracks = false
@@ -35,7 +39,7 @@ final class AppModel: ObservableObject {
             .sink { [weak self] in self?.objectWillChange.send() }
             .store(in: &bag)
         engine.apply(volume: volume, muted: muted)
-        catalog.mixtapes = Self.loadCachedMixtapes()   // instant/offline seed
+        catalog.mixtapes = Catalog.build(from: Cache.loadFeed())   // instant/offline seed
         loadCurrent(autoplay: false)
         Task { await refreshMixtapes() }
         Task { await pollLive() }
@@ -47,10 +51,11 @@ final class AppModel: ObservableObject {
     var isLive: Bool { if case .channel = selection { return true }; return false }
 
     var currentMixtape: Mixtape? {
-        if case .mixtape(let i) = selection, catalog.mixtapes.indices.contains(i) {
-            return catalog.mixtapes[i]
-        }
-        return nil
+        guard case .mixtape(let alias) = selection else { return nil }
+        // Empty alias is the "first mixtape" sentinel used before a real one is
+        // picked; otherwise resolve by alias (nil if it's gone from the catalog).
+        if alias.isEmpty { return catalog.mixtapes.first }
+        return catalog.mixtapes.first { $0.alias == alias }
     }
     var currentChannel: Channel? {
         if case .channel(let n) = selection { return catalog.channels.first { $0.number == n } }
@@ -127,30 +132,8 @@ final class AppModel: ObservableObject {
     func refreshMixtapes() async {
         guard let feed = try? await NTSAPI.mixtapes(), !feed.isEmpty else { return }
         catalog.mixtapes = Catalog.build(from: feed)
-        Self.saveCachedMixtapes(feed)
+        Cache.saveFeed(feed)
         if currentMixtape == nil, case .mixtape = selection { loadCurrent(autoplay: false) }
         objectWillChange.send()
-    }
-
-    // MARK: Mixtape feed cache (Application Support)
-
-    private static var cacheURL: URL {
-        let dir = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("NTSRadio", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("mixtapes.json")
-    }
-
-    private static func loadCachedMixtapes() -> [Mixtape] {
-        guard let data = try? Data(contentsOf: cacheURL),
-              let feed = try? JSONDecoder().decode([NTSAPI.MixtapeFeed].self, from: data)
-        else { return [] }
-        return Catalog.build(from: feed)
-    }
-
-    private static func saveCachedMixtapes(_ feed: [NTSAPI.MixtapeFeed]) {
-        guard let data = try? JSONEncoder().encode(feed) else { return }
-        try? data.write(to: cacheURL)
     }
 }
