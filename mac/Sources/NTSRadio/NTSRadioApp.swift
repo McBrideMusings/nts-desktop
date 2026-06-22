@@ -19,6 +19,9 @@ struct NTSRadioApp: App {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Disk-backed cache so CDN cover art / icons persist across launches and
+        // are available offline (URLSession.shared + AsyncImage use this).
+        URLCache.shared = URLCache(memoryCapacity: 64 << 20, diskCapacity: 512 << 20)
         Theme.registerFonts()
         if let dir = ProcessInfo.processInfo.environment["NTS_SNAPSHOT"] {
             NSApp.setActivationPolicy(.prohibited)

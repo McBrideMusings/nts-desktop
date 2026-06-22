@@ -26,18 +26,30 @@ struct DialView: View {
 
     var body: some View {
         ZStack {
-            Theme.stageInner
+            // Full-bleed now-playing backdrop: the mixtape's looping video, or
+            // the live channel's current-program artwork. Falls back to the bare
+            // stage when nothing is playing.
+            stageBackground
 
-            // Cover-art wedges (visual only)
+            // Cover-art wedges — a hovered slice previews its still poster with
+            // the looping animation layered on top (clipped to the sector). The
+            // actively-playing source fills the whole stage via stageBackground.
             ForEach(Array(tapes.enumerated()), id: \.element.id) { i, tape in
-                let lit = isLit(i)
-                LocalImage(url: tape.coverURL)
-                    .scaledToFill()
+                if model.hoverIndex == i {
+                    ZStack {
+                        AsyncImage(url: tape.coverURL) { img in
+                            img.resizable().scaledToFill()
+                        } placeholder: {
+                            Color.clear
+                        }
+                        if let anim = tape.animationURL {
+                            WedgeAnimation(url: anim)
+                        }
+                    }
                     .frame(width: 620, height: 580)
                     .clipShape(sector(i))
-                    .saturation(lit ? 1 : 0.35)
-                    .brightness(lit ? 0 : -0.22)
                     .allowsHitTesting(false)
+                }
             }
 
             // Single hit layer (under the hub, over the wedges)
@@ -53,19 +65,23 @@ struct DialView: View {
                     if let i = wedgeIndex(at: ev.location) { model.select(.mixtape(i)) }
                 })
 
-            // Monochrome symbol ring (visual only)
+            // Monochrome symbol ring (always visible — how you see/aim at each
+            // mixtape now that wedges are blank by default).
             ForEach(Array(tapes.enumerated()), id: \.element.id) { i, tape in
                 let lit = isLit(i)
                 let a = centerAngle(i) * .pi / 180
-                LocalImage(url: tape.iconURL)
-                    .scaledToFill()
-                    .frame(width: iconSize, height: iconSize)
-                    .clipShape(Circle())
-                    .saturation(lit ? 1 : 0.5)
-                    .brightness(lit ? 0 : -0.1)
-                    .scaleEffect(lit ? 1.1 : 1)
-                    .position(x: cx + iconRing * cos(a), y: cy + iconRing * sin(a))
-                    .allowsHitTesting(false)
+                AsyncImage(url: tape.iconURL) { img in
+                    img.resizable().scaledToFill()
+                } placeholder: {
+                    Color.clear
+                }
+                .frame(width: iconSize, height: iconSize)
+                .clipShape(Circle())
+                .saturation(lit ? 1 : 0.5)
+                .brightness(lit ? 0 : -0.1)
+                .scaleEffect(lit ? 1.1 : 1)
+                .position(x: cx + iconRing * cos(a), y: cy + iconRing * sin(a))
+                .allowsHitTesting(false)
             }
 
             hub.position(x: cx, y: cy)
@@ -91,15 +107,50 @@ struct DialView: View {
         return false
     }
 
+    /// The mixtape currently playing (full-bleed video backdrop), if any.
+    private var playingMixtape: Mixtape? {
+        guard model.isPlaying, case .mixtape(let i) = model.selection, tapes.indices.contains(i) else { return nil }
+        return tapes[i]
+    }
+
+    /// The dial stage shows a full-bleed video only while a mixtape plays; for a
+    /// live channel it stays the default stage (the program art fills the
+    /// channel's card in the rail instead).
+    @ViewBuilder private var stageBackground: some View {
+        if let m = playingMixtape {
+            ZStack {
+                AsyncImage(url: m.coverURL) { $0.resizable().scaledToFill() } placeholder: { Theme.stageInner }
+                if let anim = m.animationURL { WedgeAnimation(url: anim) }
+                scrim
+            }
+            .frame(width: 620, height: 580)
+            .clipped()
+            .allowsHitTesting(false)
+        } else {
+            Theme.stageInner
+        }
+    }
+
+    /// Dim layer over the backdrop so the icon ring and hub stay legible.
+    private var scrim: some View {
+        LinearGradient(
+            colors: [.black.opacity(0.30), .black.opacity(0.50)],
+            startPoint: .top, endPoint: .bottom)
+    }
+
     private func sector(_ i: Int) -> Sector {
         Sector(centerX: cx, centerY: cy,
                startDeg: centerAngle(i) - half,
                endDeg: centerAngle(i) + half)
     }
 
+    /// Hub label — only shown for a mixtape (a hovered wedge or a selected
+    /// mixtape). Empty when a channel is the source, so the hub stays a bare
+    /// play/pause control.
     private var centerLabel: String {
         if let h = model.hoverIndex, tapes.indices.contains(h) { return tapes[h].title.uppercased() }
-        return model.displayName
+        if case .mixtape = model.selection { return model.displayName }
+        return ""
     }
 
     private var pointerRotation: Double {
@@ -136,9 +187,11 @@ struct DialView: View {
                     Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
                         .font(.system(size: 17))
                         .foregroundStyle(Theme.popover.opacity(0.88))
-                    ChipText(text: centerLabel, font: Theme.display(16, .heavy), fg: Theme.hubInk)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 150)
+                    if !centerLabel.isEmpty {
+                        ChipText(text: centerLabel, font: Theme.display(16, .heavy), fg: Theme.hubInk)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: 150)
+                    }
                 }
             }
             .buttonStyle(.plain)

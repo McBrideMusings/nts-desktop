@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import AVFoundation
 
 // MARK: - Track row model
 
@@ -35,17 +36,71 @@ struct Sector: Shape {
     }
 }
 
-// MARK: - Local cached image
+// MARK: - Looping muted video (dial wedge animation)
 
-/// Loads a cached NSImage from disk; shows a neutral fill while missing.
-struct LocalImage: View {
-    let url: URL?
-    var body: some View {
-        if let url, let img = NSImage(contentsOf: url) {
-            Image(nsImage: img).resizable()
-        } else {
-            Rectangle().fill(Color(hex: 0x1a1a1d))
-        }
+/// Plays a remote looping, muted mp4 — used to animate a dial wedge while it's
+/// hovered or actively playing. Instantiated only for the active wedge(s); the
+/// player is torn down on disappear so at most a couple ever exist at once.
+struct WedgeAnimation: NSViewRepresentable {
+    let url: URL
+
+    func makeNSView(context: Context) -> LoopingPlayerView {
+        let v = LoopingPlayerView()
+        v.configure(url: url)
+        return v
+    }
+
+    func updateNSView(_ nsView: LoopingPlayerView, context: Context) {
+        nsView.configure(url: url)
+    }
+
+    static func dismantleNSView(_ nsView: LoopingPlayerView, coordinator: ()) {
+        nsView.teardown()
+    }
+}
+
+/// Layer-hosting NSView backing `WedgeAnimation`. Uses AVPlayerLooper for a
+/// seamless gapless loop.
+final class LoopingPlayerView: NSView {
+    private let playerLayer = AVPlayerLayer()
+    private var queuePlayer: AVQueuePlayer?
+    private var looper: AVPlayerLooper?
+    private var currentURL: URL?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        let base = CALayer()
+        layer = base
+        wantsLayer = true
+        playerLayer.videoGravity = .resizeAspectFill
+        base.addSublayer(playerLayer)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) unused") }
+
+    override func layout() {
+        super.layout()
+        playerLayer.frame = bounds
+    }
+
+    func configure(url: URL) {
+        guard url != currentURL else { return }
+        teardown()
+        currentURL = url
+        let q = AVQueuePlayer()
+        q.isMuted = true
+        looper = AVPlayerLooper(player: q, templateItem: AVPlayerItem(url: url))
+        playerLayer.player = q
+        queuePlayer = q
+        q.play()
+    }
+
+    func teardown() {
+        queuePlayer?.pause()
+        playerLayer.player = nil
+        looper = nil
+        queuePlayer = nil
+        currentURL = nil
     }
 }
 

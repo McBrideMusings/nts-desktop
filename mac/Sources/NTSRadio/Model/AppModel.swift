@@ -35,8 +35,10 @@ final class AppModel: ObservableObject {
             .sink { [weak self] in self?.objectWillChange.send() }
             .store(in: &bag)
         engine.apply(volume: volume, muted: muted)
+        catalog.mixtapes = Self.loadCachedMixtapes()   // instant/offline seed
         loadCurrent(autoplay: false)
-        Task { await refreshLive() }
+        Task { await refreshMixtapes() }
+        Task { await pollLive() }
     }
 
     // MARK: Derived view-model
@@ -103,8 +105,52 @@ final class AppModel: ObservableObject {
                 catalog.channels[idx].show = upd.show
                 catalog.channels[idx].startEnd = upd.startEnd
                 catalog.channels[idx].genre = upd.genre
+                catalog.channels[idx].background = upd.background.flatMap { URL(string: $0) }
             }
         }
         objectWillChange.send()
+    }
+
+    /// Refresh now-playing immediately, then every 60s so the channel backdrop
+    /// and show info track program changes while the app stays open.
+    private func pollLive() async {
+        await refreshLive()
+        while !Task.isCancelled {
+            try? await Task.sleep(nanoseconds: 60 * 1_000_000_000)
+            await refreshLive()
+        }
+    }
+
+    /// Pull the live infinite-mixtapes catalog and rebuild the dial. Best-effort:
+    /// on failure (offline, etc.) the cached seed stays in place. On success the
+    /// feed is cached to disk for the next launch.
+    func refreshMixtapes() async {
+        guard let feed = try? await NTSAPI.mixtapes(), !feed.isEmpty else { return }
+        catalog.mixtapes = Catalog.build(from: feed)
+        Self.saveCachedMixtapes(feed)
+        if currentMixtape == nil, case .mixtape = selection { loadCurrent(autoplay: false) }
+        objectWillChange.send()
+    }
+
+    // MARK: Mixtape feed cache (Application Support)
+
+    private static var cacheURL: URL {
+        let dir = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("NTSRadio", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("mixtapes.json")
+    }
+
+    private static func loadCachedMixtapes() -> [Mixtape] {
+        guard let data = try? Data(contentsOf: cacheURL),
+              let feed = try? JSONDecoder().decode([NTSAPI.MixtapeFeed].self, from: data)
+        else { return [] }
+        return Catalog.build(from: feed)
+    }
+
+    private static func saveCachedMixtapes(_ feed: [NTSAPI.MixtapeFeed]) {
+        guard let data = try? JSONEncoder().encode(feed) else { return }
+        try? data.write(to: cacheURL)
     }
 }
