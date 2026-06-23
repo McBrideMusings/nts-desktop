@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import NTSFirestore
 
 enum Selection: Equatable {
     case mixtape(String)   // mixtape alias — stable across catalog rebuilds
@@ -14,6 +15,7 @@ enum Selection: Equatable {
 final class AppModel: ObservableObject {
     let catalog = Catalog.shared
     let engine = PlayerEngine()
+    let auth = NTSAuth()
 
     @Published var selection: Selection = .firstMixtape
     @Published var muted = false { didSet { engine.apply(volume: volume, muted: muted) } }
@@ -22,15 +24,21 @@ final class AppModel: ObservableObject {
     @Published var hoverIndex: Int? = nil
     @Published var settingsOpen = false
 
-    /// Tracklist for the current source. Empty until wired to a real source
-    /// (live-channel tracklist + mixtape recently-played are deferred —
-    /// tracked in tmp/claude/followups.md).
+    /// Tracklist for the current source — populated by the Firestore listener for
+    /// mixtapes (live-channel tracklists are not wired yet; see GitHub issue #3).
     @Published var tracks: [Track] = []
 
-    // Settings placeholders — Account + Updates are intentionally non-functional
-    // for v1 (tracked in tmp/claude/followups.md). These only drive local UI.
+    // Settings placeholder — Check for Updates is intentionally non-functional for
+    // v1 (see GitHub issue #2). Start-on-Login only drives local UI.
     @Published var startOnLogin = false
     @Published var aboutOpen = false
+
+    /// Live tracklist listener for the current mixtape (nil for channels or when
+    /// signed out). Recreated whenever the source or auth state changes.
+    private var listener: FirestoreListener?
+    /// The mixtape alias the `listener` is currently streaming, so we can tell a
+    /// real source change from a no-op refresh and avoid churning the stream.
+    private var activeStreamID: String?
 
     private var bag = Set<AnyCancellable>()
 
@@ -41,6 +49,13 @@ final class AppModel: ObservableObject {
         engine.apply(volume: volume, muted: muted)
         catalog.mixtapes = Catalog.build(from: Cache.loadFeed())   // instant/offline seed
         loadCurrent(autoplay: false)
+        // Re-open the tracklist stream whenever sign-in state flips.
+        auth.$isAuthenticated
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.updateTracklist() }
+            .store(in: &bag)
+        updateTracklist()
         Task { await refreshMixtapes() }
         Task { await pollLive() }
     }
@@ -67,7 +82,7 @@ final class AppModel: ObservableObject {
     }
 
     var subtitle: String {
-        if let m = currentMixtape { _ = m; return "24/7 STREAM · NON-STOP" }
+        if currentMixtape != nil { return "24/7 STREAM · NON-STOP" }
         if let c = currentChannel {
             var parts: [String] = []
             if !c.startEnd.isEmpty { parts.append(c.startEnd) }
@@ -89,7 +104,49 @@ final class AppModel: ObservableObject {
     func select(_ s: Selection) {
         selection = s
         loadCurrent(autoplay: engine.isPlaying)
+        updateTracklist()
     }
+
+    /// Open (or tear down) the live tracklist stream for the current source.
+    /// Mixtape + signed in → Firestore `live_tracks` listener. Channels and the
+    /// signed-out state clear the list (live-channel tracklists via the public
+    /// REST endpoint are a separate follow-up).
+    func updateTracklist() {
+        // The stream we *should* be running: the current mixtape's alias when
+        // signed in, otherwise nothing.
+        let wantedAlias: String? = {
+            guard auth.isAuthenticated, case .mixtape = selection else { return nil }
+            return currentMixtape?.alias
+        }()
+        // Already streaming the right source — don't churn the connection (this
+        // also makes a catalog rebuild a no-op unless the first mixtape changed).
+        if listener != nil, wantedAlias == activeStreamID { return }
+        listener?.stop()
+        listener = nil
+        tracks = []
+        activeStreamID = wantedAlias
+        guard let alias = wantedAlias, let mix = currentMixtape else { return }
+        let hue = mix.hue
+        let listener = FirestoreListener(
+            streamID: alias,
+            tokenProvider: { [auth] in try await auth.validToken() },
+            onUpdate: { [weak self] live in
+                self?.tracks = live.compactMap { t in
+                    t.title.isEmpty ? nil
+                        : Track(time: Self.hhmm.string(from: t.startTime),
+                                title: t.title,
+                                artist: t.artists.joined(separator: ", "),
+                                hue: hue)
+                }
+            }
+        )
+        self.listener = listener
+        listener.start()
+    }
+
+    private static let hhmm: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "HH:mm"; return f
+    }()
 
     func loadCurrent(autoplay: Bool) {
         let url = currentMixtape?.streamURL ?? currentChannel?.streamURL
@@ -134,6 +191,10 @@ final class AppModel: ObservableObject {
         catalog.mixtapes = Catalog.build(from: feed)
         Cache.saveFeed(feed)
         if currentMixtape == nil, case .mixtape = selection { loadCurrent(autoplay: false) }
+        // The first mixtape's alias is only known once the catalog loads (cold
+        // start), and the live feed can reorder it; updateTracklist() is a no-op
+        // unless the target stream actually changed.
+        updateTracklist()
         objectWillChange.send()
     }
 }
