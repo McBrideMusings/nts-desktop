@@ -1,11 +1,15 @@
 import SwiftUI
 import AppKit
 
-/// macOS-style settings sheet. Account + Check-for-Updates are intentionally
-/// non-functional for v1 (tracked in tmp/claude/followups.md); Start-on-Login
-/// flips locally (real SMAppService wiring lands with .app packaging).
+/// macOS-style settings sheet. Account sign-in is live (NTS Supporters, via
+/// `NTSAuth`); Check-for-Updates is intentionally non-functional for v1 (see
+/// GitHub issue #2); Start-on-Login flips locally (real SMAppService wiring
+/// lands with .app packaging).
 struct SettingsView: View {
     @EnvironmentObject var model: AppModel
+    @EnvironmentObject var auth: NTSAuth
+    @State private var email = ""
+    @State private var password = ""
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -38,25 +42,22 @@ struct SettingsView: View {
             .overlay(alignment: .bottom) { Rectangle().fill(.black.opacity(0.1)).frame(height: 0.5) }
 
             VStack(alignment: .leading, spacing: 0) {
-                Text("ACCOUNT")
-                    .font(Theme.mono(9.5, .regular)).tracking(1.5)
-                    .foregroundStyle(Theme.sheetInk2)
-                    .padding(.bottom, 9)
-
-                field("Email")
-                Spacer().frame(height: 9)
-                field("Password")
-                Spacer().frame(height: 13)
-
-                Button { /* non-functional v1 */ } label: {
-                    Text("Log In")
-                        .font(Theme.ui(14, .semibold))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 9)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.blue))
+                HStack(spacing: 6) {
+                    Text("ACCOUNT")
+                        .font(Theme.mono(9.5, .regular)).tracking(1.5)
+                        .foregroundStyle(Theme.sheetInk2)
+                    Spacer()
+                    Text("NTS SUPPORTERS")
+                        .font(Theme.mono(9.5, .regular)).tracking(1.5)
+                        .foregroundStyle(Theme.sheetInk3)
                 }
-                .buttonStyle(.plain)
+                .padding(.bottom, 9)
+
+                if auth.isAuthenticated {
+                    signedIn
+                } else {
+                    signInForm
+                }
 
                 divider
 
@@ -123,15 +124,72 @@ struct SettingsView: View {
         Rectangle().fill(.black.opacity(0.1)).frame(height: 1).padding(.vertical, 18)
     }
 
-    // Display-only field (Account login is non-functional in v1 — followups.md).
-    private func field(_ placeholder: String) -> some View {
-        Text(placeholder)
-            .font(Theme.ui(13.5))
-            .foregroundStyle(Theme.sheetInk2)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(EdgeInsets(top: 8, leading: 11, bottom: 8, trailing: 11))
-            .background(RoundedRectangle(cornerRadius: 7).fill(.white)
-                .overlay(RoundedRectangle(cornerRadius: 7).stroke(.black.opacity(0.16), lineWidth: 1)))
+    // MARK: Account states
+
+    private var signInForm: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            TextField("Email", text: $email)
+                .textFieldStyle(.plain)
+                .textContentType(.username)
+                .disableAutocorrection(true)
+                .font(Theme.ui(13.5)).foregroundStyle(Theme.sheetInk)
+                .padding(EdgeInsets(top: 8, leading: 11, bottom: 8, trailing: 11))
+                .background(inputChrome)
+
+            SecureField("Password", text: $password)
+                .textFieldStyle(.plain)
+                .textContentType(.password)
+                .font(Theme.ui(13.5)).foregroundStyle(Theme.sheetInk)
+                .padding(EdgeInsets(top: 8, leading: 11, bottom: 8, trailing: 11))
+                .background(inputChrome)
+                .onSubmit(submit)
+
+            if let err = auth.errorMessage {
+                Text(err).font(Theme.ui(11.5)).foregroundStyle(Theme.red)
+            }
+
+            Button(action: submit) {
+                HStack(spacing: 7) {
+                    if auth.isWorking { ProgressView().controlSize(.small) }
+                    Text(auth.isWorking ? "Logging In…" : "Log In")
+                        .font(Theme.ui(14, .semibold)).foregroundStyle(.white)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 9)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Theme.blue))
+            }
+            .buttonStyle(.plain)
+            .disabled(auth.isWorking)
+        }
+    }
+
+    private var signedIn: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            HStack(spacing: 8) {
+                Circle().fill(Theme.green).frame(width: 8, height: 8)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Signed in").font(Theme.ui(13, .semibold)).foregroundStyle(Theme.sheetInk)
+                    if let em = auth.email {
+                        Text(em).font(Theme.ui(11.5)).foregroundStyle(Theme.sheetInk2)
+                    }
+                }
+                Spacer()
+            }
+            ghost("Log Out") { auth.signOut() }
+        }
+    }
+
+    private var inputChrome: some View {
+        RoundedRectangle(cornerRadius: 7).fill(.white)
+            .overlay(RoundedRectangle(cornerRadius: 7).stroke(.black.opacity(0.16), lineWidth: 1))
+    }
+
+    private func submit() {
+        let e = email, p = password
+        Task {
+            await auth.signIn(email: e, password: p)
+            if auth.isAuthenticated { password = "" }
+        }
     }
 
     private func ghost(_ title: String, action: @escaping () -> Void) -> some View {

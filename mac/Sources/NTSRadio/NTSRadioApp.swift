@@ -10,6 +10,7 @@ struct NTSRadioApp: App {
         MenuBarExtra {
             PopoverView()
                 .environmentObject(model)
+                .environmentObject(model.auth)
         } label: {
             MenuBarIcon(playing: model.isPlaying && !model.muted)
         }
