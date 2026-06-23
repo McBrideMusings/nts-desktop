@@ -15,6 +15,7 @@ enum Snapshot {
             configure(model)
             let view = PopoverView()
                 .environmentObject(model)
+                .environmentObject(model.auth)
                 .frame(width: 800, height: 640)
             let renderer = ImageRenderer(content: view)
             renderer.scale = 2

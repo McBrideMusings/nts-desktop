@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import Combine
 import NTSFirestore
 
@@ -32,6 +33,16 @@ final class AppModel: ObservableObject {
     // v1 (see GitHub issue #2). Start-on-Login only drives local UI.
     @Published var startOnLogin = false
     @Published var aboutOpen = false
+
+    /// Whether the app also shows a Dock icon (and app-switcher entry). Off by
+    /// default — the app lives primarily in the menu bar. Persisted; flips the
+    /// activation policy live when toggled.
+    @Published var showInDock: Bool = UserDefaults.standard.bool(forKey: "showInDock") {
+        didSet {
+            UserDefaults.standard.set(showInDock, forKey: "showInDock")
+            NSApp.setActivationPolicy(showInDock ? .regular : .accessory)
+        }
+    }
 
     /// Live tracklist listener for the current mixtape (nil for channels or when
     /// signed out). Recreated whenever the source or auth state changes.

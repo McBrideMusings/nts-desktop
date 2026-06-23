@@ -5,32 +5,22 @@ struct PopoverView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            TopBar()
+
             HStack(spacing: 0) {
                 ChannelRail()
                 DialView()
-                    .overlay(alignment: .topTrailing) { settingsGear }
                     .overlay { if model.showTracks { TracklistOverlay() } }
             }
-            .frame(height: 580)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             NowPlayingBar()
         }
-        .frame(width: 800)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.popover)
-        .clipShape(RoundedRectangle(cornerRadius: 15))
+        // Extend the content (the TopBar) up under the transparent title bar so
+        // its controls land on the traffic lights' row, Spotify-style.
+        .ignoresSafeArea(.container, edges: .top)
         .overlay { if model.settingsOpen { SettingsView() } }
-    }
-
-    private var settingsGear: some View {
-        Button { model.settingsOpen.toggle() } label: {
-            Image(systemName: "gearshape")
-                .font(.system(size: 18, weight: .regular))
-                .foregroundStyle(model.settingsOpen ? Theme.popover : Theme.hubInk)
-                .frame(width: 34, height: 34)
-                .background(RoundedRectangle(cornerRadius: 8)
-                    .fill(model.settingsOpen ? Theme.hubInk : Theme.hairline(0.10)))
-        }
-        .buttonStyle(.plain)
-        .padding(14)
     }
 }

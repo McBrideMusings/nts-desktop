@@ -11,7 +11,11 @@ channels and the Infinite Mixtapes, in a SwiftUI dial that lives in your menu ba
 - Play / pause, mute, and volume from a compact now-playing bar.
 - **Live mixtape tracklists** — real-time, updating the moment a track changes
   (requires signing in with a paid NTS Supporters account).
-- Native menu-bar agent — no Dock icon, no window clutter.
+- **Lives in the menu bar** — click the icon to toggle a floating, resizable
+  window that stays open while you work in other apps. A top bar carries the
+  macOS window controls, a login indicator, and settings.
+- **Optional Dock icon** — off by default (menu bar only); enable it in
+  Settings → Show in Dock.
 
 ## Requirements
 
@@ -23,7 +27,7 @@ channels and the Infinite Mixtapes, in a SwiftUI dial that lives in your menu ba
 The app lives in `mac/` (a Swift package). From the repo root:
 
 ```
-make dev       # run from source (fast iteration)
+make dev       # run from source; press R to rebuild & relaunch, Q to quit
 make build     # compile the release binary
 make app       # assemble "NTS Radio.app"
 make install   # build and install to /Applications
@@ -33,8 +37,8 @@ make deploy    # build a distributable .dmg
 Each target delegates to `mac/`; you can also run `make <target>` from inside
 `mac/` directly.
 
-To quit the app, open its Settings (the gear) and choose **Quit NTS Radio** — a
-menu-bar-only app has no app menu.
+To quit the app, open Settings (the gear in the window's top bar) and choose
+**Quit NTS Radio** — a menu-bar-only app has no app menu.
 
 ## Project layout
 
