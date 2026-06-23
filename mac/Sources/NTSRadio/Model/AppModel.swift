@@ -33,6 +33,13 @@ final class AppModel: ObservableObject {
     @Published var startOnLogin = false
     @Published var aboutOpen = false
 
+    /// Whether the app also shows a Dock icon (and app-switcher entry). Off by
+    /// default — the app lives primarily in the menu bar. Persisted here; the
+    /// AppDelegate observes it and owns applying the activation policy.
+    @Published var showInDock: Bool = UserDefaults.standard.bool(forKey: "showInDock") {
+        didSet { UserDefaults.standard.set(showInDock, forKey: "showInDock") }
+    }
+
     /// Live tracklist listener for the current mixtape (nil for channels or when
     /// signed out). Recreated whenever the source or auth state changes.
     private var listener: FirestoreListener?

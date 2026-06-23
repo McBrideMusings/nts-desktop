@@ -13,9 +13,12 @@ enum Snapshot {
         func shot(_ name: String, _ configure: (AppModel) -> Void) {
             let model = AppModel()
             configure(model)
+            // Match the app's default window content size; the top bar's
+            // traffic-light gap renders empty here (no real lights offscreen).
             let view = PopoverView()
                 .environmentObject(model)
-                .frame(width: 800, height: 640)
+                .environmentObject(model.auth)
+                .frame(width: 880, height: 720)
             let renderer = ImageRenderer(content: view)
             renderer.scale = 2
             guard let img = renderer.nsImage,

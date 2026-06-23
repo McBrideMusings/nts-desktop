@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// The radial mixtape dial. Fixed 620×580 design canvas (= popover width − rail),
-/// center (310,290) — matching the prototype's geometry constants, generalised
-/// from 10 to N mixtapes (pitch = 360/N).
+/// The radial mixtape dial. Originally a fixed 620×580 design canvas; now fluid
+/// — all geometry is derived from the view's actual size via `Geo` so the dial
+/// grows, shrinks, and stays crisp as the window resizes. The circle is sized
+/// off the smaller dimension (it's round), centered in whatever space it gets.
 ///
 /// Wedges are drawn as non-interactive visuals; a single hit layer over the
 /// dial maps cursor position → angle → wedge index. (Stacking N full-size
@@ -12,11 +13,19 @@ import SwiftUI
 struct DialView: View {
     @EnvironmentObject var model: AppModel
 
-    private let cx: CGFloat = 310
-    private let cy: CGFloat = 290
-    private let iconRing: CGFloat = 206
-    private let iconSize: CGFloat = 56
-    private let hubRadius: CGFloat = 113   // dead zone: the hub assembly
+    /// Resolved dial geometry for the current view size. The reference design
+    /// was 620×580 with the dial limited by the 580 (vertical) extent, so every
+    /// original pixel constant is scaled by `k = min(w,h)/580`.
+    private struct Geo {
+        let w: CGFloat, h: CGFloat
+        var cx: CGFloat { w / 2 }
+        var cy: CGFloat { h / 2 }
+        var k: CGFloat { min(w, h) / 580 }
+        var iconRing: CGFloat { 206 * k }
+        var iconSize: CGFloat { 56 * k }
+        var hubRadius: CGFloat { 113 * k }   // dead zone: the hub assembly
+        var bleed: CGFloat { max(w, h) * 2 } // wedge radius — past the frame
+    }
 
     private var tapes: [Mixtape] { model.catalog.mixtapes }
     private var pitch: Double { tapes.isEmpty ? 36 : 360.0 / Double(tapes.count) }
@@ -25,77 +34,80 @@ struct DialView: View {
     private func centerAngle(_ i: Int) -> Double { -90 + Double(i) * pitch }
 
     var body: some View {
-        ZStack {
-            // Full-bleed now-playing backdrop: the mixtape's looping video, or
-            // the live channel's current-program artwork. Falls back to the bare
-            // stage when nothing is playing.
-            stageBackground
+        GeometryReader { proxy in
+            let g = Geo(w: proxy.size.width, h: proxy.size.height)
+            ZStack {
+                // Full-bleed now-playing backdrop: the mixtape's looping video, or
+                // the live channel's current-program artwork. Falls back to the bare
+                // stage when nothing is playing.
+                stageBackground(g)
 
-            // Cover-art wedges — a hovered slice previews its still poster with
-            // the looping animation layered on top (clipped to the sector). The
-            // actively-playing source fills the whole stage via stageBackground.
-            ForEach(Array(tapes.enumerated()), id: \.element.id) { i, tape in
-                if model.hoverIndex == i {
-                    ZStack {
-                        AsyncImage(url: tape.coverURL) { img in
-                            img.resizable().scaledToFill()
-                        } placeholder: {
-                            Color.clear
+                // Cover-art wedges — a hovered slice previews its still poster with
+                // the looping animation layered on top (clipped to the sector). The
+                // actively-playing source fills the whole stage via stageBackground.
+                ForEach(Array(tapes.enumerated()), id: \.element.id) { i, tape in
+                    if model.hoverIndex == i {
+                        ZStack {
+                            AsyncImage(url: tape.coverURL) { img in
+                                img.resizable().scaledToFill()
+                            } placeholder: {
+                                Color.clear
+                            }
+                            if let anim = tape.animationURL {
+                                WedgeAnimation(url: anim)
+                            }
                         }
-                        if let anim = tape.animationURL {
-                            WedgeAnimation(url: anim)
+                        .frame(width: g.w, height: g.h)
+                        .clipShape(sector(i, g))
+                        .allowsHitTesting(false)
+                    }
+                }
+
+                // Single hit layer (under the hub, over the wedges)
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onContinuousHover { phase in
+                        switch phase {
+                        case .active(let loc): model.hoverIndex = wedgeIndex(at: loc, g)
+                        case .ended: model.hoverIndex = nil
                         }
                     }
-                    .frame(width: 620, height: 580)
-                    .clipShape(sector(i))
+                    .gesture(SpatialTapGesture().onEnded { ev in
+                        if let i = wedgeIndex(at: ev.location, g) { model.select(.mixtape(tapes[i].alias)) }
+                    })
+
+                // Monochrome symbol ring (always visible — how you see/aim at each
+                // mixtape now that wedges are blank by default).
+                ForEach(Array(tapes.enumerated()), id: \.element.id) { i, tape in
+                    let lit = isLit(i)
+                    let a = centerAngle(i) * .pi / 180
+                    AsyncImage(url: tape.iconURL) { img in
+                        img.resizable().scaledToFill()
+                    } placeholder: {
+                        Color.clear
+                    }
+                    .frame(width: g.iconSize, height: g.iconSize)
+                    .clipShape(Circle())
+                    .saturation(lit ? 1 : 0.5)
+                    .brightness(lit ? 0 : -0.1)
+                    .scaleEffect(lit ? 1.1 : 1)
+                    .position(x: g.cx + g.iconRing * cos(a), y: g.cy + g.iconRing * sin(a))
                     .allowsHitTesting(false)
                 }
+
+                hub(g).position(x: g.cx, y: g.cy)
             }
-
-            // Single hit layer (under the hub, over the wedges)
-            Color.clear
-                .contentShape(Rectangle())
-                .onContinuousHover { phase in
-                    switch phase {
-                    case .active(let loc): model.hoverIndex = wedgeIndex(at: loc)
-                    case .ended: model.hoverIndex = nil
-                    }
-                }
-                .gesture(SpatialTapGesture().onEnded { ev in
-                    if let i = wedgeIndex(at: ev.location) { model.select(.mixtape(tapes[i].alias)) }
-                })
-
-            // Monochrome symbol ring (always visible — how you see/aim at each
-            // mixtape now that wedges are blank by default).
-            ForEach(Array(tapes.enumerated()), id: \.element.id) { i, tape in
-                let lit = isLit(i)
-                let a = centerAngle(i) * .pi / 180
-                AsyncImage(url: tape.iconURL) { img in
-                    img.resizable().scaledToFill()
-                } placeholder: {
-                    Color.clear
-                }
-                .frame(width: iconSize, height: iconSize)
-                .clipShape(Circle())
-                .saturation(lit ? 1 : 0.5)
-                .brightness(lit ? 0 : -0.1)
-                .scaleEffect(lit ? 1.1 : 1)
-                .position(x: cx + iconRing * cos(a), y: cy + iconRing * sin(a))
-                .allowsHitTesting(false)
-            }
-
-            hub.position(x: cx, y: cy)
+            .frame(width: g.w, height: g.h)
+            .background(Theme.stage)
+            .clipped()
         }
-        .frame(width: 620, height: 580)
-        .background(Theme.stage)
-        .clipped()
     }
 
     /// Map a point in dial space to a wedge index (nil inside the hub zone).
-    private func wedgeIndex(at p: CGPoint) -> Int? {
+    private func wedgeIndex(at p: CGPoint, _ g: Geo) -> Int? {
         guard !tapes.isEmpty else { return nil }
-        let dx = p.x - cx, dy = p.y - cy
-        if hypot(dx, dy) < hubRadius { return nil }
+        let dx = p.x - g.cx, dy = p.y - g.cy
+        if hypot(dx, dy) < g.hubRadius { return nil }
         var rel = (atan2(dy, dx) * 180 / .pi - (-90)).truncatingRemainder(dividingBy: 360)
         if rel < 0 { rel += 360 }
         return (Int((rel / pitch).rounded()) % tapes.count + tapes.count) % tapes.count
@@ -116,14 +128,14 @@ struct DialView: View {
     /// The dial stage shows a full-bleed video only while a mixtape plays; for a
     /// live channel it stays the default stage (the program art fills the
     /// channel's card in the rail instead).
-    @ViewBuilder private var stageBackground: some View {
+    @ViewBuilder private func stageBackground(_ g: Geo) -> some View {
         if let m = playingMixtape {
             ZStack {
                 AsyncImage(url: m.coverURL) { $0.resizable().scaledToFill() } placeholder: { Theme.stageInner }
                 if let anim = m.animationURL { WedgeAnimation(url: anim) }
                 scrim
             }
-            .frame(width: 620, height: 580)
+            .frame(width: g.w, height: g.h)
             .clipped()
             .allowsHitTesting(false)
         } else {
@@ -138,10 +150,11 @@ struct DialView: View {
             startPoint: .top, endPoint: .bottom)
     }
 
-    private func sector(_ i: Int) -> Sector {
-        Sector(centerX: cx, centerY: cy,
+    private func sector(_ i: Int, _ g: Geo) -> Sector {
+        Sector(centerX: g.cx, centerY: g.cy,
                startDeg: centerAngle(i) - half,
-               endDeg: centerAngle(i) + half)
+               endDeg: centerAngle(i) + half,
+               radius: g.bleed)
     }
 
     /// Hub label — only shown for a mixtape (a hovered wedge or a selected
@@ -161,17 +174,18 @@ struct DialView: View {
         return 0
     }
 
-    private var hub: some View {
-        ZStack {
+    private func hub(_ g: Geo) -> some View {
+        let k = g.k
+        return ZStack {
             // Selection pointer
             ZStack(alignment: .top) {
                 Color.clear
-                RoundedRectangle(cornerRadius: 2)
+                RoundedRectangle(cornerRadius: 2 * k)
                     .fill(model.accent)
-                    .frame(width: 3, height: 18)
-                    .padding(.top, 6)
+                    .frame(width: 3 * k, height: 18 * k)
+                    .padding(.top, 6 * k)
             }
-            .frame(width: 226, height: 226)
+            .frame(width: 226 * k, height: 226 * k)
             .rotationEffect(.degrees(pointerRotation))
             .opacity(model.isLive ? 0 : 1)
             .allowsHitTesting(false)
@@ -181,28 +195,28 @@ struct DialView: View {
             Circle()
                 .fill(Theme.stageInner)
                 .overlay(Circle().stroke(Theme.hairline(0.14), lineWidth: 1))
-                .frame(width: 190, height: 190)
+                .frame(width: 190 * k, height: 190 * k)
                 .allowsHitTesting(false)
 
             // Play / pause hub
             Button { model.togglePlay() } label: {
-                VStack(spacing: 9) {
+                VStack(spacing: 9 * k) {
                     Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 17))
+                        .font(.system(size: 17 * k))
                         .foregroundStyle(Theme.popover.opacity(0.88))
                     if !centerLabel.isEmpty {
-                        ChipText(text: centerLabel, font: Theme.display(16, .heavy), fg: Theme.hubInk)
+                        ChipText(text: centerLabel, font: Theme.display(16 * k, .heavy), fg: Theme.hubInk)
                             .multilineTextAlignment(.center)
-                            .frame(maxWidth: 150)
+                            .frame(maxWidth: 150 * k)
                     }
                 }
             }
             .buttonStyle(.plain)
-            .frame(width: 166, height: 166)
+            .frame(width: 166 * k, height: 166 * k)
             .background(Circle().fill(Theme.hubInk))
             .clipShape(Circle())
-            .shadow(color: .black.opacity(0.5), radius: 11, y: 6)
+            .shadow(color: .black.opacity(0.5), radius: 11 * k, y: 6 * k)
         }
-        .frame(width: 226, height: 226)
+        .frame(width: 226 * k, height: 226 * k)
     }
 }

@@ -12,8 +12,8 @@ ICON_SRC   := Resources/AppIcon.icns
 
 .PHONY: dev run-binary build app dmg install run clean
 
-dev: ## Run the app from source (fast iteration)
-	swift run $(APP)
+dev: ## Run from source; press R to rebuild & relaunch, Q to quit
+	./dev.sh
 
 build: ## Compile the release binary
 	swift build -c $(CONFIG)

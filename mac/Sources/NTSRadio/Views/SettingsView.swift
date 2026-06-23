@@ -75,6 +75,20 @@ struct SettingsView: View {
 
                 divider
 
+                HStack {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Show in Dock")
+                            .font(Theme.ui(14, .medium)).foregroundStyle(Theme.sheetInk)
+                        Text("Also show NTS in the Dock and app switcher.")
+                            .font(Theme.ui(12)).foregroundStyle(Theme.sheetInk2)
+                    }
+                    .padding(.trailing, 14)
+                    Spacer()
+                    TogglePill(on: model.showInDock) { model.showInDock.toggle() }
+                }
+
+                divider
+
                 HStack(spacing: 10) {
                     ghost("About") { model.aboutOpen.toggle() }
                     ghost("Check for Updates…") { /* non-functional v1 */ }
