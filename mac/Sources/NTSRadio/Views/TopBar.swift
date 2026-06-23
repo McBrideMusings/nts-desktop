@@ -61,7 +61,7 @@ struct TopBar: View {
     }
 
     private var settingsButton: some View {
-        Button { model.settingsOpen.toggle() } label: {
+        Button { model.settingsOpen = true } label: {
             Image(systemName: "gearshape")
                 .font(.system(size: 15, weight: .regular))
                 .foregroundStyle(Theme.ink)

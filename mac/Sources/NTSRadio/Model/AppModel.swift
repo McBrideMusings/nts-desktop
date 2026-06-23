@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 import Combine
 import NTSFirestore
 
@@ -35,13 +34,10 @@ final class AppModel: ObservableObject {
     @Published var aboutOpen = false
 
     /// Whether the app also shows a Dock icon (and app-switcher entry). Off by
-    /// default — the app lives primarily in the menu bar. Persisted; flips the
-    /// activation policy live when toggled.
+    /// default — the app lives primarily in the menu bar. Persisted here; the
+    /// AppDelegate observes it and owns applying the activation policy.
     @Published var showInDock: Bool = UserDefaults.standard.bool(forKey: "showInDock") {
-        didSet {
-            UserDefaults.standard.set(showInDock, forKey: "showInDock")
-            NSApp.setActivationPolicy(showInDock ? .regular : .accessory)
-        }
+        didSet { UserDefaults.standard.set(showInDock, forKey: "showInDock") }
     }
 
     /// Live tracklist listener for the current mixtape (nil for channels or when

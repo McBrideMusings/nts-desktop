@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Combine
 
 @main
 struct NTSRadioApp: App {
@@ -20,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var windowController: RadioWindowController!
     private var parentWatch: DispatchSourceProcess?
+    private var bag = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Disk-backed cache so CDN cover art / icons persist across launches and
@@ -38,16 +40,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.model = model
 
         // Menu-bar presence is always on; the Dock icon is user-controlled
-        // (Settings ▸ Show in Dock) and persisted across launches. didSet doesn't
-        // fire for the initial value, so apply the saved choice explicitly here.
-        NSApp.setActivationPolicy(model.showInDock ? .regular : .accessory)
+        // (Settings ▸ Show in Dock) and persisted. The AppDelegate owns the
+        // activation policy — this sink fires immediately with the saved value
+        // (initial apply) and again whenever the toggle flips.
+        model.$showInDock
+            .sink { NSApp.setActivationPolicy($0 ? .regular : .accessory) }
+            .store(in: &bag)
 
         windowController = RadioWindowController(model: model)
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.image = MenuBarIcon.barsImage
         item.button?.target = self
-        item.button?.action = #selector(toggleWindow)
+        item.button?.action = #selector(statusItemClicked)
+        item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         statusItem = item
     }
 
@@ -67,9 +73,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         parentWatch = src
     }
 
-    @objc private func toggleWindow() {
-        windowController.toggle(relativeTo: statusItem.button)
+    /// Left-click toggles the window; right-click (or control-click) opens a
+    /// small menu — the menu-bar-only mode otherwise has no Quit affordance.
+    @objc private func statusItemClicked() {
+        let event = NSApp.currentEvent
+        let isRight = event?.type == .rightMouseUp
+            || (event?.modifierFlags.contains(.control) ?? false)
+        if isRight { showStatusMenu() }
+        else { windowController.toggle(relativeTo: statusItem.button) }
     }
+
+    private func showStatusMenu() {
+        guard let button = statusItem.button else { return }
+        let menu = NSMenu()
+        let dock = NSMenuItem(title: "Show in Dock", action: #selector(toggleDock), keyEquivalent: "")
+        dock.target = self
+        dock.state = model.showInDock ? .on : .off
+        menu.addItem(dock)
+        menu.addItem(.separator())
+        let quit = NSMenuItem(title: "Quit NTS Radio", action: #selector(quitApp), keyEquivalent: "")
+        quit.target = self
+        menu.addItem(quit)
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.maxY + 4), in: button)
+    }
+
+    @objc private func toggleDock() { model.showInDock.toggle() }
+    @objc private func quitApp() { NSApp.terminate(nil) }
 
     /// Clicking the Dock icon (when shown) reveals the window — a Dock app with
     /// no window is a dead end.
