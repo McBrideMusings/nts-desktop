@@ -68,7 +68,7 @@ private struct ChannelCard: View {
         VStack(alignment: .leading, spacing: 0) {
             liveChip
             Spacer(minLength: 8)
-            HStack { Spacer(); disc; Spacer() }
+            HStack { Spacer(); channelDisc(diameter: 86, showNumber: false); Spacer() }
             Spacer(minLength: 8)
             VStack(alignment: .leading, spacing: 6) {
                 ChipText(text: channel.city, font: Theme.mono(10).weight(.medium))
@@ -87,7 +87,7 @@ private struct ChannelCard: View {
     private var compactContent: some View {
         let d = max(34, min(86, slot * 0.46))
         return VStack(spacing: max(6, d * 0.14)) {
-            numberedDisc(d)
+            channelDisc(diameter: d, showNumber: true)
             ChipText(text: channel.city, font: Theme.mono(10).weight(.medium))
                 .opacity(active ? 1 : 0.85)
         }
@@ -95,8 +95,13 @@ private struct ChannelCard: View {
         .padding(12)
     }
 
-    private func numberedDisc(_ d: CGFloat) -> some View {
-        let s = d / 86   // stroke/shadow scale relative to the full-size disc
+    /// The channel's accent disc, used at full size (86, no number) in the tall
+    /// card and scaled with the slot (number centered) in the compact card. One
+    /// renderer so the active stroke/shadow treatment stays in sync across both.
+    /// Strokes and shadow scale by `s` so at `diameter: 86` they match the
+    /// original fixed-size disc exactly.
+    private func channelDisc(diameter d: CGFloat, showNumber: Bool) -> some View {
+        let s = d / 86
         return ZStack {
             Circle()
                 .fill(channel.accent)
@@ -110,9 +115,11 @@ private struct ChannelCard: View {
                 }
                 .shadow(color: .black.opacity(active ? 0.5 : 0.45),
                         radius: (active ? 13 : 8) * s, y: (active ? 5 : 6) * s)
-            Text("\(channel.number)")
-                .font(Theme.display(d * 0.5, .black))
-                .foregroundStyle(channel.accentText)
+            if showNumber {
+                Text("\(channel.number)")
+                    .font(Theme.display(d * 0.5, .black))
+                    .foregroundStyle(channel.accentText)
+            }
         }
         .frame(width: d, height: d)
     }
@@ -163,20 +170,5 @@ private struct ChannelCard: View {
         }
         .fixedSize()
         .background(Theme.chipBlack)
-    }
-
-    private var disc: some View {
-        Circle()
-            .fill(channel.accent)
-            .frame(width: 86, height: 86)
-            .opacity(active ? 1 : 0.92)
-            .overlay {
-                if active {
-                    Circle().stroke(.black.opacity(0.4), lineWidth: 4)
-                        .padding(-2)
-                        .overlay(Circle().stroke(channel.accent, lineWidth: 2).padding(-4))
-                }
-            }
-            .shadow(color: .black.opacity(active ? 0.5 : 0.45), radius: active ? 13 : 8, y: active ? 5 : 6)
     }
 }
