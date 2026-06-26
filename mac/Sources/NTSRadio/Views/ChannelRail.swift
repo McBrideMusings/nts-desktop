@@ -4,14 +4,23 @@ struct ChannelRail: View {
     @EnvironmentObject var model: AppModel
 
     var body: some View {
-        VStack(spacing: 0) {
-            ForEach(Array(model.catalog.channels.enumerated()), id: \.element.id) { idx, c in
-                ChannelCard(channel: c, active: model.selection == .channel(c.number))
-                    .onTapGesture { model.select(.channel(c.number)) }
-                if idx == 0 {
-                    Rectangle().fill(Theme.hairline(0.1)).frame(height: 1)
+        // A GeometryReader here measures the rail's actual slot height and, as a
+        // side effect, stops the cards' intrinsic size from forcing a tall window
+        // minimum — the rail now fills whatever height it's given instead.
+        GeometryReader { proxy in
+            let cardH = (proxy.size.height - 1) / 2   // minus the 1pt divider
+            VStack(spacing: 0) {
+                ForEach(Array(model.catalog.channels.enumerated()), id: \.element.id) { idx, c in
+                    ChannelCard(channel: c,
+                                active: model.selection == .channel(c.number),
+                                slot: cardH)
+                        .onTapGesture { model.select(.channel(c.number)) }
+                    if idx == 0 {
+                        Rectangle().fill(Theme.hairline(0.1)).frame(height: 1)
+                    }
                 }
             }
+            .frame(width: proxy.size.width, height: proxy.size.height)
         }
         .frame(width: 180)
         .overlay(alignment: .trailing) {
@@ -23,6 +32,14 @@ struct ChannelRail: View {
 private struct ChannelCard: View {
     let channel: Channel
     let active: Bool
+    let slot: CGFloat
+
+    /// Below this slot height the card sheds its live chip + show title and shows
+    /// just the numbered disc + city. That's what lets the whole window get short:
+    /// the full card's fixed disc + `fixedSize` chip + wrapping title otherwise
+    /// pin a tall minimum height that propagates up to the window.
+    private static let compactThreshold: CGFloat = 168
+    private var compact: Bool { slot < Self.compactThreshold }
 
     var body: some View {
         ZStack {
@@ -37,24 +54,67 @@ private struct ChannelCard: View {
                     .init(color: .black.opacity(0.86), location: 1),
                 ], startPoint: .top, endPoint: .bottom)
 
-            VStack(alignment: .leading, spacing: 0) {
-                liveChip
-                Spacer(minLength: 8)
-                HStack { Spacer(); disc; Spacer() }
-                Spacer(minLength: 8)
-                VStack(alignment: .leading, spacing: 6) {
-                    ChipText(text: channel.city, font: Theme.mono(10).weight(.medium))
-                    ChipText(text: channel.show.uppercased(), font: Theme.display(17, .black))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .padding(EdgeInsets(top: 15, leading: 16, bottom: 15, trailing: 16))
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            if compact { compactContent } else { fullContent }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.stage)
         .clipped()
         .contentShape(Rectangle())
+    }
+
+    // MARK: Full card (tall)
+
+    private var fullContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            liveChip
+            Spacer(minLength: 8)
+            HStack { Spacer(); disc; Spacer() }
+            Spacer(minLength: 8)
+            VStack(alignment: .leading, spacing: 6) {
+                ChipText(text: channel.city, font: Theme.mono(10).weight(.medium))
+                ChipText(text: channel.show.uppercased(), font: Theme.display(17, .black))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(EdgeInsets(top: 15, leading: 16, bottom: 15, trailing: 16))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    // MARK: Compact card (short)
+
+    /// Just the numbered disc + city, both centered. The disc scales with the
+    /// slot height so two cards always fit no matter how short the window gets.
+    private var compactContent: some View {
+        let d = max(34, min(86, slot * 0.46))
+        return VStack(spacing: max(6, d * 0.14)) {
+            numberedDisc(d)
+            ChipText(text: channel.city, font: Theme.mono(10).weight(.medium))
+                .opacity(active ? 1 : 0.85)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(12)
+    }
+
+    private func numberedDisc(_ d: CGFloat) -> some View {
+        let s = d / 86   // stroke/shadow scale relative to the full-size disc
+        return ZStack {
+            Circle()
+                .fill(channel.accent)
+                .opacity(active ? 1 : 0.92)
+                .overlay {
+                    if active {
+                        Circle().stroke(.black.opacity(0.4), lineWidth: 4 * s)
+                            .padding(-2 * s)
+                            .overlay(Circle().stroke(channel.accent, lineWidth: 2 * s).padding(-4 * s))
+                    }
+                }
+                .shadow(color: .black.opacity(active ? 0.5 : 0.45),
+                        radius: (active ? 13 : 8) * s, y: (active ? 5 : 6) * s)
+            Text("\(channel.number)")
+                .font(Theme.display(d * 0.5, .black))
+                .foregroundStyle(channel.accentText)
+        }
+        .frame(width: d, height: d)
     }
 
     /// The current program's full-bleed artwork (downloaded live, disk-cached) —
