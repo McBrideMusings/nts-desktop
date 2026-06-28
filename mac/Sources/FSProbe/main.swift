@@ -7,15 +7,8 @@ import NTSFirestore
 // first list on every push, then exits after ~25s.
 
 let arg = CommandLine.arguments.dropFirst().first ?? "memory-lane"
-// "1"/"2" select a live channel (matched by stream_pathname); anything else is
-// a mixtape alias (matched by stream_id).
-let (field, value): (String, String) = {
-    switch arg {
-    case "1": return ("stream_pathname", "/stream")
-    case "2": return ("stream_pathname", "/stream2")
-    default:  return ("stream_id", arg)
-    }
-}()
+// "1"/"2" select a live channel; anything else is a mixtape alias.
+let filter = Int(arg).flatMap { LiveTracksFilter.channel($0) } ?? .mixtape(arg)
 guard let token = ProcessInfo.processInfo.environment["NTS_TOKEN"], !token.isEmpty else {
     FileHandle.standardError.write(Data("NTS_TOKEN env var is required\n".utf8))
     exit(2)
@@ -25,8 +18,7 @@ let df = DateFormatter()
 df.dateFormat = "HH:mm:ss"
 
 let listener = FirestoreListener(
-    filterField: field,
-    filterValue: value,
+    filter: filter,
     tokenProvider: { token },
     onUpdate: { tracks in
         print("── update: \(tracks.count) tracks ──")
@@ -37,7 +29,7 @@ let listener = FirestoreListener(
     }
 )
 
-print("listening to live_tracks for \(field)=\(value) …")
+print("listening to live_tracks for \(filter.field)=\(filter.value) …")
 listener.start()
 try await Task.sleep(nanoseconds: 25 * 1_000_000_000)
 listener.stop()

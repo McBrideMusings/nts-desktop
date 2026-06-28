@@ -35,23 +35,16 @@ public final class FirestoreListener {
     /// from cancellation (which stops the listener for good).
     private struct StreamExpired: Error {}
 
-    private let filterField: String
-    private let filterValue: String
+    private let filter: LiveTracksFilter
     private let tokenProvider: @Sendable () async throws -> String
     private let onUpdate: @MainActor @Sendable ([LiveTrack]) -> Void
     private var task: Task<Void, Never>?
 
-    /// - Parameters:
-    ///   - filterField: the `live_tracks` field to match on — `"stream_id"` for
-    ///     a mixtape, `"stream_pathname"` for a live channel.
-    ///   - filterValue: the value that field must equal (mixtape alias, or
-    ///     `"/stream"` / `"/stream2"`).
-    public init(filterField: String,
-                filterValue: String,
+    /// - Parameter filter: which source's tracks to stream — see `LiveTracksFilter`.
+    public init(filter: LiveTracksFilter,
                 tokenProvider: @escaping @Sendable () async throws -> String,
                 onUpdate: @escaping @MainActor @Sendable ([LiveTrack]) -> Void) {
-        self.filterField = filterField
-        self.filterValue = filterValue
+        self.filter = filter
         self.tokenProvider = tokenProvider
         self.onUpdate = onUpdate
     }
@@ -151,9 +144,9 @@ public final class FirestoreListener {
 
     private func makeListenRequest() -> Google_Firestore_V1_ListenRequest {
         var fieldFilter = Google_Firestore_V1_StructuredQuery.FieldFilter()
-        fieldFilter.field = .with { $0.fieldPath = filterField }
+        fieldFilter.field = .with { $0.fieldPath = self.filter.field }
         fieldFilter.op = .equal
-        fieldFilter.value = .with { $0.stringValue = filterValue }
+        fieldFilter.value = .with { $0.stringValue = self.filter.value }
 
         var filter = Google_Firestore_V1_StructuredQuery.Filter()
         filter.fieldFilter = fieldFilter

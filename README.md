@@ -9,8 +9,9 @@ channels and the Infinite Mixtapes, in a SwiftUI dial that lives in your menu ba
 - **Infinite Mixtapes** — all of NTS's 24/7 genre streams, picked from a radial
   cover-art dial.
 - Play / pause, mute, and volume from a compact now-playing bar.
-- **Live mixtape tracklists** — real-time, updating the moment a track changes
-  (requires signing in with a paid NTS Supporters account).
+- **Live tracklists** — for both the channels and the mixtapes, real-time,
+  updating the moment a track changes (requires signing in with a paid NTS
+  Supporters account).
 - **Lives in the menu bar** — click the icon to toggle a floating, resizable
   window that stays open while you work in other apps. A top bar carries the
   macOS window controls, a login indicator, and settings.
@@ -47,7 +48,7 @@ mac/         # the SwiftUI menu-bar app (Swift package)
   Sources/NTSRadio/
     Model/   # catalog, AVPlayer engine, NTS API, auth, app state
     Views/   # menu-bar icon, dial, channel rail, now-playing bar, settings
-  Sources/NTSFirestore/  # Firestore Listen client for live mixtape tracklists
+  Sources/NTSFirestore/  # Firestore Listen client for live channel + mixtape tracklists
   Proto/     # vendored Firestore protos + regenerate.sh
 ```
 

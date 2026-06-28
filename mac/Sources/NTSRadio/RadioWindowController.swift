@@ -40,7 +40,9 @@ final class RadioWindowController {
         let controlsVC = NSTitlebarAccessoryViewController()
         controlsVC.layoutAttribute = .trailing
         let controlsHost = NSHostingView(rootView: controls)
-        controlsHost.frame = NSRect(x: 0, y: 0, width: 80, height: 32)
+        // Size to the SwiftUI content so adding a control can't silently clip;
+        // TopBarControls fixes its own height (32, matching the TopBar strip).
+        controlsHost.frame = NSRect(origin: .zero, size: controlsHost.fittingSize)
         controlsVC.view = controlsHost
         window.addTitlebarAccessoryViewController(controlsVC)
         window.backgroundColor = NSColor(red: 0x0b/255, green: 0x0b/255, blue: 0x0c/255, alpha: 1) // Theme.popover
