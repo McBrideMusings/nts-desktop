@@ -20,3 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optional Dock icon (Settings → Show in Dock), persisted across launches.
 - `make dev` / `admin dev` reload loop — press **R** to rebuild & relaunch,
   **Q** to quit; the dev app also exits with the terminal that started it.
+- Now-playing source links: a live channel's show title links to its current
+  episode on nts.live, and the playing mixtape's current source episode appears
+  in the secondary line and links to that episode (sourced from NTS's Firestore
+  `mixtape_titles`). Clickable labels render bold white with a hover underline.
+
+### Fixed
+
+- Decode HTML entities in live show titles (e.g. `&amp;` now renders as `&`).
+- Capture the app's stdout in the `admin dev` / `make dev` log by making stdout
+  unbuffered (a long-running GUI process otherwise never flushes to the pipe).

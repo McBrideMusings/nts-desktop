@@ -24,6 +24,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var bag = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // When run from source under `admin dev` / `swift run`, stdout is a pipe,
+        // not a TTY — so Swift block-buffers `print()` and a long-running GUI app
+        // (which never exits to flush) shows no output in the captured dev log.
+        // Force unbuffered stdout so logs stream live to tmp/dev.<timestamp>.log.
+        setvbuf(stdout, nil, _IONBF, 0)
+
         // Disk-backed cache so CDN cover art / icons persist across launches and
         // are available offline (URLSession.shared + AsyncImage use this).
         Cache.configureImageCache()

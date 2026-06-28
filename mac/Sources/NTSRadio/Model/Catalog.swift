@@ -31,8 +31,19 @@ struct Channel: Identifiable, Hashable {
     var genre: String = ""
     var startEnd: String = ""
     var background: URL? = nil   // current program's full-bleed artwork
+    // Aliases for the current broadcast, used to link the show title to its
+    // nts.live episode page (empty when the live feed didn't supply them).
+    var showAlias: String = ""
+    var episodeAlias: String = ""
 
     var id: Int { number }
+
+    /// The nts.live episode page for the current broadcast, when the feed gave us
+    /// the aliases — lets the show title act as a link.
+    var episodeURL: URL? {
+        guard !showAlias.isEmpty, !episodeAlias.isEmpty else { return nil }
+        return URL(string: "https://www.nts.live/shows/\(showAlias)/episodes/\(episodeAlias)")
+    }
 
     var streamURL: URL {
         URL(string: number == 1
