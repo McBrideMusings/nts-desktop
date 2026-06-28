@@ -25,7 +25,7 @@ final class AppModel: ObservableObject {
     @Published var settingsOpen = false
 
     /// Tracklist for the current source — populated by the Firestore listener for
-    /// mixtapes (live-channel tracklists are not wired yet; see GitHub issue #3).
+    /// both mixtapes and live channels when signed in (empty when signed out).
     @Published var tracks: [Track] = []
 
     // Settings placeholder — Check for Updates is intentionally non-functional for
@@ -40,12 +40,13 @@ final class AppModel: ObservableObject {
         didSet { UserDefaults.standard.set(showInDock, forKey: "showInDock") }
     }
 
-    /// Live tracklist listener for the current mixtape (nil for channels or when
-    /// signed out). Recreated whenever the source or auth state changes.
+    /// Live tracklist listener for the current source (nil when signed out).
+    /// Recreated whenever the source or auth state changes.
     private var listener: FirestoreListener?
-    /// The mixtape alias the `listener` is currently streaming, so we can tell a
+    /// The `live_tracks` filter the `listener` is currently streaming (e.g.
+    /// `"stream_id=poolside"` or `"stream_pathname=/stream"`), so we can tell a
     /// real source change from a no-op refresh and avoid churning the stream.
-    private var activeStreamID: String?
+    private var activeStreamKey: String?
 
     private var bag = Set<AnyCancellable>()
 
@@ -114,28 +115,46 @@ final class AppModel: ObservableObject {
         updateTracklist()
     }
 
+    /// The Firestore `live_tracks` filter + accent for the current source: a
+    /// mixtape (matched by `stream_id`) or a live channel (matched by
+    /// `stream_pathname`). Both feeds are supporter-gated, so this is nil when
+    /// signed out.
+    private struct WantedStream { let field: String; let value: String; let hue: Double }
+
+    private var wantedStream: WantedStream? {
+        guard auth.isAuthenticated else { return nil }
+        switch selection {
+        case .mixtape:
+            guard let mix = currentMixtape else { return nil }
+            return WantedStream(field: "stream_id", value: mix.alias, hue: mix.hue)
+        case .channel(let n):
+            guard let ch = currentChannel else { return nil }
+            return WantedStream(field: "stream_pathname",
+                                value: n == 1 ? "/stream" : "/stream2",
+                                hue: ch.artHue)
+        }
+    }
+
     /// Open (or tear down) the live tracklist stream for the current source.
-    /// Mixtape + signed in → Firestore `live_tracks` listener. Channels and the
-    /// signed-out state clear the list (live-channel tracklists via the public
-    /// REST endpoint are a separate follow-up).
+    /// Signed in → a Firestore `live_tracks` listener for the current mixtape or
+    /// channel; signed out → cleared (both feeds are supporter-gated). The public
+    /// REST tracklist endpoint is empty for an in-progress channel show, so live
+    /// channel tracks come from Firestore too, not REST.
     func updateTracklist() {
-        // The stream we *should* be running: the current mixtape's alias when
-        // signed in, otherwise nothing.
-        let wantedAlias: String? = {
-            guard auth.isAuthenticated, case .mixtape = selection else { return nil }
-            return currentMixtape?.alias
-        }()
+        let wanted = wantedStream
+        let wantedKey = wanted.map { "\($0.field)=\($0.value)" }
         // Already streaming the right source — don't churn the connection (this
         // also makes a catalog rebuild a no-op unless the first mixtape changed).
-        if listener != nil, wantedAlias == activeStreamID { return }
+        if listener != nil, wantedKey == activeStreamKey { return }
         listener?.stop()
         listener = nil
         tracks = []
-        activeStreamID = wantedAlias
-        guard let alias = wantedAlias, let mix = currentMixtape else { return }
-        let hue = mix.hue
+        activeStreamKey = wantedKey
+        guard let wanted else { return }
+        let hue = wanted.hue
         let listener = FirestoreListener(
-            streamID: alias,
+            filterField: wanted.field,
+            filterValue: wanted.value,
             tokenProvider: { [auth] in try await auth.validToken() },
             onUpdate: { [weak self] live in
                 self?.tracks = live.compactMap { t in
