@@ -28,6 +28,23 @@ final class RadioWindowController {
         // them); the title bar is transparent with no title text.
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
+
+        // The settings + account controls must be real title-bar items: with
+        // fullSizeContentView the title-bar view sits above the content and
+        // eats clicks in its band for window dragging, so controls drawn into
+        // the TopBar strip render but never receive a click. A trailing
+        // title-bar accessory makes AppKit route clicks to them.
+        let controls = TopBarControls()
+            .environmentObject(model)
+            .environmentObject(model.auth)
+        let controlsVC = NSTitlebarAccessoryViewController()
+        controlsVC.layoutAttribute = .trailing
+        let controlsHost = NSHostingView(rootView: controls)
+        // Size to the SwiftUI content so adding a control can't silently clip;
+        // TopBarControls fixes its own height (32, matching the TopBar strip).
+        controlsHost.frame = NSRect(origin: .zero, size: controlsHost.fittingSize)
+        controlsVC.view = controlsHost
+        window.addTitlebarAccessoryViewController(controlsVC)
         window.backgroundColor = NSColor(red: 0x0b/255, green: 0x0b/255, blue: 0x0c/255, alpha: 1) // Theme.popover
         window.isMovableByWindowBackground = false   // drag via the title-bar strip only, not the dial
         window.level = .normal                        // ordinary window: stays open unfocused, can go behind

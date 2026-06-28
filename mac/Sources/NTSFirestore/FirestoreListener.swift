@@ -10,10 +10,12 @@ public struct LiveTrack: Equatable, Sendable {
     public let artists: [String]
 }
 
-/// Real-time listener for a mixtape's live tracklist.
+/// Real-time listener for a live tracklist.
 ///
-/// NTS publishes the currently-playing track for each infinite mixtape to a
-/// Firestore collection `live_tracks`, filtered by `stream_id == <mixtape alias>`.
+/// NTS publishes the currently-playing track to a Firestore collection
+/// `live_tracks`. Each source is selected by one equality filter:
+/// `stream_id == <mixtape alias>` for an infinite mixtape, or
+/// `stream_pathname == "/stream"` / `"/stream2"` for live channels 1 / 2.
 /// This opens the Firestore `Listen` gRPC stream and pushes an updated, newest-
 /// first list every time a track changes (sub-second, no polling). Access is
 /// gated by a Firebase ID token (paid NTS Supporters) passed as a bearer token;
@@ -33,15 +35,16 @@ public final class FirestoreListener {
     /// from cancellation (which stops the listener for good).
     private struct StreamExpired: Error {}
 
-    private let streamID: String
+    private let filter: LiveTracksFilter
     private let tokenProvider: @Sendable () async throws -> String
     private let onUpdate: @MainActor @Sendable ([LiveTrack]) -> Void
     private var task: Task<Void, Never>?
 
-    public init(streamID: String,
+    /// - Parameter filter: which source's tracks to stream — see `LiveTracksFilter`.
+    public init(filter: LiveTracksFilter,
                 tokenProvider: @escaping @Sendable () async throws -> String,
                 onUpdate: @escaping @MainActor @Sendable ([LiveTrack]) -> Void) {
-        self.streamID = streamID
+        self.filter = filter
         self.tokenProvider = tokenProvider
         self.onUpdate = onUpdate
     }
@@ -141,9 +144,9 @@ public final class FirestoreListener {
 
     private func makeListenRequest() -> Google_Firestore_V1_ListenRequest {
         var fieldFilter = Google_Firestore_V1_StructuredQuery.FieldFilter()
-        fieldFilter.field = .with { $0.fieldPath = "stream_id" }
+        fieldFilter.field = .with { $0.fieldPath = self.filter.field }
         fieldFilter.op = .equal
-        fieldFilter.value = .with { $0.stringValue = streamID }
+        fieldFilter.value = .with { $0.stringValue = self.filter.value }
 
         var filter = Google_Firestore_V1_StructuredQuery.Filter()
         filter.fieldFilter = fieldFilter
