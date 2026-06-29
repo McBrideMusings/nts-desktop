@@ -95,11 +95,9 @@ struct DialView: View {
                     .allowsHitTesting(false)
                 }
 
-                // Empty center in the idle state — just the ring of mixtapes,
-                // no play hub, until something is selected.
-                if !model.isIdle {
-                    hub(g).position(x: g.cx, y: g.cy)
-                }
+                // The play hub is always present (so the dial never reads as an
+                // empty void); in the idle state it just has no selection tail.
+                hub(g).position(x: g.cx, y: g.cy)
             }
             .frame(width: g.w, height: g.h)
             .background(Theme.stage)
@@ -183,7 +181,7 @@ struct DialView: View {
             }
             .frame(width: 226 * k, height: 226 * k)
             .rotationEffect(.degrees(pointerRotation))
-            .opacity(model.isLive ? 0 : 1)
+            .opacity((model.isLive || model.isIdle) ? 0 : 1)   // no tail until a mixtape is picked
             .allowsHitTesting(false)
             .animation(.spring(response: 0.45, dampingFraction: 0.6), value: pointerRotation)
 
@@ -194,19 +192,12 @@ struct DialView: View {
                 .frame(width: 190 * k, height: 190 * k)
                 .allowsHitTesting(false)
 
-            // Play / pause hub — just the control, no label (matches the prototype;
-            // the playing source's name lives in the now-playing bar).
-            Button { model.togglePlay() } label: {
-                Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 19 * k))
-                    .foregroundStyle(Theme.popover.opacity(0.88))
-                    .frame(width: 166 * k, height: 166 * k)
-            }
-            .buttonStyle(.plain)
-            .frame(width: 166 * k, height: 166 * k)
-            .background(Circle().fill(Theme.hubInk))
-            .clipShape(Circle())
-            .shadow(color: .black.opacity(0.5), radius: 11 * k, y: 6 * k)
+            // Center hub disc — a passive focal element, always present (no
+            // play/pause control here; transport lives in the now-playing bar).
+            Circle()
+                .fill(Theme.hubInk)
+                .frame(width: 166 * k, height: 166 * k)
+                .shadow(color: .black.opacity(0.5), radius: 11 * k, y: 6 * k)
         }
         .frame(width: 226 * k, height: 226 * k)
     }
