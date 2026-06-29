@@ -28,11 +28,13 @@ app: build ## Assemble the .app bundle (fonts bundled, mixtapes fetched live)
 	cp -R "$(BUILD_DIR)/$(RES_BUNDLE)" "$(APP_BUNDLE)/Contents/MacOS/" 2>/dev/null || true
 	# Icon (reuse the existing NTS icon)
 	cp "$(ICON_SRC)" "$(APP_BUNDLE)/Contents/Resources/AppIcon.icns" 2>/dev/null || true
-	# Ad-hoc sign so it launches cleanly locally
-	codesign --force --deep --sign - "$(APP_BUNDLE)" 2>/dev/null || true
+	# Stable-sign (Apple Development identity, fixed identifier) so macOS Keychain
+	# grants persist across rebuilds. CODE_SIGN_IDENTITY=- forces ad-hoc (the dmg).
+	./codesign-local.sh "$(APP_BUNDLE)"
 	@echo "Built $(APP_BUNDLE)"
 
-dmg: app ## Build a distributable .dmg from the .app
+dmg: ## Build a distributable .dmg from the .app (ad-hoc signed — no personal cert)
+	CODE_SIGN_IDENTITY=- $(MAKE) app
 	rm -f "$(OUT)/$(APP_NAME).dmg"
 	hdiutil create -volname "$(APP_NAME)" -srcfolder "$(APP_BUNDLE)" -ov -format UDZO "$(OUT)/$(APP_NAME).dmg"
 	@echo "Built $(OUT)/$(APP_NAME).dmg"

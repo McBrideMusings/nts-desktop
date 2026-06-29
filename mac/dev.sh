@@ -23,7 +23,13 @@ start_app() {
   app_pid=$!
 }
 
-build() { echo "▶ building…"; swift build; }
+build() {
+  echo "▶ building…"
+  swift build || return 1
+  # Stable-sign the binary so the macOS Keychain grant survives rebuilds
+  # (ad-hoc signing re-prompts every build — see codesign-local.sh).
+  ./codesign-local.sh "$BIN"
+}
 
 banner() { echo "✓ running (pid $app_pid) — press R to reload, Q to quit"; }
 
