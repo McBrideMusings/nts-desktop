@@ -25,8 +25,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in the secondary line and links to that episode (sourced from NTS's Firestore
   `mixtape_titles`). Clickable labels render bold white with a hover underline.
 
+### Changed
+
+- Synced the interface to the Claude Design prototype: the tracklist is now a
+  full-width overlay (NOW PLAYING header, TIME/TRACK/COPY columns, per-row copy
+  button, red accent on the playing row); the live-channel cards show the city +
+  time range in the chip with the show name below; and the dial's center hub is
+  an always-present passive disc (no play control in the hub) with a triangular
+  tail pointing at the selected mixtape.
+- The app launches idle — nothing is selected or playing until you pick a mixtape
+  or channel (previously it auto-selected the first mixtape).
+- Settings is now grouped GENERAL / DISPLAY sections with a "Hide Dial Dot When
+  Small" toggle; sign-in moved into a standalone Account popover. (Show in Dock
+  and the in-Settings Quit were removed; Quit remains in the menu-bar menu.)
+- The app icon and the menu-bar icon are now the NTS logo, with the mark also
+  centered in the window title bar.
+
 ### Fixed
 
 - Decode HTML entities in live show titles (e.g. `&amp;` now renders as `&`).
 - Capture the app's stdout in the `admin dev` / `make dev` log by making stdout
   unbuffered (a long-running GUI process otherwise never flushes to the pipe).
+- Keychain re-prompt on every rebuild: local builds are now stable-signed (Apple
+  Development identity + a fixed identifier) so macOS keeps the grant across
+  rebuilds instead of treating each ad-hoc build as a new app.
