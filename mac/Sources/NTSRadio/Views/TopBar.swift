@@ -19,6 +19,17 @@ struct TopBar: View {
             .frame(height: 32)
             .frame(maxWidth: .infinity)
             .background(Theme.nowBar)
+            // Centered NTS mark in the title-bar band (matches the prototype).
+            // Non-interactive, so it's safe in the strip even though the title-bar
+            // view eats clicks; the interactive controls live in TopBarControls.
+            .overlay {
+                Image(nsImage: MenuBarIcon.logoImage)
+                    .resizable()
+                    .renderingMode(.template)
+                    .frame(width: 13, height: 13)
+                    .foregroundStyle(Theme.ink.opacity(0.9))
+                    .allowsHitTesting(false)
+            }
             .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline(0.08)).frame(height: 1) }
     }
 }

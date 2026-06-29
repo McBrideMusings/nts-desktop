@@ -161,15 +161,6 @@ struct DialView: View {
                radius: g.bleed)
     }
 
-    /// Hub label — only shown for a mixtape (a hovered wedge or a selected
-    /// mixtape). Empty when a channel is the source, so the hub stays a bare
-    /// play/pause control.
-    private var centerLabel: String {
-        if let h = model.hoverIndex, tapes.indices.contains(h) { return tapes[h].title.uppercased() }
-        if case .mixtape = model.selection { return model.displayName }
-        return ""
-    }
-
     private var pointerRotation: Double {
         if let alias = model.currentMixtape?.alias,
            let idx = tapes.firstIndex(where: { $0.alias == alias }) {
@@ -181,13 +172,14 @@ struct DialView: View {
     private func hub(_ g: Geo) -> some View {
         let k = g.k
         return ZStack {
-            // Selection pointer
+            // Selection pointer — a triangular tail on the hub rim pointing at the
+            // active mixtape (matches the prototype; was a thin tick before).
             ZStack(alignment: .top) {
                 Color.clear
-                RoundedRectangle(cornerRadius: 2 * k)
-                    .fill(model.accent)
-                    .frame(width: 3 * k, height: 18 * k)
-                    .padding(.top, 6 * k)
+                HubTail()
+                    .fill(Theme.hubInk)
+                    .frame(width: 30 * k, height: 17 * k)
+                    .padding(.top, 18 * k)
             }
             .frame(width: 226 * k, height: 226 * k)
             .rotationEffect(.degrees(pointerRotation))
@@ -202,18 +194,13 @@ struct DialView: View {
                 .frame(width: 190 * k, height: 190 * k)
                 .allowsHitTesting(false)
 
-            // Play / pause hub
+            // Play / pause hub — just the control, no label (matches the prototype;
+            // the playing source's name lives in the now-playing bar).
             Button { model.togglePlay() } label: {
-                VStack(spacing: 9 * k) {
-                    Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 17 * k))
-                        .foregroundStyle(Theme.popover.opacity(0.88))
-                    if !centerLabel.isEmpty {
-                        ChipText(text: centerLabel, font: Theme.display(16 * k, .heavy), fg: Theme.hubInk)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: 150 * k)
-                    }
-                }
+                Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 19 * k))
+                    .foregroundStyle(Theme.popover.opacity(0.88))
+                    .frame(width: 166 * k, height: 166 * k)
             }
             .buttonStyle(.plain)
             .frame(width: 166 * k, height: 166 * k)
@@ -222,5 +209,19 @@ struct DialView: View {
             .shadow(color: .black.opacity(0.5), radius: 11 * k, y: 6 * k)
         }
         .frame(width: 226 * k, height: 226 * k)
+    }
+}
+
+/// The hub's selection tail — a triangle whose tip points outward (up before the
+/// pointer's rotation), reading as a tail off the hub disc toward the active
+/// mixtape.
+private struct HubTail: Shape {
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: r.midX, y: r.minY))     // tip (outward)
+        p.addLine(to: CGPoint(x: r.minX, y: r.maxY))  // base left
+        p.addLine(to: CGPoint(x: r.maxX, y: r.maxY))  // base right
+        p.closeSubpath()
+        return p
     }
 }
