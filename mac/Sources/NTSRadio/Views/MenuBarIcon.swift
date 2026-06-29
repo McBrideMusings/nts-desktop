@@ -1,35 +1,20 @@
 import SwiftUI
 import AppKit
 
-/// The status-bar item: NTS's four equalizer bars, drawn as a *template*
-/// NSImage so macOS tints/sizes it like every other menu-bar icon. A custom
-/// SwiftUI Shape label renders as a zero-width (invisible) item, so we hand
-/// MenuBarExtra a concrete Image.
+/// The status-bar item: the NTS logo, loaded as a *template* NSImage so macOS
+/// tints and sizes it to match every other menu-bar icon (black on a light bar,
+/// white on a dark one). The artwork (NTSLogoTemplate.png) is the NTS mark with
+/// the letters knocked out, rendered from Resources/NTSLogo.svg.
 struct MenuBarIcon: View {
-    var playing: Bool
-
     var body: some View {
-        Image(nsImage: MenuBarIcon.barsImage)
+        Image(nsImage: MenuBarIcon.logoImage)
     }
 
-    static let barsImage: NSImage = {
-        let heights: [CGFloat] = [0.55, 1.0, 0.42, 0.8]
-        let barW: CGFloat = 2, gap: CGFloat = 1.6
-        let w: CGFloat = CGFloat(heights.count) * barW + CGFloat(heights.count - 1) * gap
-        let h: CGFloat = 15
-
-        let img = NSImage(size: NSSize(width: w, height: h))
-        img.lockFocus()
-        NSColor.black.setFill()
-        var x: CGFloat = 0
-        for frac in heights {
-            let bh = max(2, h * frac)
-            NSBezierPath(roundedRect: NSRect(x: x, y: 0, width: barW, height: bh),
-                         xRadius: 1, yRadius: 1).fill()
-            x += barW + gap
-        }
-        img.unlockFocus()
-        img.isTemplate = true   // adapts to light/dark menu bar
+    static let logoImage: NSImage = {
+        let img = Bundle.module.url(forResource: "NTSLogoTemplate", withExtension: "png")
+            .flatMap { NSImage(contentsOf: $0) } ?? NSImage(size: NSSize(width: 16, height: 16))
+        img.size = NSSize(width: 16, height: 16)   // menu-bar icons read best ~16pt
+        img.isTemplate = true
         return img
     }()
 }

@@ -56,7 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         windowController = RadioWindowController(model: model)
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.image = MenuBarIcon.barsImage
+        item.button?.image = MenuBarIcon.logoImage
         item.button?.target = self
         item.button?.action = #selector(statusItemClicked)
         item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
