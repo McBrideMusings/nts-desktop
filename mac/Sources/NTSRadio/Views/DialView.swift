@@ -95,7 +95,11 @@ struct DialView: View {
                     .allowsHitTesting(false)
                 }
 
-                hub(g).position(x: g.cx, y: g.cy)
+                // Empty center in the idle state — just the ring of mixtapes,
+                // no play hub, until something is selected.
+                if !model.isIdle {
+                    hub(g).position(x: g.cx, y: g.cy)
+                }
             }
             .frame(width: g.w, height: g.h)
             .background(Theme.stage)

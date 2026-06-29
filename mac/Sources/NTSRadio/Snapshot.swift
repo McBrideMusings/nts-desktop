@@ -30,9 +30,54 @@ enum Snapshot {
             print("wrote \(name)")
         }
 
-        shot("01-default-mix-dial.png") { _ in }
-        shot("02-channel1-live.png") { $0.select(.channel(1)) }
-        shot("03-tracklist.png") { $0.select(.channel(1)); $0.showTracks = true }
+        // Sample mixtape + tracklist matching the prototype's data, so the
+        // tracklist surface renders with content for a faithful diff.
+        let sampleMix = Mixtape(
+            alias: "rap-house", title: "Rap House", subtitle: "808s and champagne.",
+            streamURL: URL(string: "https://example.com/s")!,
+            coverURL: nil, iconURL: nil, animationURL: nil, hue: 285)
+        let sampleTracks = [
+            Track(time: "21:05", title: "Champagne", artist: "Clams Casino", hue: 285),
+            Track(time: "21:00", title: "808 Heart", artist: "Metro Boomin", hue: 285),
+            Track(time: "20:55", title: "Drip", artist: "Gunna", hue: 285),
+        ]
+
+        // Seed live-channel show + time so the cards render with content (the
+        // snapshot has no network), matching the prototype's sample data.
+        func seedChannels(_ m: AppModel) {
+            if m.catalog.channels.count >= 2 {
+                m.catalog.channels[0].show = "Low Slung Transmission"
+                m.catalog.channels[0].startEnd = "17:00 – 19:00"
+                m.catalog.channels[1].show = "Desert Frequency Hour"
+                m.catalog.channels[1].startEnd = "09:00 – 11:00"
+            }
+        }
+
+        // Seed a sample mixtape catalog so the dial ring renders (no network in
+        // the snapshot). Icons come from the CDN, so spokes are positioned but
+        // their symbols don't load here — the ring layout + hub still verify.
+        func seedMixtapes(_ m: AppModel) {
+            let names = ["Poolside", "Slow Focus", "100% Hip Hop", "Island Time",
+                         "4 To The Floor", "Memory Lane", "The Pit", "Sheet Music",
+                         "Feelings", "Expansions", "Rap House", "Labyrinth"]
+            m.catalog.mixtapes = names.enumerated().map { i, n in
+                Mixtape(alias: n.lowercased().replacingOccurrences(of: " ", with: "-"),
+                        title: n, subtitle: "", streamURL: URL(string: "https://example.com/s")!,
+                        coverURL: nil, iconURL: nil, animationURL: nil,
+                        hue: Double(i) * 360 / 12)
+            }
+        }
+
+        // Default launch state is now idle — nothing selected (empty center, idle
+        // now-playing bar). This shot verifies that empty state.
+        shot("01-default-mix-dial.png") { seedChannels($0); seedMixtapes($0) }
+        shot("02-channel1-live.png") { seedChannels($0); seedMixtapes($0); $0.select(.channel(1)) }
+        shot("03-tracklist.png") {
+            $0.catalog.mixtapes = [sampleMix]
+            $0.select(.mixtape("rap-house"))
+            $0.tracks = sampleTracks
+            $0.showTracks = true
+        }
         shot("04-settings.png") { $0.settingsOpen = true }
 
         exit(0)

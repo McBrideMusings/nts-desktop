@@ -70,11 +70,8 @@ private struct ChannelCard: View {
             Spacer(minLength: 8)
             HStack { Spacer(); channelDisc(diameter: 86, showNumber: false); Spacer() }
             Spacer(minLength: 8)
-            VStack(alignment: .leading, spacing: 6) {
-                ChipText(text: channel.city, font: Theme.mono(10).weight(.medium))
-                ChipText(text: channel.show.uppercased(), font: Theme.display(17, .black))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            ChipText(text: channel.show.uppercased(), font: Theme.display(17, .black))
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(EdgeInsets(top: 15, leading: 16, bottom: 15, trailing: 16))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -155,12 +152,9 @@ private struct ChannelCard: View {
                 .frame(maxHeight: .infinity)
                 .background(channel.accent)
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text("LIVE NOW")
-                        .font(Theme.mono(9, .bold))
-                        .tracking(1.3)
-                    Circle().fill(Theme.liveDot).frame(width: 5, height: 5)
-                }
+                Text(channel.city)
+                    .font(Theme.mono(9, .bold))
+                    .tracking(1.3)
                 Text(channel.startEnd.isEmpty ? "—" : channel.startEnd)
                     .font(Theme.display(14, .heavy))
                     .monospacedDigit()

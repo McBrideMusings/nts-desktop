@@ -19,6 +19,8 @@ enum TracklistAdapter {
                        mixtape: Mixtape?,
                        channel: Channel?) -> Stream? {
         switch selection {
+        case .idle:
+            return nil
         case .mixtape:
             guard let mix = mixtape else { return nil }
             return Stream(filter: .mixtape(mix.alias), hue: mix.hue)

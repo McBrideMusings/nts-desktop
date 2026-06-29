@@ -10,9 +10,11 @@ struct PopoverView: View {
             HStack(spacing: 0) {
                 ChannelRail()
                 DialView()
-                    .overlay { if model.showTracks { TracklistOverlay() } }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // The tracklist is a full-width overlay (covers the rail + dial),
+            // matching the prototype — not just the dial pane.
+            .overlay { if model.showTracks { TracklistOverlay() } }
 
             NowPlayingBar()
         }

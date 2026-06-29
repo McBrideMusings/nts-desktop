@@ -3,12 +3,9 @@ import Combine
 import NTSFirestore
 
 enum Selection: Equatable {
+    case idle              // nothing selected — the default empty state on launch
     case mixtape(String)   // mixtape alias — stable across catalog rebuilds
     case channel(Int)
-
-    /// Sentinel meaning "the first mixtape", used before the catalog has loaded
-    /// (its alias isn't known yet at init).
-    static let firstMixtape = Selection.mixtape("")
 }
 
 @MainActor
@@ -17,7 +14,7 @@ final class AppModel: ObservableObject {
     let engine = PlayerEngine()
     let auth = NTSAuth()
 
-    @Published var selection: Selection = .firstMixtape
+    @Published var selection: Selection = .idle
     @Published var muted = false { didSet { engine.apply(volume: volume, muted: muted) } }
     @Published var volume: Double = 72 { didSet { engine.apply(volume: volume, muted: muted) } }
     @Published var showTracks = false
@@ -88,11 +85,11 @@ final class AppModel: ObservableObject {
     var isPlaying: Bool { engine.isPlaying }
     var isLive: Bool { if case .channel = selection { return true }; return false }
 
+    /// Whether nothing is selected — the idle/empty state shown on first launch.
+    var isIdle: Bool { selection == .idle }
+
     var currentMixtape: Mixtape? {
         guard case .mixtape(let alias) = selection else { return nil }
-        // Empty alias is the "first mixtape" sentinel used before a real one is
-        // picked; otherwise resolve by alias (nil if it's gone from the catalog).
-        if alias.isEmpty { return catalog.mixtapes.first }
         return catalog.mixtapes.first { $0.alias == alias }
     }
     var currentChannel: Channel? {

@@ -14,19 +14,22 @@ struct NowPlayingBar: View {
                     .background(Circle().fill(Theme.ink))
             }
             .buttonStyle(.plain)
+            .disabled(model.isIdle)
+            .opacity(model.isIdle ? 0.4 : 1)
 
             VStack(alignment: .leading, spacing: 2) {
-                // Live show title — already bold white; links to its episode page.
+                // Idle (nothing selected) → placeholder; otherwise the live show
+                // title (links to its episode page) or the mixtape name.
                 LinkLabel(
-                    text: model.displayName,
+                    text: model.isIdle ? "NOTHING PLAYING" : model.displayName,
                     url: model.nowPlayingShowURL,
                     font: Theme.display(14, .heavy),
-                    color: Theme.ink
+                    color: model.isIdle ? Theme.inkMuted : Theme.ink
                 )
                 // Mixtape source episode — when it's a link, NTS shows it bold white
                 // (vs the muted, regular non-link descriptor).
                 LinkLabel(
-                    text: model.subtitle,
+                    text: model.isIdle ? "PICK A MIXTAPE OR CHANNEL" : model.subtitle,
                     url: model.nowPlayingEpisodeURL,
                     font: Theme.mono(10, .regular),
                     linkFont: Theme.mono(10, .bold),
