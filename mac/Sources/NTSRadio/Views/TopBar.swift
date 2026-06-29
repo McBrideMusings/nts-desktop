@@ -39,10 +39,10 @@ struct TopBarControls: View {
     }
 
     /// Login-state indicator: signed-in shows the email's initial with a green
-    /// dot; signed-out shows a generic person glyph. Either way it opens the
-    /// settings sheet, where sign-in / sign-out lives.
+    /// dot; signed-out shows a generic person glyph. Opens the standalone account
+    /// popover, where sign-in / sign-out lives.
     private var profileButton: some View {
-        Button { model.settingsOpen = true } label: {
+        Button { model.loginOpen = true } label: {
             ZStack(alignment: .bottomTrailing) {
                 ZStack {
                     Circle()

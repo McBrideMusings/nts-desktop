@@ -78,7 +78,8 @@ enum Snapshot {
             $0.tracks = sampleTracks
             $0.showTracks = true
         }
-        shot("04-settings.png") { $0.settingsOpen = true }
+        shot("04-settings.png") { seedChannels($0); seedMixtapes($0); $0.settingsOpen = true }
+        shot("05-login.png") { seedChannels($0); seedMixtapes($0); $0.loginOpen = true }
 
         exit(0)
     }

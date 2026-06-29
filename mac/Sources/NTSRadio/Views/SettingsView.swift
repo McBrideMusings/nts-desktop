@@ -1,226 +1,151 @@
 import SwiftUI
 import AppKit
 
-/// macOS-style settings sheet. Account sign-in is live (NTS Supporters, via
-/// `NTSAuth`); Check-for-Updates is intentionally non-functional for v1 (see
-/// GitHub issue #2); Start-on-Login flips locally (real SMAppService wiring
-/// lands with .app packaging).
+/// macOS-style settings popover, grouped GENERAL / DISPLAY sections (matching the
+/// prototype). Sign-in lives in the standalone account popover (`LoginView`), not
+/// here. Check-for-Updates is intentionally non-functional for v1 (GitHub #2);
+/// Start-on-Login flips locally (real SMAppService wiring lands with packaging).
 struct SettingsView: View {
     @EnvironmentObject var model: AppModel
-    @EnvironmentObject var auth: NTSAuth
-    @State private var email = ""
-    @State private var password = ""
 
     var body: some View {
         ZStack(alignment: .top) {
             Color.black.opacity(0.32)
                 .ignoresSafeArea()
                 .onTapGesture { model.settingsOpen = false }
-
-            sheet
-                .padding(.top, 14)
+            sheet.padding(.top, 14)
         }
     }
 
     private var sheet: some View {
         VStack(spacing: 0) {
-            ZStack {
-                Text("Settings")
-                    .font(Theme.ui(13, .semibold))
-                    .foregroundStyle(Theme.sheetInk)
-                HStack {
-                    Button { model.settingsOpen = false } label: {
-                        Circle().fill(Theme.trafficRed).frame(width: 12, height: 12)
+            header
+
+            VStack(alignment: .leading, spacing: 16) {
+                section("GENERAL") {
+                    card {
+                        settingRow("Start on Login",
+                                   "Open NTS automatically when you sign in.",
+                                   on: model.startOnLogin) { model.startOnLogin.toggle() }
                     }
-                    .buttonStyle(.plain)
-                    Spacer()
-                }
-                .padding(.leading, 14)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 13)
-            .overlay(alignment: .bottom) { Rectangle().fill(.black.opacity(0.1)).frame(height: 0.5) }
-
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 6) {
-                    Text("ACCOUNT")
-                        .font(Theme.mono(9.5, .regular)).tracking(1.5)
-                        .foregroundStyle(Theme.sheetInk2)
-                    Spacer()
-                    Text("NTS SUPPORTERS")
-                        .font(Theme.mono(9.5, .regular)).tracking(1.5)
-                        .foregroundStyle(Theme.sheetInk3)
-                }
-                .padding(.bottom, 9)
-
-                if auth.isAuthenticated {
-                    signedIn
-                } else {
-                    signInForm
                 }
 
-                divider
-
-                HStack {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Start on Login")
-                            .font(Theme.ui(14, .medium)).foregroundStyle(Theme.sheetInk)
-                        Text("Open NTS automatically when you sign in.")
-                            .font(Theme.ui(12)).foregroundStyle(Theme.sheetInk2)
+                section("DISPLAY") {
+                    card {
+                        settingRow("Hide Dial Dot When Small",
+                                   "Drop the channel's center dot once the window shrinks.",
+                                   on: model.hideDialDotWhenSmall) { model.hideDialDotWhenSmall.toggle() }
                     }
-                    .padding(.trailing, 14)
-                    Spacer()
-                    TogglePill(on: model.startOnLogin) { model.startOnLogin.toggle() }
                 }
 
-                divider
-
-                HStack {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Show in Dock")
-                            .font(Theme.ui(14, .medium)).foregroundStyle(Theme.sheetInk)
-                        Text("Also show NTS in the Dock and app switcher.")
-                            .font(Theme.ui(12)).foregroundStyle(Theme.sheetInk2)
-                    }
-                    .padding(.trailing, 14)
-                    Spacer()
-                    TogglePill(on: model.showInDock) { model.showInDock.toggle() }
+                card {
+                    linkRow("Check for Updates…") { /* non-functional v1 (GitHub #2) */ }
+                    rowDivider
+                    linkRow("About NTS Radio") { model.aboutOpen.toggle() }
                 }
 
-                divider
+                if model.aboutOpen { aboutCard }
 
-                HStack(spacing: 10) {
-                    ghost("About") { model.aboutOpen.toggle() }
-                    ghost("Check for Updates…") { /* non-functional v1 */ }
-                }
-
-                if model.aboutOpen {
-                    VStack(spacing: 3) {
-                        Text("NTS Radio").font(Theme.ui(13, .bold)).tracking(0.3)
-                            .foregroundStyle(Theme.sheetInk)
-                        Text("Version 0.1 · Streaming worldwide since 2011")
-                            .font(Theme.ui(11.5)).foregroundStyle(Theme.sheetInk2)
-                        Text("Made with love in London & Manchester")
-                            .font(Theme.ui(11.5)).foregroundStyle(Theme.sheetInk2)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(12)
-                    .background(RoundedRectangle(cornerRadius: 9).fill(.black.opacity(0.04)))
-                    .padding(.top, 13)
-                }
-
-                Button { NSApp.terminate(nil) } label: {
-                    Text("Quit NTS Radio")
-                        .font(Theme.ui(13, .medium))
-                        .foregroundStyle(Theme.red)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 7)
-                        .background(RoundedRectangle(cornerRadius: 7).fill(.white.opacity(0.9))
-                            .overlay(RoundedRectangle(cornerRadius: 7).stroke(.black.opacity(0.22), lineWidth: 0.5)))
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 14)
-
-                Text("© 2026 NTS Radio Ltd. All rights reserved.")
+                Text("© 2026 NTS Radio Ltd.")
                     .font(Theme.ui(10.5)).foregroundStyle(Theme.sheetInk3)
                     .frame(maxWidth: .infinity)
-                    .padding(.top, 16)
+                    .padding(.top, 2)
             }
-            .padding(EdgeInsets(top: 18, leading: 20, bottom: 16, trailing: 20))
+            .padding(EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16))
         }
-        .frame(width: 360)
+        .frame(width: 340)
         .background(Theme.sheet)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.5), radius: 35, y: 24)
     }
 
-    private var divider: some View {
-        Rectangle().fill(.black.opacity(0.1)).frame(height: 1).padding(.vertical, 18)
-    }
+    // MARK: Header
 
-    // MARK: Account states
-
-    private var signInForm: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            TextField("Email", text: $email)
-                .textFieldStyle(.plain)
-                .textContentType(.username)
-                .disableAutocorrection(true)
-                .font(Theme.ui(13.5)).foregroundStyle(Theme.sheetInk)
-                .padding(EdgeInsets(top: 8, leading: 11, bottom: 8, trailing: 11))
-                .background(inputChrome)
-
-            SecureField("Password", text: $password)
-                .textFieldStyle(.plain)
-                .textContentType(.password)
-                .font(Theme.ui(13.5)).foregroundStyle(Theme.sheetInk)
-                .padding(EdgeInsets(top: 8, leading: 11, bottom: 8, trailing: 11))
-                .background(inputChrome)
-                .onSubmit(submit)
-
-            if let err = auth.errorMessage {
-                Text(err).font(Theme.ui(11.5)).foregroundStyle(Theme.red)
-            }
-
-            Button(action: submit) {
-                HStack(spacing: 7) {
-                    if auth.isWorking { ProgressView().controlSize(.small) }
-                    Text(auth.isWorking ? "Logging In…" : "Log In")
-                        .font(Theme.ui(14, .semibold)).foregroundStyle(.white)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 9)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Theme.blue))
-            }
-            .buttonStyle(.plain)
-            .disabled(auth.isWorking)
-        }
-    }
-
-    private var signedIn: some View {
-        VStack(alignment: .leading, spacing: 11) {
+    private var header: some View {
+        ZStack {
+            Text("Settings")
+                .font(Theme.ui(13, .semibold))
+                .foregroundStyle(Theme.sheetInk)
             HStack(spacing: 8) {
-                Circle().fill(Theme.green).frame(width: 8, height: 8)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Signed in").font(Theme.ui(13, .semibold)).foregroundStyle(Theme.sheetInk)
-                    if let em = auth.email {
-                        Text(em).font(Theme.ui(11.5)).foregroundStyle(Theme.sheetInk2)
-                    }
+                Button { model.settingsOpen = false } label: {
+                    Circle().fill(Theme.trafficRed).frame(width: 12, height: 12)
                 }
+                .buttonStyle(.plain)
+                Circle().fill(.black.opacity(0.12)).frame(width: 12, height: 12)
+                Circle().fill(.black.opacity(0.12)).frame(width: 12, height: 12)
                 Spacer()
             }
-            ghost("Log Out") { auth.signOut() }
+            .padding(.leading, 14)
         }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 13)
+        .overlay(alignment: .bottom) { Rectangle().fill(.black.opacity(0.1)).frame(height: 0.5) }
     }
 
-    private var inputChrome: some View {
-        RoundedRectangle(cornerRadius: 7).fill(.white)
-            .overlay(RoundedRectangle(cornerRadius: 7).stroke(.black.opacity(0.16), lineWidth: 1))
-    }
+    // MARK: Building blocks
 
-    private func submit() {
-        let e = email, p = password
-        Task {
-            await auth.signIn(email: e, password: p)
-            if auth.isAuthenticated { password = "" }
-        }
-    }
-
-    private func ghost(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    private func section<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
             Text(title)
-                .font(Theme.ui(13, .medium))
-                .foregroundStyle(Theme.sheetInk)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 7)
-                .background(RoundedRectangle(cornerRadius: 7).fill(.white.opacity(0.9))
-                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(.black.opacity(0.22), lineWidth: 0.5)))
+                .font(Theme.mono(9.5, .regular)).tracking(1.5)
+                .foregroundStyle(Theme.sheetInk3)
+                .padding(.leading, 4)
+            content()
+        }
+    }
+
+    private func card<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(spacing: 0) { content() }
+            .background(RoundedRectangle(cornerRadius: 10).fill(.white))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(.black.opacity(0.06), lineWidth: 0.5))
+    }
+
+    private var rowDivider: some View {
+        Rectangle().fill(.black.opacity(0.08)).frame(height: 0.5).padding(.leading, 14)
+    }
+
+    private func settingRow(_ title: String, _ desc: String, on: Bool, _ toggle: @escaping () -> Void) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(Theme.ui(14, .medium)).foregroundStyle(Theme.sheetInk)
+                Text(desc).font(Theme.ui(12)).foregroundStyle(Theme.sheetInk2)
+            }
+            Spacer()
+            TogglePill(on: on, action: toggle)
+        }
+        .padding(EdgeInsets(top: 11, leading: 14, bottom: 11, trailing: 12))
+    }
+
+    private func linkRow(_ title: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Text(title).font(Theme.ui(14, .regular)).foregroundStyle(Theme.sheetInk)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.sheetInk3)
+            }
+            .contentShape(Rectangle())
+            .padding(EdgeInsets(top: 12, leading: 14, bottom: 12, trailing: 14))
         }
         .buttonStyle(.plain)
     }
+
+    private var aboutCard: some View {
+        VStack(spacing: 3) {
+            Text("NTS Radio").font(Theme.ui(13, .bold)).tracking(0.3).foregroundStyle(Theme.sheetInk)
+            Text("Version 0.1 · Streaming worldwide since 2011")
+                .font(Theme.ui(11.5)).foregroundStyle(Theme.sheetInk2)
+            Text("Made with love in London & Manchester")
+                .font(Theme.ui(11.5)).foregroundStyle(Theme.sheetInk2)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 10).fill(.black.opacity(0.04)))
+    }
 }
 
-private struct TogglePill: View {
+struct TogglePill: View {
     let on: Bool
     let action: () -> Void
     var body: some View {

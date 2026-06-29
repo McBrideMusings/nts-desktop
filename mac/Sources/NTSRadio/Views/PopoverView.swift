@@ -24,5 +24,6 @@ struct PopoverView: View {
         // its controls land on the traffic lights' row, Spotify-style.
         .ignoresSafeArea(.container, edges: .top)
         .overlay { if model.settingsOpen { SettingsView() } }
+        .overlay { if model.loginOpen { LoginView() } }
     }
 }

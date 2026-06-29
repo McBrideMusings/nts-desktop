@@ -20,6 +20,7 @@ final class AppModel: ObservableObject {
     @Published var showTracks = false
     @Published var hoverIndex: Int? = nil
     @Published var settingsOpen = false
+    @Published var loginOpen = false   // standalone sign-in popover (account button)
 
     /// Tracklist for the current source — populated by the Firestore listener for
     /// both mixtapes and live channels when signed in (empty when signed out).
@@ -40,6 +41,13 @@ final class AppModel: ObservableObject {
     /// AppDelegate observes it and owns applying the activation policy.
     @Published var showInDock: Bool = UserDefaults.standard.bool(forKey: "showInDock") {
         didSet { UserDefaults.standard.set(showInDock, forKey: "showInDock") }
+    }
+
+    /// DISPLAY setting (prototype): once the window shrinks to the compact dial,
+    /// drop the channel disc's center number. On by default. Persisted.
+    @Published var hideDialDotWhenSmall: Bool =
+        (UserDefaults.standard.object(forKey: "hideDialDotWhenSmall") as? Bool) ?? true {
+        didSet { UserDefaults.standard.set(hideDialDotWhenSmall, forKey: "hideDialDotWhenSmall") }
     }
 
     /// Live tracklist listener for the current source (nil when signed out).
