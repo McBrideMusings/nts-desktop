@@ -13,7 +13,8 @@ struct ChannelRail: View {
                 ForEach(Array(model.catalog.channels.enumerated()), id: \.element.id) { idx, c in
                     ChannelCard(channel: c,
                                 active: model.selection == .channel(c.number),
-                                slot: cardH)
+                                slot: cardH,
+                                hideDotWhenSmall: model.hideDialDotWhenSmall)
                         .onTapGesture { model.select(.channel(c.number)) }
                     if idx == 0 {
                         Rectangle().fill(Theme.hairline(0.1)).frame(height: 1)
@@ -33,6 +34,7 @@ private struct ChannelCard: View {
     let channel: Channel
     let active: Bool
     let slot: CGFloat
+    let hideDotWhenSmall: Bool
 
     /// Below this slot height the card sheds its live chip + show title and shows
     /// just the numbered disc + city. That's what lets the whole window get short:
@@ -70,11 +72,8 @@ private struct ChannelCard: View {
             Spacer(minLength: 8)
             HStack { Spacer(); channelDisc(diameter: 86, showNumber: false); Spacer() }
             Spacer(minLength: 8)
-            VStack(alignment: .leading, spacing: 6) {
-                ChipText(text: channel.city, font: Theme.mono(10).weight(.medium))
-                ChipText(text: channel.show.uppercased(), font: Theme.display(17, .black))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            ChipText(text: channel.show.uppercased(), font: Theme.display(17, .black))
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(EdgeInsets(top: 15, leading: 16, bottom: 15, trailing: 16))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -87,7 +86,7 @@ private struct ChannelCard: View {
     private var compactContent: some View {
         let d = max(34, min(86, slot * 0.46))
         return VStack(spacing: max(6, d * 0.14)) {
-            channelDisc(diameter: d, showNumber: true)
+            channelDisc(diameter: d, showNumber: !hideDotWhenSmall)
             ChipText(text: channel.city, font: Theme.mono(10).weight(.medium))
                 .opacity(active ? 1 : 0.85)
         }
@@ -155,12 +154,9 @@ private struct ChannelCard: View {
                 .frame(maxHeight: .infinity)
                 .background(channel.accent)
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text("LIVE NOW")
-                        .font(Theme.mono(9, .bold))
-                        .tracking(1.3)
-                    Circle().fill(Theme.liveDot).frame(width: 5, height: 5)
-                }
+                Text(channel.city)
+                    .font(Theme.mono(9, .bold))
+                    .tracking(1.3)
                 Text(channel.startEnd.isEmpty ? "—" : channel.startEnd)
                     .font(Theme.display(14, .heavy))
                     .monospacedDigit()

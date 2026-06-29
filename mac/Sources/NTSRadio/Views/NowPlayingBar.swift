@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct NowPlayingBar: View {
     @EnvironmentObject var model: AppModel
@@ -13,17 +14,29 @@ struct NowPlayingBar: View {
                     .background(Circle().fill(Theme.ink))
             }
             .buttonStyle(.plain)
+            .disabled(model.isIdle)
+            .opacity(model.isIdle ? 0.4 : 1)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(model.displayName)
-                    .font(Theme.display(14, .heavy))
-                    .foregroundStyle(Theme.ink)
-                    .lineLimit(1)
-                Text(model.subtitle)
-                    .font(Theme.mono(10, .regular))
-                    .tracking(0.5)
-                    .foregroundStyle(Theme.inkMuted)
-                    .lineLimit(1)
+                // Idle (nothing selected) → placeholder; otherwise the live show
+                // title (links to its episode page) or the mixtape name.
+                LinkLabel(
+                    text: model.isIdle ? "NOTHING PLAYING" : model.displayName,
+                    url: model.nowPlayingShowURL,
+                    font: Theme.display(14, .heavy),
+                    color: model.isIdle ? Theme.inkMuted : Theme.ink
+                )
+                // Mixtape source episode — when it's a link, NTS shows it bold white
+                // (vs the muted, regular non-link descriptor).
+                LinkLabel(
+                    text: model.isIdle ? "PICK A MIXTAPE OR CHANNEL" : model.subtitle,
+                    url: model.nowPlayingEpisodeURL,
+                    font: Theme.mono(10, .regular),
+                    linkFont: Theme.mono(10, .bold),
+                    color: Theme.inkMuted,
+                    linkColor: Theme.ink,
+                    tracking: 0.5
+                )
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -40,6 +53,8 @@ struct NowPlayingBar: View {
                         .fill(model.showTracks ? Theme.ink : Theme.hairline(0.08)))
             }
             .buttonStyle(.plain)
+            .disabled(model.isIdle)
+            .opacity(model.isIdle ? 0.4 : 1)
 
             Button { model.muted.toggle() } label: {
                 Image(systemName: model.muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
@@ -55,6 +70,39 @@ struct NowPlayingBar: View {
         .padding(.vertical, 12)
         .background(Theme.nowBar)
         .overlay(alignment: .top) { Rectangle().fill(Theme.hairline(0.08)).frame(height: 1) }
+    }
+}
+
+/// A now-playing label that becomes a link when `url` is non-nil: it switches to
+/// `linkFont`/`linkColor` (NTS shows clickable labels bold white), shows an
+/// underline + pointer cursor on hover, and opens the page in the browser on tap.
+/// Plain text otherwise.
+private struct LinkLabel: View {
+    let text: String
+    let url: URL?
+    let font: Font
+    var linkFont: Font? = nil
+    let color: Color
+    var linkColor: Color? = nil
+    var tracking: CGFloat = 0
+    @State private var hovering = false
+
+    var body: some View {
+        let isLink = url != nil
+        Text(text)
+            .font(isLink ? (linkFont ?? font) : font)
+            .tracking(tracking)
+            .underline(isLink && hovering)
+            .foregroundStyle(isLink ? (linkColor ?? color) : color)
+            .lineLimit(1)
+            .contentShape(Rectangle())
+            .onHover { inside in
+                hovering = inside
+                guard isLink else { return }
+                if inside { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+            }
+            .onTapGesture { if let url { NSWorkspace.shared.open(url) } }
+            .help(url?.absoluteString ?? "")
     }
 }
 

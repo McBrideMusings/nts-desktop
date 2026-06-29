@@ -9,6 +9,8 @@ enum NTSAPI {
         let startEnd: String
         let genre: String
         let background: String?   // current program's full-bleed artwork
+        let showAlias: String     // for linking the title to its episode page
+        let episodeAlias: String
     }
 
     private struct Response: Decodable {
@@ -24,7 +26,12 @@ enum NTSAPI {
             let embeds: Embeds?
         }
         struct Embeds: Decodable { let details: Details? }
-        struct Details: Decodable { let genres: [Genre]?; let media: Media? }
+        struct Details: Decodable {
+            let genres: [Genre]?
+            let media: Media?
+            let show_alias: String?
+            let episode_alias: String?
+        }
         struct Genre: Decodable { let value: String? }
         struct Media: Decodable { let background_large: String? }
     }
@@ -90,12 +97,46 @@ enum NTSAPI {
 
         return decoded.results.compactMap { r -> LiveUpdate? in
             guard let chName = r.channel_name, let ch = Int(chName), let now = r.now else { return nil }
-            let show = now.broadcast_title ?? ""
-            let genre = now.embeds?.details?.genres?.first?.value ?? ""
+            let details = now.embeds?.details
+            let show = decodeEntities(now.broadcast_title ?? "")
+            let genre = decodeEntities(details?.genres?.first?.value ?? "")
             let startEnd = timeRange(now.start_timestamp, now.end_timestamp)
-            let background = now.embeds?.details?.media?.background_large
-            return LiveUpdate(channel: ch, show: show, startEnd: startEnd, genre: genre, background: background)
+            let background = details?.media?.background_large
+            return LiveUpdate(
+                channel: ch, show: show, startEnd: startEnd, genre: genre, background: background,
+                showAlias: details?.show_alias ?? "", episodeAlias: details?.episode_alias ?? ""
+            )
         }
+    }
+
+    /// Decode the handful of HTML entities NTS leaves in broadcast titles/genres
+    /// (e.g. `&amp;` → `&`). Numeric entities (`&#39;`, `&#x27;`) are handled too.
+    /// `&amp;` is unescaped last so `&amp;lt;` survives as `&lt;`.
+    ///
+    /// Deliberately a tiny hand-rolled table rather than a library: `NSAttributedString`
+    /// HTML import is heavyweight and main-thread-only (wrong for a background decode of
+    /// a one-line title), and pulling a parser dependency (SwiftSoup, etc.) is overkill
+    /// for the few entities NTS actually emits in a plain-text title.
+    static func decodeEntities(_ s: String) -> String {
+        guard s.contains("&") else { return s }
+        var out = s
+        for (entity, char) in [("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""), ("&#39;", "'"), ("&apos;", "'"), ("&nbsp;", " ")] {
+            out = out.replacingOccurrences(of: entity, with: char)
+        }
+        // Numeric entities: &#123; (decimal) and &#x1F;/&#X1F; (hex). Resolve each
+        // match independently against the original ranges (reversed, so earlier
+        // ranges stay valid) — a single malformed/out-of-range token is left as-is
+        // rather than abandoning every entity after it.
+        if let re = try? NSRegularExpression(pattern: "&#(x?)([0-9A-Fa-f]+);", options: .caseInsensitive) {
+            let ns = out as NSString
+            for m in re.matches(in: out, range: NSRange(location: 0, length: ns.length)).reversed() {
+                let hex = !ns.substring(with: m.range(at: 1)).isEmpty
+                let digits = ns.substring(with: m.range(at: 2))
+                guard let code = UInt32(digits, radix: hex ? 16 : 10), let scalar = Unicode.Scalar(code) else { continue }
+                out = (out as NSString).replacingCharacters(in: m.range, with: String(scalar))
+            }
+        }
+        return out.replacingOccurrences(of: "&amp;", with: "&")
     }
 
     private static let iso: ISO8601DateFormatter = {
