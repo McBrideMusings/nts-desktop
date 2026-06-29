@@ -112,20 +112,29 @@ enum NTSAPI {
     /// Decode the handful of HTML entities NTS leaves in broadcast titles/genres
     /// (e.g. `&amp;` → `&`). Numeric entities (`&#39;`, `&#x27;`) are handled too.
     /// `&amp;` is unescaped last so `&amp;lt;` survives as `&lt;`.
+    ///
+    /// Deliberately a tiny hand-rolled table rather than a library: `NSAttributedString`
+    /// HTML import is heavyweight and main-thread-only (wrong for a background decode of
+    /// a one-line title), and pulling a parser dependency (SwiftSoup, etc.) is overkill
+    /// for the few entities NTS actually emits in a plain-text title.
     static func decodeEntities(_ s: String) -> String {
         guard s.contains("&") else { return s }
         var out = s
         for (entity, char) in [("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""), ("&#39;", "'"), ("&apos;", "'"), ("&nbsp;", " ")] {
             out = out.replacingOccurrences(of: entity, with: char)
         }
-        // Numeric entities: &#123; (decimal) and &#x1F; (hex). Each replacement
-        // shrinks the string, so the loop terminates; a malformed token breaks out.
-        while let r = out.range(of: "&#x?[0-9A-Fa-f]+;", options: .regularExpression) {
-            let token = out[r]
-            let hex = token.lowercased().contains("x")
-            let digits = token.dropFirst(hex ? 3 : 2).dropLast()
-            guard let code = UInt32(digits, radix: hex ? 16 : 10), let scalar = Unicode.Scalar(code) else { break }
-            out.replaceSubrange(r, with: String(scalar))
+        // Numeric entities: &#123; (decimal) and &#x1F;/&#X1F; (hex). Resolve each
+        // match independently against the original ranges (reversed, so earlier
+        // ranges stay valid) — a single malformed/out-of-range token is left as-is
+        // rather than abandoning every entity after it.
+        if let re = try? NSRegularExpression(pattern: "&#(x?)([0-9A-Fa-f]+);", options: .caseInsensitive) {
+            let ns = out as NSString
+            for m in re.matches(in: out, range: NSRange(location: 0, length: ns.length)).reversed() {
+                let hex = !ns.substring(with: m.range(at: 1)).isEmpty
+                let digits = ns.substring(with: m.range(at: 2))
+                guard let code = UInt32(digits, radix: hex ? 16 : 10), let scalar = Unicode.Scalar(code) else { continue }
+                out = (out as NSString).replacingCharacters(in: m.range, with: String(scalar))
+            }
         }
         return out.replacingOccurrences(of: "&amp;", with: "&")
     }

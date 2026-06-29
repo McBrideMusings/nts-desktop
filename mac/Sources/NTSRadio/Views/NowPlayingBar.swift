@@ -53,6 +53,8 @@ struct NowPlayingBar: View {
                         .fill(model.showTracks ? Theme.ink : Theme.hairline(0.08)))
             }
             .buttonStyle(.plain)
+            .disabled(model.isIdle)
+            .opacity(model.isIdle ? 0.4 : 1)
 
             Button { model.muted.toggle() } label: {
                 Image(systemName: model.muted ? "speaker.slash.fill" : "speaker.wave.2.fill")

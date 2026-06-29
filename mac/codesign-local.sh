@@ -29,7 +29,10 @@ if [ -z "$id" ]; then
   [ -z "$id" ] && id="-"
 fi
 
-codesign --force --deep --identifier "$identifier" --sign "$id" "$target" 2>/dev/null \
-  || codesign --force --deep --sign "$id" "$target"
-
-printf '  ✓ codesigned %s (%s)\n' "$(basename "$target")" "${id:0:14}"
+if codesign --force --deep --identifier "$identifier" --sign "$id" "$target" 2>/dev/null \
+   || codesign --force --deep --sign "$id" "$target"; then
+  printf '  ✓ codesigned %s (%s)\n' "$(basename "$target")" "${id:0:14}"
+else
+  echo "  ✗ codesign failed for $target" >&2
+  exit 1
+fi

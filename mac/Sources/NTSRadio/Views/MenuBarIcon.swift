@@ -1,15 +1,9 @@
-import SwiftUI
 import AppKit
 
-/// The status-bar item: the NTS logo, loaded as a *template* NSImage so macOS
-/// tints and sizes it to match every other menu-bar icon (black on a light bar,
-/// white on a dark one). The artwork (NTSLogoTemplate.png) is the NTS mark with
-/// the letters knocked out, rendered from Resources/NTSLogo.svg.
-struct MenuBarIcon: View {
-    var body: some View {
-        Image(nsImage: MenuBarIcon.logoImage)
-    }
-
+/// The NTS logo for the status-bar item (and the title-bar mark), loaded as a
+/// *template* NSImage so macOS tints and sizes it like every other menu-bar icon
+/// (black on a light bar, white on a dark one). Rendered from Resources/NTSLogo.svg.
+enum MenuBarIcon {
     static let logoImage: NSImage = {
         let img = Bundle.module.url(forResource: "NTSLogoTemplate", withExtension: "png")
             .flatMap { NSImage(contentsOf: $0) } ?? NSImage(size: NSSize(width: 16, height: 16))

@@ -8,6 +8,12 @@ enum Selection: Equatable {
     case channel(Int)
 }
 
+/// The one modal popover that can be open at a time.
+enum Sheet: Equatable {
+    case settings
+    case login
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     let catalog = Catalog.shared
@@ -19,8 +25,18 @@ final class AppModel: ObservableObject {
     @Published var volume: Double = 72 { didSet { engine.apply(volume: volume, muted: muted) } }
     @Published var showTracks = false
     @Published var hoverIndex: Int? = nil
-    @Published var settingsOpen = false
-    @Published var loginOpen = false   // standalone sign-in popover (account button)
+    /// Which modal popover is up, if any — one at a time (settings and the account
+    /// sheet are mutually exclusive). `settingsOpen`/`loginOpen` wrap it so callers
+    /// stay simple while only one can ever be open.
+    @Published var activeSheet: Sheet? = nil
+    var settingsOpen: Bool {
+        get { activeSheet == .settings }
+        set { if newValue { activeSheet = .settings } else if activeSheet == .settings { activeSheet = nil } }
+    }
+    var loginOpen: Bool {
+        get { activeSheet == .login }
+        set { if newValue { activeSheet = .login } else if activeSheet == .login { activeSheet = nil } }
+    }
 
     /// Tracklist for the current source — populated by the Firestore listener for
     /// both mixtapes and live channels when signed in (empty when signed out).
@@ -198,7 +214,12 @@ final class AppModel: ObservableObject {
         let listener = MixtapeTitleListener(
             mixtapeAlias: alias,
             tokenProvider: { [auth] in try await auth.validToken() },
-            onUpdate: { [weak self] episode in self?.mixtapeEpisode = episode }
+            // Ignore a late emit from a listener we've since switched away from, so
+            // a fast A→B switch can't briefly show A's episode under B.
+            onUpdate: { [weak self] episode in
+                guard let self, self.activeTitleAlias == alias else { return }
+                self.mixtapeEpisode = episode
+            }
         )
         titleListener = listener
         listener.start()
@@ -220,12 +241,16 @@ final class AppModel: ObservableObject {
         guard let info = try? await NTSAPI.live() else { return }
         for upd in info {
             if let idx = catalog.channels.firstIndex(where: { $0.number == upd.channel }) {
+                let showChanged = catalog.channels[idx].show != upd.show
                 catalog.channels[idx].show = upd.show
                 catalog.channels[idx].startEnd = upd.startEnd
                 catalog.channels[idx].genre = upd.genre
                 catalog.channels[idx].background = upd.background.flatMap { URL(string: $0) }
-                catalog.channels[idx].showAlias = upd.showAlias
-                catalog.channels[idx].episodeAlias = upd.episodeAlias
+                // A detail-less poll (no embeds.details) returns empty aliases —
+                // don't blank a still-valid episode link mid-broadcast. Only update
+                // the aliases when we got real ones or the broadcast actually changed.
+                if !upd.showAlias.isEmpty || showChanged { catalog.channels[idx].showAlias = upd.showAlias }
+                if !upd.episodeAlias.isEmpty || showChanged { catalog.channels[idx].episodeAlias = upd.episodeAlias }
             }
         }
         objectWillChange.send()

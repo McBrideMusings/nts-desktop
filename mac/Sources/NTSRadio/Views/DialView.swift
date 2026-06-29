@@ -198,6 +198,7 @@ struct DialView: View {
                 .fill(Theme.hubInk)
                 .frame(width: 166 * k, height: 166 * k)
                 .shadow(color: .black.opacity(0.5), radius: 11 * k, y: 6 * k)
+                .allowsHitTesting(false)
         }
         .frame(width: 226 * k, height: 226 * k)
     }

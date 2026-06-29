@@ -41,17 +41,12 @@ struct TracklistOverlay: View {
                 Spacer()
             } else {
                 columnHeader
-                let rows = VStack(spacing: 0) {
-                    ForEach(Array(model.tracks.enumerated()), id: \.element.id) { idx, track in
-                        TrackRow(track: track, playing: idx == 0)
+                ScrollView {
+                    VStack(spacing: 0) {
+                        ForEach(Array(model.tracks.enumerated()), id: \.element.id) { idx, track in
+                            TrackRow(track: track, playing: idx == 0)
+                        }
                     }
-                }
-                // ImageRenderer (the snapshot tool) can't capture ScrollView
-                // content, so render rows un-scrolled there; scroll in the app.
-                if ProcessInfo.processInfo.environment["NTS_SNAPSHOT"] != nil {
-                    rows; Spacer()
-                } else {
-                    ScrollView { rows }
                 }
             }
         }
