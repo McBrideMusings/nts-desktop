@@ -79,6 +79,10 @@ final class AppModel: ObservableObject {
     private var titleListener: MixtapeTitleListener?
     private var activeTitleAlias: String?
 
+    /// Publishes what's playing to the system and receives the media keys /
+    /// headset buttons. Built last in `init` because it reads this model.
+    private var nowPlaying: NowPlayingCenter?
+
     private var bag = Set<AnyCancellable>()
 
     init() {
@@ -100,6 +104,7 @@ final class AppModel: ObservableObject {
             .store(in: &bag)
         updateTracklist()
         updateMixtapeTitle()
+        nowPlaying = NowPlayingCenter(model: self)
         Task { await refreshMixtapes() }
         Task { await pollLive() }
     }
@@ -235,6 +240,41 @@ final class AppModel: ObservableObject {
         else { loadCurrent(autoplay: true) }
     }
 
+    /// Start the current source (the system Play button — distinct from toggle,
+    /// which the media key sends).
+    func play() {
+        guard !isIdle else { return }
+        loadCurrent(autoplay: true)
+    }
+
+    func pause() { engine.pause() }
+
+    /// Move to the neighbouring source within the current group and select it —
+    /// what the next/previous-track buttons on a headset do. The two live
+    /// channels toggle between themselves; mixtapes walk the dial and wrap
+    /// around at both ends. Idle does nothing: there's no group to walk yet.
+    /// Playing state carries over, matching a click on the dial.
+    func step(by delta: Int) {
+        switch selection {
+        case .idle:
+            return
+        case .channel(let number):
+            let all = catalog.channels
+            guard let i = all.firstIndex(where: { $0.number == number }) else { return }
+            select(.channel(all[wrap(i + delta, all.count)].number))
+        case .mixtape(let alias):
+            let all = catalog.mixtapes
+            guard let i = all.firstIndex(where: { $0.alias == alias }) else { return }
+            select(.mixtape(all[wrap(i + delta, all.count)].alias))
+        }
+    }
+
+    /// Index `i` folded back into `0..<count`, for negative values too (Swift's
+    /// `%` keeps the sign of the left operand, so `-1 % 16` is `-1`, not `15`).
+    private func wrap(_ i: Int, _ count: Int) -> Int {
+        ((i % count) + count) % count
+    }
+
     /// Pull live now-playing for the two channels. Best-effort: failures leave
     /// the seeded placeholders in place.
     func refreshLive() async {
@@ -254,6 +294,9 @@ final class AppModel: ObservableObject {
             }
         }
         objectWillChange.send()
+        // The channel show/host/art just moved — nothing @Published changed, so
+        // the system tile has to be told by hand.
+        nowPlaying?.refresh()
     }
 
     /// Refresh now-playing immediately, then every 60s so the channel backdrop
@@ -280,5 +323,6 @@ final class AppModel: ObservableObject {
         updateTracklist()
         updateMixtapeTitle()
         objectWillChange.send()
+        nowPlaying?.refresh()   // the cold-start catalog just named the selected mixtape
     }
 }

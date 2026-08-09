@@ -24,6 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   episode on nts.live, and the playing mixtape's current source episode appears
   in the secondary line and links to that episode (sourced from NTS's Firestore
   `mixtape_titles`). Clickable labels render bold white with a hover underline.
+- System playback controls. The laptop's play/pause media key and a headset's
+  play/pause button start and stop the stream; next/previous step to the
+  neighbouring source — the two live channels toggle between themselves, and
+  mixtapes cycle the dial and wrap at both ends. The Now Playing tile in Control
+  Center shows the current track (or the show/mixtape name when no track feed is
+  available), the source, and its cover art — the mixtape's poster, a live
+  channel's program art, or the channel's own gradient when it has none. Marked
+  as a live stream, so no scrubber or elapsed time.
 
 ### Changed
 
