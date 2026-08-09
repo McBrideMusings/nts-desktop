@@ -36,14 +36,17 @@ final class NowPlayingCenter {
         self.model = model
         wireCommands()
         // Everything the tile shows: which source is selected, the live track,
-        // the mixtape's source episode, and whether audio is actually running.
-        // `receive(on:)` defers to after the change lands — @Published fires in
-        // willSet, so reading the model in the handler would see the old value.
-        Publishers.Merge4(
+        // the mixtape's source episode, whether audio is actually running, and
+        // the catalog itself (the 60s live poll rewrites a channel's show name
+        // and art in place). `receive(on:)` defers to after the change lands —
+        // these fire in willSet, so reading the model in the handler would
+        // otherwise see the old value.
+        Publishers.Merge5(
             model.$selection.map { _ in () },
             model.$tracks.map { _ in () },
             model.$mixtapeEpisode.map { _ in () },
-            model.engine.$isPlaying.map { _ in () }
+            model.engine.$isPlaying.map { _ in () },
+            model.catalog.objectWillChange.map { _ in () }
         )
         .receive(on: RunLoop.main)
         .sink { [weak self] _ in self?.refresh() }
@@ -197,13 +200,22 @@ final class NowPlayingCenter {
             // already in (see Cache.configureImageCache), so a source the user
             // has seen before paints without a round trip.
             artworkTask = Task { [weak self] in
-                guard let (data, _) = try? await URLSession.shared.data(from: url),
-                      !Task.isCancelled,
-                      let image = NSImage(data: data),
-                      let self, self.artworkKey == key
-                else { return }
-                self.artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-                self.push()
+                // A cover that fails to download would otherwise stay missing
+                // until the user switched sources and back, so a dropped
+                // connection leaves a permanently blank tile. Try again a
+                // couple of times, backing off; the source is a long-running
+                // stream, so there's time.
+                for delay in [UInt64(0), 3, 10] {
+                    if delay > 0 { try? await Task.sleep(nanoseconds: delay * 1_000_000_000) }
+                    guard !Task.isCancelled, let self, self.artworkKey == key else { return }
+                    guard let (data, _) = try? await URLSession.shared.data(from: url),
+                          let image = NSImage(data: data)
+                    else { continue }
+                    guard !Task.isCancelled, self.artworkKey == key else { return }
+                    self.artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+                    self.push()
+                    return
+                }
             }
         }
     }

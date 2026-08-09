@@ -67,12 +67,17 @@ struct Channel: Identifiable, Hashable {
 
 // MARK: - Catalog
 
+/// The dial's contents. Observable so that a change announces itself — the
+/// live-channel poll and the mixtape refresh both rewrite these in place, and
+/// everything downstream (the views, the system now-playing tile) has to hear
+/// about it. Before this was observable each writer had to remember to notify
+/// by hand, and a forgotten call showed up as a stale show name on screen.
 @MainActor
-final class Catalog {
+final class Catalog: ObservableObject {
     /// Populated dynamically from the NTS catalog endpoint (seeded from the
     /// on-disk cache for instant/offline first paint, then refreshed live).
-    var mixtapes: [Mixtape]
-    var channels: [Channel]
+    @Published var mixtapes: [Mixtape]
+    @Published var channels: [Channel]
 
     static let shared = Catalog()
 

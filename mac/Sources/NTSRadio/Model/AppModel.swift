@@ -86,9 +86,14 @@ final class AppModel: ObservableObject {
     private var bag = Set<AnyCancellable>()
 
     init() {
-        engine.objectWillChange
-            .sink { [weak self] in self?.objectWillChange.send() }
-            .store(in: &bag)
+        // Both are observable objects of their own; republish their changes as
+        // ours so a view watching the model repaints when the stream starts or
+        // the dial's contents move.
+        for upstream in [engine.objectWillChange, catalog.objectWillChange] {
+            upstream
+                .sink { [weak self] in self?.objectWillChange.send() }
+                .store(in: &bag)
+        }
         engine.apply(volume: volume, muted: muted)
         catalog.mixtapes = Catalog.build(from: Cache.loadFeed())   // instant/offline seed
         loadCurrent(autoplay: false)
@@ -293,10 +298,6 @@ final class AppModel: ObservableObject {
                 if !upd.episodeAlias.isEmpty || showChanged { catalog.channels[idx].episodeAlias = upd.episodeAlias }
             }
         }
-        objectWillChange.send()
-        // The channel show/host/art just moved — nothing @Published changed, so
-        // the system tile has to be told by hand.
-        nowPlaying?.refresh()
     }
 
     /// Refresh now-playing immediately, then every 60s so the channel backdrop
@@ -322,7 +323,5 @@ final class AppModel: ObservableObject {
         // target stream actually changed.
         updateTracklist()
         updateMixtapeTitle()
-        objectWillChange.send()
-        nowPlaying?.refresh()   // the cold-start catalog just named the selected mixtape
     }
 }
