@@ -21,8 +21,11 @@ final class NowPlayingCenter {
 
     /// What was last handed to the system. A refresh that changes none of it
     /// (hover, volume, a catalog rebuild that kept the same source) is dropped
-    /// rather than churning the tile.
+    /// rather than churning the tile — but the first one always goes through,
+    /// since launching idle matches the initial `nil` and would otherwise leave
+    /// the commands at MediaPlayer's enabled-by-default state.
     private var published: Info?
+    private var hasPublished = false
     /// Which image `artwork` holds, so a download that lands after the user has
     /// moved on can be recognised as stale and thrown away.
     private var artworkKey: ArtworkKey?
@@ -104,9 +107,10 @@ final class NowPlayingCenter {
     /// call it from anywhere the now-playing text could have moved.
     func refresh() {
         let next = snapshot()
-        guard next != published else { return }
+        guard next != published || !hasPublished else { return }
         let keyChanged = next?.artwork != published?.artwork
         published = next
+        hasPublished = true
         if keyChanged { loadArtwork(next?.artwork) }
         push()
     }
@@ -147,19 +151,13 @@ final class NowPlayingCenter {
     /// the system, and switch the commands on or off to match.
     private func push() {
         let center = MPNowPlayingInfoCenter.default()
-        let commands = MPRemoteCommandCenter.shared()
+        // Idle means there is nothing to control, so the buttons go dark rather
+        // than sitting live over an empty tile.
+        setCommandsEnabled(published != nil)
         guard let info = published else {
             center.nowPlayingInfo = nil
             center.playbackState = .stopped
-            for command in [commands.playCommand, commands.pauseCommand, commands.togglePlayPauseCommand,
-                            commands.nextTrackCommand, commands.previousTrackCommand] {
-                command.isEnabled = false
-            }
             return
-        }
-        for command in [commands.playCommand, commands.pauseCommand, commands.togglePlayPauseCommand,
-                        commands.nextTrackCommand, commands.previousTrackCommand] {
-            command.isEnabled = true
         }
         var fields: [String: Any] = [
             MPMediaItemPropertyTitle: info.title,
@@ -172,6 +170,14 @@ final class NowPlayingCenter {
         if let artwork { fields[MPMediaItemPropertyArtwork] = artwork }
         center.nowPlayingInfo = fields
         center.playbackState = info.isPlaying ? .playing : .paused
+    }
+
+    private func setCommandsEnabled(_ enabled: Bool) {
+        let center = MPRemoteCommandCenter.shared()
+        for command in [center.playCommand, center.pauseCommand, center.togglePlayPauseCommand,
+                        center.nextTrackCommand, center.previousTrackCommand] {
+            command.isEnabled = enabled
+        }
     }
 
     // MARK: Artwork
