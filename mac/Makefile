@@ -23,9 +23,10 @@ app: build ## Assemble the .app bundle (fonts bundled, mixtapes fetched live)
 	mkdir -p "$(APP_BUNDLE)/Contents/MacOS" "$(APP_BUNDLE)/Contents/Resources"
 	cp Info.plist "$(APP_BUNDLE)/Contents/Info.plist"
 	cp "$(BUILD_DIR)/$(APP)" "$(APP_BUNDLE)/Contents/MacOS/$(APP)"
-	# SwiftPM resource bundle (Archivo font) — placed where Bundle.module looks
+	# SwiftPM resource bundle (Archivo font). Must live in Resources/, NOT MacOS/:
+	# Bundle.module checks Bundle.main.resourceURL first, and a flat resource
+	# bundle inside MacOS/ makes codesign --deep treat it as nested code and fail.
 	cp -R "$(BUILD_DIR)/$(RES_BUNDLE)" "$(APP_BUNDLE)/Contents/Resources/" 2>/dev/null || true
-	cp -R "$(BUILD_DIR)/$(RES_BUNDLE)" "$(APP_BUNDLE)/Contents/MacOS/" 2>/dev/null || true
 	# Icon (reuse the existing NTS icon)
 	cp "$(ICON_SRC)" "$(APP_BUNDLE)/Contents/Resources/AppIcon.icns" 2>/dev/null || true
 	# Stable-sign (Apple Development identity, fixed identifier) so macOS Keychain
