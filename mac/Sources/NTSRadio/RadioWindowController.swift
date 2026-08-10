@@ -10,6 +10,10 @@ import AppKit
 final class RadioWindowController {
     private let window: KeyableWindow
     private static let frameName = "NTSRadioWindow"
+    /// Smallest window the interface is laid out for. With `.fullSizeContentView`
+    /// the content view spans the whole frame, so this is both the frame minimum
+    /// and the content minimum.
+    static let minContentSize = NSSize(width: 720, height: 300)
 
     init(model: AppModel) {
         let root = PopoverView()
@@ -71,7 +75,14 @@ final class RadioWindowController {
         window.level = .normal                        // ordinary window: stays open unfocused, can go behind
         window.isReleasedWhenClosed = false
         window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
-        window.contentMinSize = NSSize(width: 720, height: 300)   // no max — free to grow
+        // The floor the layout is designed against: below 720×300 the two channel
+        // cards stop fitting side by side and the dial shrinks past the point
+        // where its face text can be read. `contentMinSize` on its own did not
+        // hold: the window was draggable down to roughly 340×790 and to a 95pt
+        // strip. `minSize` constrains the frame, which is what a resize drag
+        // actually moves, so both are set.
+        window.contentMinSize = Self.minContentSize
+        window.minSize = Self.minContentSize
         window.setFrameAutosaveName(Self.frameName)  // remember size + position across launches
         self.window = window
     }
@@ -88,6 +99,18 @@ final class RadioWindowController {
         if !window.isVisible, !window.setFrameUsingName(Self.frameName) {
             // First ever open (no saved frame): drop it just below the menu-bar icon.
             positionUnderStatusItem(statusButton)
+            window.saveFrame(usingName: Self.frameName)
+        }
+        // A frame saved before the minimum was enforced can be smaller than the
+        // layout survives; `setFrameUsingName` restores it verbatim, so grow it
+        // back here rather than reopening at 340×90 forever.
+        let f = window.frame
+        if f.width < Self.minContentSize.width || f.height < Self.minContentSize.height {
+            window.setFrame(NSRect(x: f.minX,
+                                   y: f.maxY - max(f.height, Self.minContentSize.height),
+                                   width: max(f.width, Self.minContentSize.width),
+                                   height: max(f.height, Self.minContentSize.height)),
+                            display: false)
             window.saveFrame(usingName: Self.frameName)
         }
         NSApp.activate(ignoringOtherApps: true)

@@ -181,18 +181,14 @@ struct DialView: View {
         return Double(i) * pitch
     }
 
-    /// The knob: knurled rim, a recessed face carrying the mixtape's cover, and a
-    /// triangular index on the rim that turns to the selected position.
+    /// The knob: a plain disc carrying the mixtape's cover, and a triangular index
+    /// on its rim that turns to the selected position.
     private func knob(_ g: Geo) -> some View {
         ZStack {
-            Knurl(teeth: 132)
-                .fill(Theme.ink.opacity(0.20))
+            Circle()
+                .fill(Theme.stageInner)
                 .frame(width: g.knob, height: g.knob)
-                .background(
-                    Circle()
-                        .fill(Theme.stageInner)
-                        .shadow(color: .black.opacity(0.65), radius: g.knob * 0.06, y: g.knob * 0.02)
-                )
+                .shadow(color: .black.opacity(0.65), radius: g.knob * 0.06, y: g.knob * 0.02)
                 .overlay(Circle().stroke(Theme.hairline(0.16), lineWidth: 1))
 
             knobFace(g)
@@ -239,23 +235,13 @@ struct DialView: View {
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
                 } else {
-                    // Idle. The face still carries something — an empty disc this
-                    // size was the single biggest dead area in the old layout.
+                    // Idle: the mark alone.
                     Image(nsImage: MenuBarIcon.logoImage)
                         .resizable()
                         .renderingMode(.template)
                         .scaledToFit()
                         .frame(width: g.face * 0.20, height: g.face * 0.20)
                         .foregroundStyle(Theme.ink.opacity(0.85))
-                    Text("\(tapes.count) INFINITE MIXTAPES")
-                        .font(Theme.mono(max(8, g.face * 0.045), .bold))
-                        .tracking(g.face * 0.016)
-                        .foregroundStyle(Theme.ink.opacity(0.8))
-                        .padding(.top, g.face * 0.05)
-                    Text("TURN THE DIAL")
-                        .font(Theme.mono(max(7, g.face * 0.038)))
-                        .tracking(g.face * 0.014)
-                        .foregroundStyle(Theme.inkMuted)
                 }
             }
             .padding(.horizontal, g.face * 0.16)
@@ -264,30 +250,6 @@ struct DialView: View {
         .clipShape(Circle())
         .overlay(Circle().stroke(Theme.hairline(0.10), lineWidth: 1))
         .shadow(color: .black.opacity(0.55), radius: g.face * 0.06, y: g.face * 0.02)
-    }
-}
-
-/// The knurled grip: a ring of radial teeth cut into the knob's rim, drawn as one
-/// path so the texture costs a single shape rather than a hundred views.
-private struct Knurl: Shape {
-    let teeth: Int
-
-    func path(in r: CGRect) -> Path {
-        var p = Path()
-        let c = CGPoint(x: r.midX, y: r.midY)
-        let outer = min(r.width, r.height) / 2
-        let inner = outer * 0.93
-        let step = (.pi * 2) / Double(teeth)
-        for i in 0..<teeth {
-            let a0 = Double(i) * step
-            let a1 = a0 + step * 0.5
-            p.move(to: CGPoint(x: c.x + inner * cos(a0), y: c.y + inner * sin(a0)))
-            p.addLine(to: CGPoint(x: c.x + outer * cos(a0), y: c.y + outer * sin(a0)))
-            p.addLine(to: CGPoint(x: c.x + outer * cos(a1), y: c.y + outer * sin(a1)))
-            p.addLine(to: CGPoint(x: c.x + inner * cos(a1), y: c.y + inner * sin(a1)))
-            p.closeSubpath()
-        }
-        return p
     }
 }
 
