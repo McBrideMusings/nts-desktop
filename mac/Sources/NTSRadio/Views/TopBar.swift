@@ -1,52 +1,50 @@
 import SwiftUI
 
-/// Spotify-style top navigation bar. A solid strip above the interface (never
-/// any full-bleed media) that seats the macOS traffic-light buttons on the
-/// left and the account + settings controls on the right.
+/// Spotify-style top navigation bar: a solid strip that seats the macOS
+/// traffic-light buttons on the left, the NTS mark in the middle and the
+/// settings + account controls on the right.
 ///
-/// The strip itself is just the visual row; the interactive settings + account
-/// controls live in `TopBarControls`, which `RadioWindowController` mounts as a
-/// real title-bar accessory. They can't live in this strip: with
-/// `fullSizeContentView`, AppKit's title-bar view sits above the content view
-/// and swallows every click in the title-bar band for window dragging, so any
-/// button placed here would render but never receive a click.
+/// This is *not* part of the content view. `RadioWindowController` mounts it as
+/// a full-width `.top` title-bar accessory, which makes AppKit own the strip:
+/// it routes clicks to the buttons (a view drawn into the content view under
+/// the title bar renders but never gets a click — the title-bar view swallows
+/// them for window dragging), and it reports the strip's height as the content
+/// view's top safe-area inset, so the rail and dial start exactly below it.
+/// The old arrangement drew this strip in the content stack and pulled the
+/// stack up under the title bar by a hardcoded 32pt; whenever AppKit's real
+/// band was taller, the whole interface slid up and the channel cards ran into
+/// the traffic lights.
 struct TopBar: View {
-    var body: some View {
-        // 32pt tall — its center (16pt) matches the traffic lights' vertical
-        // center, and the title-bar accessory floats its controls over the top
-        // right of this same strip.
-        Color.clear
-            .frame(height: 32)
-            .frame(maxWidth: .infinity)
-            .background(Theme.nowBar)
-            // Centered NTS mark in the title-bar band (matches the prototype).
-            // Non-interactive, so it's safe in the strip even though the title-bar
-            // view eats clicks; the interactive controls live in TopBarControls.
-            .overlay {
-                Image(nsImage: MenuBarIcon.logoImage)
-                    .resizable()
-                    .renderingMode(.template)
-                    .frame(width: 13, height: 13)
-                    .foregroundStyle(Theme.ink.opacity(0.9))
-                    .allowsHitTesting(false)
-            }
-            .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline(0.08)).frame(height: 1) }
-    }
-}
-
-/// The settings + account controls, mounted by `RadioWindowController` as a
-/// trailing title-bar accessory so AppKit routes clicks to them (see `TopBar`).
-struct TopBarControls: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var auth: NTSAuth
 
+    /// The strip's height, and therefore the title-bar band's. 32pt keeps the
+    /// traffic lights vertically centred in it.
+    static let height: CGFloat = 32
+
     var body: some View {
-        HStack(spacing: 8) {
-            settingsButton
-            profileButton
+        ZStack {
+            // Centred NTS mark. Non-interactive so it never steals a drag.
+            Image(nsImage: MenuBarIcon.logoImage)
+                .resizable()
+                .renderingMode(.template)
+                .frame(width: 13, height: 13)
+                .foregroundStyle(Theme.ink.opacity(0.9))
+                .allowsHitTesting(false)
+
+            HStack(spacing: 8) {
+                Spacer()
+                settingsButton
+                profileButton
+            }
+            .padding(.trailing, 14)
         }
-        .padding(.trailing, 14)
-        .frame(height: 32)
+        .frame(maxWidth: .infinity)
+        .frame(height: Self.height)
+        .background(Theme.nowBar)
+        // No hairline here: AppKit insets this view past the traffic lights, so
+        // a rule drawn at its bottom would stop 78pt short of the left edge.
+        // PopoverView draws it along the top of the content instead.
     }
 
     /// Login-state indicator: signed-in shows the email's initial with a green

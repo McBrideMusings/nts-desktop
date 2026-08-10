@@ -15,7 +15,19 @@ final class RadioWindowController {
         let root = PopoverView()
             .environmentObject(model)
             .environmentObject(model.auth)
-        let hosting = NSHostingView(rootView: root)
+        // The content view spans the whole window (`.fullSizeContentView`) and
+        // `PopoverView` opens with its own `TopBar.height` strip laid out from
+        // the top of the window — the same constant that sizes the title-bar
+        // accessory below, so the strip and the band AppKit actually draws
+        // cannot disagree. They did before: the strip hardcoded 32pt while the
+        // real band was taller, and the whole interface slid up by the
+        // difference, which is what ran the channel cards into the traffic
+        // lights and cut the second card off at the bottom.
+        //
+        // `sizingOptions = []` keeps the SwiftUI ideal size from driving the
+        // window size — the saved frame does that.
+        let hosting = NSHostingController(rootView: root)
+        hosting.sizingOptions = []
 
         let window = KeyableWindow(
             contentRect: NSRect(x: 0, y: 0, width: 880, height: 720),
@@ -23,29 +35,38 @@ final class RadioWindowController {
             backing: .buffered,
             defer: false
         )
-        window.contentView = hosting
-        // Traffic lights float over the content (the TopBar reserves space for
-        // them); the title bar is transparent with no title text.
+        window.contentViewController = hosting
+        // Traffic lights float over the top bar; the title bar itself is
+        // transparent with no title text, so the bar's own black fill is what
+        // the eye reads as the title bar.
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
 
-        // The settings + account controls must be real title-bar items: with
-        // fullSizeContentView the title-bar view sits above the content and
-        // eats clicks in its band for window dragging, so controls drawn into
-        // the TopBar strip render but never receive a click. A trailing
-        // title-bar accessory makes AppKit route clicks to them.
-        let controls = TopBarControls()
+        // The whole top bar is a full-width title-bar accessory rather than a
+        // strip inside the content view. Two things follow from that, and both
+        // are why it lives here: AppKit routes clicks to its buttons (a view
+        // drawn into the content view under the title bar never receives one —
+        // the title-bar view swallows clicks in its band for window dragging),
+        // and AppKit sets the content view's top safe-area inset to this
+        // accessory's height, so PopoverView's rail and dial start exactly
+        // below the bar with no height for the content side to guess at.
+        let topBar = TopBar()
             .environmentObject(model)
             .environmentObject(model.auth)
-        let controlsVC = NSTitlebarAccessoryViewController()
-        controlsVC.layoutAttribute = .trailing
-        let controlsHost = NSHostingView(rootView: controls)
-        // Size to the SwiftUI content so adding a control can't silently clip;
-        // TopBarControls fixes its own height (32, matching the TopBar strip).
-        controlsHost.frame = NSRect(origin: .zero, size: controlsHost.fittingSize)
-        controlsVC.view = controlsHost
-        window.addTitlebarAccessoryViewController(controlsVC)
-        window.backgroundColor = NSColor(red: 0x0b/255, green: 0x0b/255, blue: 0x0c/255, alpha: 1) // Theme.popover
+        let topBarVC = NSTitlebarAccessoryViewController()
+        topBarVC.layoutAttribute = .top
+        let topBarHost = NSHostingView(rootView: topBar)
+        // Width is stretched by AppKit; the height here is the band's height.
+        topBarHost.frame = NSRect(x: 0, y: 0, width: 880, height: TopBar.height)
+        topBarHost.autoresizingMask = [.width]
+        topBarVC.view = topBarHost
+        window.addTitlebarAccessoryViewController(topBarVC)
+        // AppKit insets a `.top` accessory by the traffic lights' width, so the
+        // bar's own fill starts 78pt in. The window background paints that
+        // leading corner, so it has to be the same black as the bar — anything
+        // else reads as a notch cut out of the strip. Nothing else shows the
+        // window background: PopoverView paints the whole content area.
+        window.backgroundColor = .black                // matches Theme.nowBar
         window.isMovableByWindowBackground = false   // drag via the title-bar strip only, not the dial
         window.level = .normal                        // ordinary window: stays open unfocused, can go behind
         window.isReleasedWhenClosed = false

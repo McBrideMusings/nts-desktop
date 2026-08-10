@@ -5,7 +5,15 @@ struct PopoverView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TopBar()
+            // The title-bar band. The window's top-bar accessory paints its own
+            // black over everything right of the traffic lights, but AppKit
+            // insets that accessory past them, so this fills the same strip
+            // inside the content view — that's what colours the corner behind
+            // the traffic lights and lets the rule below run the full width.
+            // Nothing interactive goes here: the title bar swallows clicks in
+            // this band, which is why the controls live in the accessory.
+            Theme.nowBar.frame(height: TopBar.height)
+            Rectangle().fill(Theme.hairline(0.08)).frame(height: 1)
 
             HStack(spacing: 0) {
                 ChannelRail()
@@ -20,8 +28,8 @@ struct PopoverView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.popover)
-        // Extend the content (the TopBar) up under the transparent title bar so
-        // its controls land on the traffic lights' row, Spotify-style.
+        // Lay the stack out from the very top of the window, so the strip above
+        // covers the title-bar band exactly instead of being pushed below it.
         .ignoresSafeArea(.container, edges: .top)
         .overlay { if model.settingsOpen { SettingsView() } }
         .overlay { if model.loginOpen { LoginView() } }
