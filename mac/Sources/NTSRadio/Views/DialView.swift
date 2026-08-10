@@ -189,7 +189,6 @@ struct DialView: View {
                 .fill(Theme.stageInner)
                 .frame(width: g.knob, height: g.knob)
                 .shadow(color: .black.opacity(0.65), radius: g.knob * 0.06, y: g.knob * 0.02)
-                .overlay(Circle().stroke(Theme.hairline(0.16), lineWidth: 1))
 
             knobFace(g)
 
