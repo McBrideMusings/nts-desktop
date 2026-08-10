@@ -4,9 +4,6 @@ import AppKit
 struct ChannelRail: View {
     @EnvironmentObject var model: AppModel
 
-    /// `.vertical` stacks the two cards (rail down one side); `.horizontal` puts
-    /// them side by side (rail across the top, or a short rail on the left).
-    let axis: Axis
     /// Which side the rail's dividing hairline sits on — the edge facing the dial.
     let edge: Edge
 
@@ -15,13 +12,19 @@ struct ChannelRail: View {
         // side effect, stops the cards' intrinsic size from forcing a tall window
         // minimum — the rail now fills whatever space it's given instead.
         GeometryReader { proxy in
-            // The slot height is what decides whether a card can carry its genre
-            // chips, so in a row the card gets the rail's whole height.
-            let slotH = axis == .vertical ? (proxy.size.height - 1) / 2 : proxy.size.height
-            let slotW = axis == .vertical ? proxy.size.width : (proxy.size.width - 1) / 2
+            // The rail arranges its own two cards from the box it was handed:
+            // split the long side, so each card comes out as square as the box
+            // allows. A tall rail down one edge stacks them; a wide one across
+            // the top — or a short one beside the dial — puts them side by side.
+            // This used to be told to the rail by `PopoverView`, keyed to the
+            // window being under 430pt tall, which is a number about the window
+            // and not about the cards.
+            let stacked = proxy.size.height > proxy.size.width
+            let slotH = stacked ? (proxy.size.height - 1) / 2 : proxy.size.height
+            let slotW = stacked ? proxy.size.width : (proxy.size.width - 1) / 2
             let cards = Array(model.catalog.channels.enumerated())
             Group {
-                if axis == .vertical {
+                if stacked {
                     VStack(spacing: 0) {
                         ForEach(cards, id: \.element.id) { idx, c in
                             card(c, w: slotW, h: slotH)

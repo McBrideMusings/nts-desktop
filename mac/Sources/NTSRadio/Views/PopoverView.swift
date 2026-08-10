@@ -30,8 +30,15 @@ struct PopoverView: View {
             // column; a short window keeps the rail on the left but lays its cards
             // out side by side, which is the only way two of them still read at
             // 300pt of height. Everything else is the original left-column rail.
-            // Every rail size below is capped at a share of the window as well as
-            // a fixed number of points, so the dial always keeps the majority of
+            // One decision here: does the rail sit above the dial or beside it.
+            // That follows the window's own proportions, and the rail then picks
+            // how to arrange its two cards from the box it ends up with — see
+            // `ChannelRail`. There used to be a third case keyed to a bare
+            // "shorter than 430pt", which swapped the whole rail for a one-point
+            // change in height and had nothing to do with what the cards needed.
+            //
+            // Every rail size is capped at a share of the window as well as a
+            // fixed number of points, so the dial always keeps the majority of
             // the pane. The fixed 300pt rail is what used to make a 340pt-wide
             // window impossible, and the minimum size had to be a two-part rule
             // to work around it — which is what made resizing snap.
@@ -39,20 +46,14 @@ struct PopoverView: View {
                 let w = proxy.size.width, h = proxy.size.height
                 if h > 0 && w / h <= 1.02 {
                     VStack(spacing: 0) {
-                        ChannelRail(axis: .horizontal, edge: .bottom)
+                        ChannelRail(edge: .bottom)
                             .frame(height: min(min(max(150, h * 0.24), 250), h * 0.45))
-                        DialView()
-                    }
-                } else if h < 430 {
-                    HStack(spacing: 0) {
-                        ChannelRail(axis: .horizontal, edge: .trailing)
-                            .frame(width: min(300, w * 0.55))
                         DialView()
                     }
                 } else {
                     HStack(spacing: 0) {
-                        ChannelRail(axis: .vertical, edge: .trailing)
-                            .frame(width: min(268, w * 0.45))
+                        ChannelRail(edge: .trailing)
+                            .frame(width: min(280, w * 0.55))
                         DialView()
                     }
                 }
