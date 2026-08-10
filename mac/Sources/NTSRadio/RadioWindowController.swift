@@ -20,19 +20,21 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
     /// keeps the rail beside the dial and needs the width. Allowed is therefore
     /// `width ≥ 520` (with height ≥ 230) **or** `height ≥ 520` (with width ≥ 340).
     ///
-    /// Each dimension's floor is read off the size the window **already has**, and
-    /// only ever stops that dimension — nothing here grows the other one. Growing
-    /// the other one is what made dragging feel wrong: pulling a 600×300 window
-    /// narrower shoved its height from 300 up to 520, and pulling the width back
-    /// out left the height at 520, so the same drag out and back changed the
-    /// window's height. Reading the floor off the current size means a drag stops
-    /// at the edge of what is allowed and leaves every other dimension where the
-    /// hand left it. Because a live resize arrives as a stream of small steps, a
-    /// diagonal drag out of one regime and into the other still gets there — the
-    /// floor relaxes as soon as the other dimension has cleared 520.
-    static func clamped(_ size: NSSize, current: NSSize) -> NSSize {
-        NSSize(width: max(size.width, current.height < 520 ? 520 : 340),
-               height: max(size.height, current.width < 520 ? 520 : 230))
+    /// One rectangle, no coupling between the two dimensions.
+    ///
+    /// It used to be two regimes — a narrow window had to stay tall, a short one
+    /// had to stay wide — because the channel rail was a fixed 300pt and at 340
+    /// wide there was nothing left for the dial. Any such rule has a corner where
+    /// the two floors meet, and dragging diagonally through it made the window
+    /// stick and jump: each step's floor depended on the other dimension's current
+    /// value, and the two took turns pushing each other. The rail is proportional
+    /// now (`PopoverView`), so the layout survives any size at or above this and
+    /// the rule can be a plain minimum.
+    static let minSize = NSSize(width: 340, height: 230)
+
+    static func clamped(_ size: NSSize) -> NSSize {
+        NSSize(width: max(size.width, minSize.width),
+               height: max(size.height, minSize.height))
     }
 
     init(model: AppModel) {
@@ -96,12 +98,12 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
         window.level = .normal                        // ordinary window: stays open unfocused, can go behind
         window.isReleasedWhenClosed = false
         window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
-        // The absolute floor. Neither `contentMinSize` nor `minSize` can express
-        // the width-depends-on-height rule, so the real clamp is
-        // `windowWillResize(_:to:)` below — AppKit asks the delegate for every
-        // step of a resize drag, which is the only place a rule like that fits.
-        window.contentMinSize = NSSize(width: 340, height: 230)
-        window.minSize = NSSize(width: 340, height: 230)
+        // `contentMinSize` did not hold this window down on its own — it stayed
+        // draggable to a 95pt strip — so the floor is also enforced from
+        // `windowWillResize(_:to:)` below, which AppKit asks for at every step of
+        // a resize drag.
+        window.contentMinSize = Self.minSize
+        window.minSize = Self.minSize
         window.delegate = self
         window.setFrameAutosaveName(Self.frameName)  // remember size + position across launches
         self.window = window
@@ -125,7 +127,7 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
         // back verbatim from `setFrameUsingName`, so grow it here rather than
         // reopening at that size forever.
         let f = window.frame
-        let ok = Self.clamped(f.size, current: f.size)
+        let ok = Self.clamped(f.size)
         if ok != f.size {
             window.setFrame(NSRect(x: f.minX, y: f.maxY - ok.height,
                                    width: ok.width, height: ok.height),
@@ -137,7 +139,7 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
     }
 
     nonisolated func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
-        MainActor.assumeIsolated { Self.clamped(frameSize, current: sender.frame.size) }
+        MainActor.assumeIsolated { Self.clamped(frameSize) }
     }
 
     private func positionUnderStatusItem(_ statusButton: NSStatusBarButton?) {

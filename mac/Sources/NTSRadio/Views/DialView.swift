@@ -221,18 +221,22 @@ struct DialView: View {
             }
 
             VStack(spacing: g.face * 0.035) {
-                if let m = facing {
+                // Under about 96pt across, the face can hold a word or two at a
+                // size nobody can read. It holds the mark instead.
+                if let m = facing, g.face >= 96 {
                     Text(m.title.uppercased())
                         .font(Theme.display(max(13, g.face * 0.115), .black))
                         .foregroundStyle(Theme.ink)
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
                         .minimumScaleFactor(0.6)
-                    Text(m.subtitle)
-                        .font(Theme.ui(max(9, g.face * 0.05)))
-                        .foregroundStyle(Theme.ink.opacity(0.7))
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
+                    if g.face >= 150 {
+                        Text(m.subtitle)
+                            .font(Theme.ui(max(9, g.face * 0.05)))
+                            .foregroundStyle(Theme.ink.opacity(0.7))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                    }
                 } else {
                     // Idle: the mark alone.
                     Image(nsImage: MenuBarIcon.logoImage)

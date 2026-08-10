@@ -83,6 +83,10 @@ private struct ChannelCard: View {
     /// line drops to the times alone — the LED and the accent border already
     /// carry live and playing.
     private var narrow: Bool { slotW < 200 }
+    /// Narrower still — two cards inside a 340pt window get about 76pt each,
+    /// where even the time truncates. The card keeps the photograph, the numeral
+    /// and the LED, which is what identifies it; the words go.
+    private var tiny: Bool { slotW < 130 }
 
     private var location: String {
         let live = channel.upcoming.first?.location ?? ""
@@ -105,8 +109,9 @@ private struct ChannelCard: View {
                 ], startPoint: .top, endPoint: .bottom)
                 .frame(height: compact ? 92 : 132)
                 .frame(maxHeight: .infinity, alignment: .bottom)
+                .opacity(tiny ? 0 : 1)
 
-            meta
+            if !tiny { meta }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.stage)

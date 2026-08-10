@@ -106,9 +106,10 @@ enum Snapshot {
         // only way to see it is to render the same state at several sizes. These
         // three are the corners: the window's own minimum, a tall column, and a
         // wide letterbox.
-        // The first two are the corners of what `RadioWindowController.clamped`
-        // allows: as narrow as the window goes, and as short.
+        // The first three are the corners of what `RadioWindowController.minSize`
+        // allows: as narrow as the window goes, as short, and both at once.
         let shapes: [(String, CGSize)] = [
+            ("09-shape-smallest-340x230.png",  CGSize(width: 340, height: 230)),
             ("10-shape-narrow-340x582.png",    CGSize(width: 340, height: 582)),
             ("11-shape-short-547x230.png",     CGSize(width: 547, height: 230)),
             ("12-shape-tall-760x1040.png",     CGSize(width: 760, height: 1040)),
