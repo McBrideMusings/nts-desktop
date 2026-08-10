@@ -11,13 +11,34 @@ enum Cache {
         URLCache.shared = URLCache(memoryCapacity: 64 << 20, diskCapacity: 512 << 20)
     }
 
-    private static var feedURL: URL {
+    /// Application Support/NTSRadio/<name> — the one place the app writes.
+    static func file(_ name: String) -> URL {
         let dir = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("NTSRadio", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("mixtapes.json")
+        return dir.appendingPathComponent(name)
     }
+
+    /// Decode a JSON file written by `save`, or nil if absent/unreadable/stale in
+    /// shape. Every caller treats a nil as "no cache yet", never as an error.
+    static func load<T: Decodable>(_ type: T.Type, from name: String) -> T? {
+        guard let data = try? Data(contentsOf: file(name)) else { return nil }
+        return try? JSONDecoder().decode(type, from: data)
+    }
+
+    static func save<T: Encodable>(_ value: T, to name: String) {
+        guard let data = try? JSONEncoder().encode(value) else { return }
+        try? data.write(to: file(name))
+    }
+
+    /// When `name` was last written, or nil if it doesn't exist.
+    static func modified(_ name: String) -> Date? {
+        let attrs = try? FileManager.default.attributesOfItem(atPath: file(name).path)
+        return attrs?[.modificationDate] as? Date
+    }
+
+    private static var feedURL: URL { file("mixtapes.json") }
 
     /// The last-saved mixtape feed, or [] if none / unreadable.
     static func loadFeed() -> [NTSAPI.MixtapeFeed] {

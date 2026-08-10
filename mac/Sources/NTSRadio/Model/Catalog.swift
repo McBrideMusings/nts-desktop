@@ -11,6 +11,9 @@ struct Mixtape: Identifiable, Hashable {
     let iconURL: URL?       // remote monochrome symbol (ring icon)
     let animationURL: URL?  // remote looping mp4 — played in wedge when active
     let hue: Double         // accent hue, matching the prototype where it had one
+    /// The shows this mixtape draws from, as NTS credits them. The catalog lists
+    /// them as the route from a mixtape to the shows and hosts inside it.
+    let credits: [NTSAPI.MixtapeCredit]
 
     var id: String { alias }
     var accent: Color { Color(h: hue, s: 68, l: 54) }
@@ -35,6 +38,9 @@ struct Channel: Identifiable, Hashable {
     // nts.live episode page (empty when the live feed didn't supply them).
     var showAlias: String = ""
     var episodeAlias: String = ""
+    /// This channel's programme list — `now` first, then every `next…` slot the
+    /// live response carried. Empty until the first poll lands.
+    var upcoming: [NTSAPI.Broadcast] = []
 
     var id: Int { number }
 
@@ -115,7 +121,8 @@ final class Catalog: ObservableObject {
                 coverURL: e.pictureLarge.flatMap { URL(string: $0) },
                 iconURL: e.iconWhite.flatMap { URL(string: $0) },
                 animationURL: (e.animationLarge ?? e.animationThumb).flatMap { URL(string: $0) },
-                hue: hues[e.alias] ?? fallbackHue
+                hue: hues[e.alias] ?? fallbackHue,
+                credits: e.credits ?? []
             )
         }
     }

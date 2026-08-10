@@ -23,6 +23,10 @@ struct PopoverView: View {
             // The tracklist is a full-width overlay (covers the rail + dial),
             // matching the prototype — not just the dial pane.
             .overlay { if model.showTracks { TracklistOverlay() } }
+            // The catalog covers the faceplate entirely, channel cards included,
+            // so the window never has to resize to make room for it.
+            .overlay { if model.catalogOpen { CatalogOverlay() } }
+            .animation(.easeOut(duration: 0.18), value: model.catalogOpen)
 
             NowPlayingBar()
         }

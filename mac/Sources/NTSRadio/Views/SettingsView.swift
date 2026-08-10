@@ -30,14 +30,6 @@ struct SettingsView: View {
                     }
                 }
 
-                section("DISPLAY") {
-                    card {
-                        settingRow("Hide Dial Dot When Small",
-                                   "Drop the channel's center dot once the window shrinks.",
-                                   on: model.hideDialDotWhenSmall) { model.hideDialDotWhenSmall.toggle() }
-                    }
-                }
-
                 card {
                     linkRow("Check for Updates…") { /* non-functional v1 (GitHub #2) */ }
                     rowDivider

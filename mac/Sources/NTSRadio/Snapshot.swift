@@ -35,7 +35,12 @@ enum Snapshot {
         let sampleMix = Mixtape(
             alias: "rap-house", title: "Rap House", subtitle: "808s and champagne.",
             streamURL: URL(string: "https://example.com/s")!,
-            coverURL: nil, iconURL: nil, animationURL: nil, hue: 285)
+            coverURL: nil, iconURL: nil, animationURL: nil, hue: 285,
+            credits: [
+                NTSAPI.MixtapeCredit(name: "Danny Brown", alias: "danny-brown"),
+                NTSAPI.MixtapeCredit(name: "DJ Spanish Fly", alias: "dj-spanish-fly"),
+                NTSAPI.MixtapeCredit(name: "Access Denied", alias: "access-denied"),
+            ])
         let sampleTracks = [
             Track(time: "21:05", title: "Champagne", artist: "Clams Casino", hue: 285),
             Track(time: "21:00", title: "808 Heart", artist: "Metro Boomin", hue: 285),
@@ -64,7 +69,7 @@ enum Snapshot {
                 Mixtape(alias: n.lowercased().replacingOccurrences(of: " ", with: "-"),
                         title: n, subtitle: "", streamURL: URL(string: "https://example.com/s")!,
                         coverURL: nil, iconURL: nil, animationURL: nil,
-                        hue: Double(i) * 360 / 12)
+                        hue: Double(i) * 360 / 12, credits: [])
             }
         }
 
@@ -80,6 +85,11 @@ enum Snapshot {
         }
         shot("04-settings.png") { seedChannels($0); seedMixtapes($0); $0.settingsOpen = true }
         shot("05-login.png") { seedChannels($0); seedMixtapes($0); $0.loginOpen = true }
+        // The catalog is deliberately not snapshotted. `ImageRenderer` lays a
+        // `ScrollView` out at zero height and never materialises a `LazyVGrid`, so
+        // every catalog state renders as an empty pane — a picture of nothing that
+        // reads as a broken screen. It is verified by capturing the real window
+        // instead (`screencapture -l <windowNumber>`).
 
         exit(0)
     }

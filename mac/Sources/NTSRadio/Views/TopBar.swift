@@ -34,6 +34,7 @@ struct TopBar: View {
 
             HStack(spacing: 8) {
                 Spacer()
+                catalogButton
                 settingsButton
                 profileButton
             }
@@ -79,6 +80,22 @@ struct TopBar: View {
         }
         .buttonStyle(.plain)
         .help(auth.isAuthenticated ? "Account — \(auth.email ?? "signed in")" : "Sign in")
+    }
+
+    /// The one control that opens and closes the catalog. It stays in the same
+    /// place either way and lights up while the catalog is up, so there is never a
+    /// second, differently-placed way back out.
+    private var catalogButton: some View {
+        Button { model.toggleCatalog() } label: {
+            Image(systemName: "square.grid.2x2.fill")
+                .font(.system(size: 13, weight: .regular))
+                .foregroundStyle(model.catalogOpen ? Theme.popover : Theme.ink)
+                .frame(width: 26, height: 26)
+                .background(RoundedRectangle(cornerRadius: 7)
+                    .fill(model.catalogOpen ? Theme.ink : Theme.hairline(0.10)))
+        }
+        .buttonStyle(.plain)
+        .help(model.catalogOpen ? "Hide the catalog" : "Schedule, saved and mixtapes")
     }
 
     private var settingsButton: some View {

@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- A catalog that covers the whole window, opened with the grid button in the
+  title bar. Three tabs — **Schedule**, **Saved**, **Mixtapes** — plus a search
+  field that is always present rather than a tab of its own. Every tile opens a
+  full-width detail page.
+- **Schedule** lists both channels' programmes for the next eighteen slots each.
+  That data was already arriving in every `/api/v2/live` poll as `now` plus
+  `next` … `next17`; the app had been decoding `now` and discarding the rest.
+- **Search** filters shows, mixtapes and mixtape credits at once, so a host's
+  name finds the mixtape their show feeds. It runs against a local index because
+  NTS's `/api/v2/search` answers 200 with an empty result set for every type.
+  The index is built once from `/api/v2/shows` and cached for a week; the header
+  states how many shows are in it, since the endpoint refuses any offset past
+  1000 and so cannot reach every show NTS lists.
+- **Saved** shows and mixtapes, starred from any tile or detail page and stored
+  in Application Support. NTS exposes no favourites API — `/api/v2/users/me`,
+  `/api/v2/favourites` and `/api/v2/users/me/favourites` all answer 400 — so
+  these stay on this Mac.
+- Show detail: artwork, host blurb, genres and moods, and recent episodes that
+  open on nts.live. Mixtape detail lists the shows feeding it, each one a link
+  into that show's page.
+
+### Changed
+
+- The channel cards are now the programme's photograph, shown for **both**
+  channels — the inactive one dimmed rather than drained of colour, where before
+  only the playing channel's artwork appeared at all. The 86pt accent disc is
+  gone; the channel number is a small printed box in the corner, as it is on the
+  Atonemo faceplate, and the card carries the location, air time, and genres.
+- The dial is the Atonemo's rotary: a knurled knob with a detent tick per
+  position, the mixtape icons printed on the faceplate outside it, and a
+  triangular index on the rim that turns to the selection. The knob's face
+  carries the mixtape's cover art and name — it was a 166pt disc that showed
+  nothing.
+- Removed the "Hide Dial Dot When Small" setting along with the dial dot it
+  controlled.
+
 ## [0.1.0]
 
 ### Added

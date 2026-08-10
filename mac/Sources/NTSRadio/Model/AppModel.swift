@@ -14,11 +14,46 @@ enum Sheet: Equatable {
     case login
 }
 
+/// Which list the catalog is showing when no search is running. A live query
+/// outranks the tab — it searches everything at once — so this only decides the
+/// resting view.
+enum CatalogTab: String, CaseIterable, Identifiable {
+    case schedule, saved, mixtapes
+    var id: String { rawValue }
+    var label: String { rawValue.uppercased() }
+}
+
+/// What the catalog is looking at beyond a list. Pushed on top of the grid and
+/// popped by the back control — a stack of one, which is all the depth the
+/// content has (a show's episodes link out to nts.live rather than deeper in).
+enum CatalogDetail: Equatable {
+    case show(alias: String, fallbackTitle: String)
+    case mixtape(alias: String)
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     let catalog = Catalog.shared
     let engine = PlayerEngine()
     let auth = NTSAuth()
+    let saved = Saved.shared
+    let showIndex = ShowIndex.shared
+
+    // MARK: Catalog surface
+
+    /// Whether the catalog covers the faceplate. One toggle owns this — the ▤ in
+    /// the title bar — so there is never a second way in that can disagree with it.
+    @Published var catalogOpen = false
+    @Published var catalogTab: CatalogTab = .schedule
+    /// The search field's contents. Non-empty means the query is showing instead
+    /// of `catalogTab`, across shows and mixtapes at once.
+    @Published var query = ""
+    @Published var detail: CatalogDetail? = nil
+
+    /// Fetched lazily when a show detail opens, keyed by alias so reopening the
+    /// same show is instant and a slow fetch can't land under a different show.
+    @Published var showDetails: [String: NTSAPI.ShowDetail] = [:]
+    @Published var showEpisodes: [String: [NTSAPI.Episode]] = [:]
 
     @Published var selection: Selection = .idle
     @Published var muted = false { didSet { engine.apply(volume: volume, muted: muted) } }
@@ -59,13 +94,6 @@ final class AppModel: ObservableObject {
         didSet { UserDefaults.standard.set(showInDock, forKey: "showInDock") }
     }
 
-    /// DISPLAY setting (prototype): once the window shrinks to the compact dial,
-    /// drop the channel disc's center number. On by default. Persisted.
-    @Published var hideDialDotWhenSmall: Bool =
-        (UserDefaults.standard.object(forKey: "hideDialDotWhenSmall") as? Bool) ?? true {
-        didSet { UserDefaults.standard.set(hideDialDotWhenSmall, forKey: "hideDialDotWhenSmall") }
-    }
-
     /// Live tracklist listener for the current source (nil when signed out).
     /// Recreated whenever the source or auth state changes.
     private var listener: FirestoreListener?
@@ -89,7 +117,8 @@ final class AppModel: ObservableObject {
         // Both are observable objects of their own; republish their changes as
         // ours so a view watching the model repaints when the stream starts or
         // the dial's contents move.
-        for upstream in [engine.objectWillChange, catalog.objectWillChange] {
+        for upstream in [engine.objectWillChange, catalog.objectWillChange,
+                         saved.objectWillChange, showIndex.objectWillChange] {
             upstream
                 .sink { [weak self] in self?.objectWillChange.send() }
                 .store(in: &bag)
@@ -112,6 +141,7 @@ final class AppModel: ObservableObject {
         nowPlaying = NowPlayingCenter(model: self)
         Task { await refreshMixtapes() }
         Task { await pollLive() }
+        Task { await showIndex.buildIfStale() }
     }
 
     // MARK: Derived view-model
@@ -280,6 +310,131 @@ final class AppModel: ObservableObject {
         ((i % count) + count) % count
     }
 
+    // MARK: Catalog
+
+    /// Show the catalog, or hide it. Closing drops the query and any open detail
+    /// so reopening lands on a list rather than mid-navigation from last time.
+    func toggleCatalog() {
+        catalogOpen.toggle()
+        if !catalogOpen { query = ""; detail = nil }
+    }
+
+    /// Every channel's programmes, in air order — the schedule tab's contents.
+    var schedule: [NTSAPI.Broadcast] {
+        catalog.channels.flatMap(\.upcoming)
+    }
+
+    /// Whether this broadcast is the one currently on air for its channel.
+    func isOnAir(_ b: NTSAPI.Broadcast) -> Bool {
+        catalog.channels.first { $0.number == b.channel }?.upcoming.first?.id == b.id
+    }
+
+    /// A schedule slot as a grid row, flagged if it's the one on air — the only
+    /// place the LIVE badge comes from, so it can't disagree with the rail.
+    private func row(for b: NTSAPI.Broadcast) -> CatalogRow {
+        let resolved = showIndex.ref(b.showAlias) ?? showIndex.match(title: b.title)
+        let row = CatalogRow(b, resolved: resolved)
+        return isOnAir(b) ? row.markedLive() : row
+    }
+
+    /// What the catalog lists right now. A non-empty query outranks the tab and
+    /// searches shows and mixtapes together, so a term that only appears in a
+    /// mixtape's credits still finds it while the schedule tab is selected.
+    var catalogRows: [CatalogRow] {
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard q.isEmpty else { return searchRows(q) }
+        switch catalogTab {
+        case .schedule:
+            return schedule.map(row(for:))
+        case .mixtapes:
+            return catalog.mixtapes.enumerated().map { CatalogRow($0.element, detent: $0.offset + 1) }
+        case .saved:
+            return saved.items.map(CatalogRow.init)
+        }
+    }
+
+    private func searchRows(_ q: String) -> [CatalogRow] {
+        var rows: [CatalogRow] = []
+        var seen = Set<String>()
+
+        // Mixtapes first: sixteen of them, and their credits are the only route
+        // from a host's name to the mixtape carrying their show.
+        for (i, m) in catalog.mixtapes.enumerated() where m.searchText.contains(q) {
+            rows.append(CatalogRow(m, detent: i + 1))
+            seen.insert("mixtape:\(m.alias)")
+        }
+        // Then anything on the air today, so a match you can play right now
+        // outranks the same show's index entry.
+        for b in schedule where b.searchText.contains(q) {
+            rows.append(row(for: b))
+            if !b.showAlias.isEmpty { seen.insert("show:\(b.showAlias)") }
+        }
+        for s in showIndex.all where s.haystack.contains(q) {
+            guard !seen.contains("show:\(s.alias)") else { continue }
+            rows.append(CatalogRow(s))
+        }
+        return rows
+    }
+
+    /// The line under the search field — states how much was actually searched,
+    /// because the index cannot reach every show NTS has and a bare result count
+    /// would imply it did.
+    var searchScope: String {
+        let n = showIndex.count
+        if showIndex.building { return "INDEXING SHOWS — \(n) SO FAR" }
+        return "\(catalog.mixtapes.count) MIXTAPES · \(schedule.count) SCHEDULED · \(n) SHOWS INDEXED"
+    }
+
+    // MARK: Saving
+
+    func isSaved(_ row: CatalogRow) -> Bool {
+        guard let item = row.savedItem else { return false }
+        return saved.contains(item.kind, item.alias)
+    }
+
+    func toggleSaved(_ row: CatalogRow) {
+        guard let item = row.savedItem else { return }
+        saved.toggle(item)
+    }
+
+    // MARK: Detail
+
+    func open(_ row: CatalogRow) {
+        switch row.target {
+        case .show(let alias, let title):
+            detail = .show(alias: alias, fallbackTitle: title)
+            Task { await loadShow(alias) }
+        case .mixtape(let alias):
+            detail = .mixtape(alias: alias)
+        case .none:
+            break
+        }
+    }
+
+    /// Fetch a show's page and its recent episodes, once. Both are best-effort:
+    /// a failure leaves the detail view on what the schedule row already knew.
+    func loadShow(_ alias: String) async {
+        if showDetails[alias] == nil, let d = try? await NTSAPI.show(alias: alias) {
+            showDetails[alias] = d
+            showIndex.note(alias: alias, name: d.name, location: d.location,
+                           genres: d.genres, picture: d.image?.absoluteString)
+        }
+        if showEpisodes[alias] == nil, let eps = try? await NTSAPI.episodes(alias: alias) {
+            showEpisodes[alias] = eps
+        }
+    }
+
+    /// Tune to whatever a catalog row points at, if it is playable. A schedule row
+    /// plays its channel — a future slot can't be played early, so it tunes the
+    /// channel it will air on rather than pretending to seek.
+    func play(_ row: CatalogRow) {
+        switch row.playable {
+        case .channel(let n): select(.channel(n)); loadCurrent(autoplay: true)
+        case .mixtape(let alias): select(.mixtape(alias)); loadCurrent(autoplay: true)
+        case .none: break
+        }
+    }
+
     /// Pull live now-playing for the two channels. Best-effort: failures leave
     /// the seeded placeholders in place.
     func refreshLive() async {
@@ -296,6 +451,13 @@ final class AppModel: ObservableObject {
                 // the aliases when we got real ones or the broadcast actually changed.
                 if !upd.showAlias.isEmpty || showChanged { catalog.channels[idx].showAlias = upd.showAlias }
                 if !upd.episodeAlias.isEmpty || showChanged { catalog.channels[idx].episodeAlias = upd.episodeAlias }
+                catalog.channels[idx].upcoming = upd.schedule
+                // Every slot names a show; folding them in is how the index covers
+                // shows past the endpoint's reachable 1012.
+                for b in upd.schedule where !b.showAlias.isEmpty {
+                    showIndex.note(alias: b.showAlias, name: b.title, location: b.location,
+                                   genres: b.genres, picture: b.image?.absoluteString)
+                }
             }
         }
     }

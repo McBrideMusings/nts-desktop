@@ -28,8 +28,21 @@ Requires macOS 15+ and Xcode 16+ / Swift 6 to build.
 
 The whole app lives in the `mac/` Swift package (root `Makefile`/`admin.toml` just delegate into it):
 
-- `mac/Sources/NTSRadio/Model/` — `Catalog.swift` (mixtape catalog fetch/cache), `PlayerEngine.swift` (AVPlayer), `NTSAPI.swift` / `NTSAuth.swift` (NTS REST API + sign-in), `AppModel.swift` (app state), `NowPlayingCenter.swift` (system media keys + the Control Center tile), `TracklistAdapter.swift`, `Cache.swift`
-- `mac/Sources/NTSRadio/Views/` — `DialView.swift` (radial mixtape dial), `ChannelRail.swift`, `NowPlayingBar.swift`, `TracklistOverlay.swift`, `TopBar.swift`, `SettingsView.swift`, `LoginView.swift`, `MenuBarIcon.swift`, `PopoverView.swift`
+- `mac/Sources/NTSRadio/Model/` — `Catalog.swift` (mixtape catalog fetch/cache), `PlayerEngine.swift` (AVPlayer), `NTSAPI.swift` / `NTSAuth.swift` (NTS REST API + sign-in), `AppModel.swift` (app state), `NowPlayingCenter.swift` (system media keys + the Control Center tile), `TracklistAdapter.swift`, `Cache.swift`, `ShowIndex.swift` (local searchable show index), `Saved.swift` (local bookmarks), `CatalogRow.swift` (one tile type for the catalog grid)
+- `mac/Sources/NTSRadio/Views/` — `DialView.swift` (radial mixtape dial), `ChannelRail.swift`, `NowPlayingBar.swift`, `TracklistOverlay.swift`, `CatalogOverlay.swift` (schedule / saved / mixtapes / search + detail), `TopBar.swift`, `SettingsView.swift`, `LoginView.swift`, `MenuBarIcon.swift`, `PopoverView.swift`
+
+### NTS API limits worth knowing before extending the catalog
+
+- `/api/v2/live` returns `now` plus `next` … `next17` per channel, but embeds
+  `details` (alias, genres, artwork, location) for only the first two. The other
+  slots are matched to the show index by title.
+- `/api/v2/search` answers 200 with an empty `results` array for every `type`.
+  Search is local; there is no server search to fall back to.
+- `/api/v2/shows` clamps `limit` to 12 and rejects any `offset` above 1000 with
+  HTTP 422, so at most 1012 of the ~1733 shows are reachable. `ShowIndex` walks
+  what it can and merges in anything the app encounters.
+- There is no favourites endpoint. `/api/v2/users/me`, `/api/v2/favourites` and
+  `/api/v2/users/me/favourites` all answer HTTP 400. Bookmarks are local-only.
 - `mac/Sources/NTSFirestore/` — a Firestore Listen (gRPC) client for live channel/mixtape tracklists, with generated protobuf/gRPC Swift code under `Generated/` and source `.proto` files in `mac/Proto/` (see `mac/Proto/regenerate.sh`)
 - `mac/Sources/FSProbe/` — standalone probe binary, separate from the main app target
 - `mixtapes/<slug>/` — per-mixtape assets checked into the repo (cover art, icons, animation `.mp4`s); the `animation_*.mp4` files are gitignored (kept locally, not tracked — the dial doesn't use them yet)

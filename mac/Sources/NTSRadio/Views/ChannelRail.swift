@@ -13,8 +13,7 @@ struct ChannelRail: View {
                 ForEach(Array(model.catalog.channels.enumerated()), id: \.element.id) { idx, c in
                     ChannelCard(channel: c,
                                 active: model.selection == .channel(c.number),
-                                slot: cardH,
-                                hideDotWhenSmall: model.hideDialDotWhenSmall)
+                                slot: cardH)
                         .onTapGesture { model.select(.channel(c.number)) }
                     if idx == 0 {
                         Rectangle().fill(Theme.hairline(0.1)).frame(height: 1)
@@ -23,116 +22,131 @@ struct ChannelRail: View {
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
-        .frame(width: 180)
+        .frame(width: 268)
         .overlay(alignment: .trailing) {
             Rectangle().fill(Theme.hairline(0.08)).frame(width: 1)
         }
     }
 }
 
+/// One channel, with the programme's own photograph as the card.
+///
+/// The photo is the point: both channels show theirs, and the inactive one is
+/// only dimmed rather than drained, so you can see what's on the channel you
+/// aren't listening to. The accent disc that used to dominate this card is gone —
+/// on the Atonemo that circle is a button you press, and a flat one on screen was
+/// spending the card's focal point on a channel number already printed above it.
 private struct ChannelCard: View {
     let channel: Channel
     let active: Bool
     let slot: CGFloat
-    let hideDotWhenSmall: Bool
 
-    /// Below this slot height the card sheds its live chip + show title and shows
-    /// just the numbered disc + city. That's what lets the whole window get short:
-    /// the full card's fixed disc + `fixedSize` chip + wrapping title otherwise
-    /// pin a tall minimum height that propagates up to the window.
-    private static let compactThreshold: CGFloat = 168
+    /// Below this slot height the card drops the genre chips and shrinks the
+    /// title, so two cards still fit when the window is short.
+    private static let compactThreshold: CGFloat = 170
     private var compact: Bool { slot < Self.compactThreshold }
 
-    var body: some View {
-        ZStack {
-            cardArt
-                .saturation(active ? 1 : 0.08)
-                .brightness(active ? 0 : -0.28)
+    private var location: String {
+        let live = channel.upcoming.first?.location ?? ""
+        return live.isEmpty ? channel.city : live
+    }
+    private var genres: [String] {
+        Array((channel.upcoming.first?.genres ?? [channel.genre]).filter { !$0.isEmpty }.prefix(3))
+    }
 
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            cardArt
+            // Only the base is scrimmed: a full-card wash would take the photo
+            // back out again, which is the thing this card exists to show.
             LinearGradient(
                 stops: [
-                    .init(color: .black.opacity(0.34), location: 0),
-                    .init(color: .black.opacity(0.14), location: 0.44),
-                    .init(color: .black.opacity(0.86), location: 1),
+                    .init(color: .clear, location: 0),
+                    .init(color: .black.opacity(0.78), location: 0.62),
+                    .init(color: .black.opacity(0.94), location: 1),
                 ], startPoint: .top, endPoint: .bottom)
+                .frame(height: compact ? 92 : 132)
+                .frame(maxHeight: .infinity, alignment: .bottom)
 
-            if compact { compactContent } else { fullContent }
+            meta
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.stage)
+        .overlay(alignment: .topLeading) { numeral }
+        .overlay(alignment: .topTrailing) { led }
+        .overlay { if active { Rectangle().strokeBorder(channel.accent, lineWidth: 2) } }
         .clipped()
         .contentShape(Rectangle())
     }
 
-    // MARK: Full card (tall)
+    // MARK: Pieces
 
-    private var fullContent: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            liveChip
-            Spacer(minLength: 8)
-            HStack { Spacer(); channelDisc(diameter: 86, showNumber: false); Spacer() }
-            Spacer(minLength: 8)
-            ChipText(text: channel.show.uppercased(), font: Theme.display(17, .black))
+    /// The boxed channel number, printed like the `1` and `2` silkscreened on the
+    /// Atonemo's faceplate. Lights up in the channel's accent when it's the one
+    /// playing — the panel LED, not a control.
+    private var numeral: some View {
+        Text("\(channel.number)")
+            .font(Theme.display(13, .black))
+            .foregroundStyle(active ? channel.accentText : Theme.popover)
+            .frame(width: 22, height: 22)
+            .background(active ? channel.accent : Theme.ink.opacity(0.55))
+            .padding(12)
+    }
+
+    private var led: some View {
+        Circle()
+            .fill(active ? Theme.liveDot : Theme.liveDot.opacity(0.35))
+            .frame(width: 7, height: 7)
+            .shadow(color: Theme.liveDot.opacity(active ? 0.9 : 0), radius: 5)
+            .padding(EdgeInsets(top: 16, leading: 0, bottom: 0, trailing: 14))
+    }
+
+    private var meta: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 8) {
+                Text(location)
+                if !(channel.upcoming.first?.startEnd ?? channel.startEnd).isEmpty {
+                    Text("·").opacity(0.5)
+                    Text(channel.upcoming.first?.startEnd ?? channel.startEnd).monospacedDigit()
+                }
+                Text("·").opacity(0.5)
+                Text(active ? "◉ PLAYING" : "LIVE")
+                    .foregroundStyle(active ? channel.accent : Color(hex: 0xcfcec8))
+            }
+            .font(Theme.mono(9, .bold))
+            .tracking(1.6)
+            .foregroundStyle(Color(hex: 0xcfcec8))
+            .lineLimit(1)
+
+            Text(channel.show.uppercased())
+                .font(Theme.display(compact ? 14 : 16, .black))
+                .foregroundStyle(Theme.ink)
+                .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(EdgeInsets(top: 15, leading: 16, bottom: 15, trailing: 16))
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
 
-    // MARK: Compact card (short)
-
-    /// Just the numbered disc + city, both centered. The disc scales with the
-    /// slot height so two cards always fit no matter how short the window gets.
-    private var compactContent: some View {
-        let d = max(34, min(86, slot * 0.46))
-        return VStack(spacing: max(6, d * 0.14)) {
-            channelDisc(diameter: d, showNumber: !hideDotWhenSmall)
-            ChipText(text: channel.city, font: Theme.mono(10).weight(.medium))
-                .opacity(active ? 1 : 0.85)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(12)
-    }
-
-    /// The channel's accent disc, used at full size (86, no number) in the tall
-    /// card and scaled with the slot (number centered) in the compact card. One
-    /// renderer so the active stroke/shadow treatment stays in sync across both.
-    /// Strokes and shadow scale by `s` so at `diameter: 86` they match the
-    /// original fixed-size disc exactly.
-    private func channelDisc(diameter d: CGFloat, showNumber: Bool) -> some View {
-        let s = d / 86
-        return ZStack {
-            Circle()
-                .fill(channel.accent)
-                .opacity(active ? 1 : 0.92)
-                .overlay {
-                    if active {
-                        Circle().stroke(.black.opacity(0.4), lineWidth: 4 * s)
-                            .padding(-2 * s)
-                            .overlay(Circle().stroke(channel.accent, lineWidth: 2 * s).padding(-4 * s))
+            if !compact && !genres.isEmpty {
+                HStack(spacing: 5) {
+                    ForEach(genres, id: \.self) { g in
+                        Text(g.uppercased())
+                            .font(Theme.mono(8, .semibold))
+                            .tracking(1)
+                            .foregroundStyle(Theme.popover)
+                            .padding(.horizontal, 5).padding(.vertical, 3)
+                            .background(Theme.ink.opacity(0.85))
                     }
                 }
-                .shadow(color: .black.opacity(active ? 0.5 : 0.45),
-                        radius: (active ? 13 : 8) * s, y: (active ? 5 : 6) * s)
-            if showNumber {
-                Text("\(channel.number)")
-                    .font(Theme.display(d * 0.5, .black))
-                    .foregroundStyle(channel.accentText)
             }
         }
-        .frame(width: d, height: d)
+        .padding(EdgeInsets(top: 0, leading: 14, bottom: 13, trailing: 14))
     }
 
-    /// The current program's full-bleed artwork (downloaded live, disk-cached) —
-    /// shown only while this channel is active (playing/selected). Otherwise, and
-    /// until the image loads, falls back to the procedural gradient.
+    /// The current programme's artwork, shown for both channels. The inactive one
+    /// is dimmed and partly desaturated — enough to read as "not this one" while
+    /// staying a legible photograph.
     @ViewBuilder private var cardArt: some View {
-        if active, let bg = channel.background {
-            // Color.clear takes the card's slot size; the fill image rides in an
-            // overlay so scaledToFill can't inflate the card's layout past the
-            // rail, then we clip the overflow.
-            Color.clear
-                .overlay {
+        Group {
+            if let bg = channel.background {
+                Color.clear.overlay {
                     AsyncImage(url: bg) { img in
                         img.resizable().scaledToFill()
                     } placeholder: {
@@ -140,31 +154,13 @@ private struct ChannelCard: View {
                     }
                 }
                 .clipped()
-        } else {
-            channel.art
-        }
-    }
-
-    private var liveChip: some View {
-        HStack(spacing: 0) {
-            Text("\(channel.number)")
-                .font(Theme.display(15, .black))
-                .foregroundStyle(channel.accentText)
-                .padding(.horizontal, 10)
-                .frame(maxHeight: .infinity)
-                .background(channel.accent)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(channel.city)
-                    .font(Theme.mono(9, .bold))
-                    .tracking(1.3)
-                Text(channel.startEnd.isEmpty ? "—" : channel.startEnd)
-                    .font(Theme.display(14, .heavy))
-                    .monospacedDigit()
+            } else {
+                channel.art
             }
-            .foregroundStyle(.white)
-            .padding(EdgeInsets(top: 4, leading: 11, bottom: 5, trailing: 11))
         }
-        .fixedSize()
-        .background(Theme.chipBlack)
+        .saturation(active ? 1 : 0.45)
+        .brightness(active ? 0 : -0.22)
+        .overlay(Color.black.opacity(active ? 0 : 0.28))
+        .animation(.easeOut(duration: 0.2), value: active)
     }
 }
