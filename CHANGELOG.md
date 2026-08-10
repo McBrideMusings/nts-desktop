@@ -55,6 +55,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The dial waits for a real size before drawing. Its whole geometry is a
+  fraction of the smaller window dimension, so on a layout pass that reported
+  zero it collapsed to a point in the top-left corner — and a click landing in
+  that frame was measured from the corner and could select a mixtape nowhere
+  near the cursor.
 - The Keychain helper behind sign-in no longer discards the `OSStatus` from
   `SecItemDelete` and `SecItemAdd`. A failed write meant the refresh token never
   reached disk while the app carried on as if signed in, so the session ended at
