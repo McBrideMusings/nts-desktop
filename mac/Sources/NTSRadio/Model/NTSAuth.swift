@@ -187,20 +187,40 @@ private enum Keychain {
 
     struct Stored { let refreshToken: String; let email: String? }
 
+    /// A readable form of an `OSStatus` — the same wording Keychain Access shows.
+    private static func message(_ status: OSStatus) -> String {
+        (SecCopyErrorMessageString(status, nil) as String?) ?? "OSStatus \(status)"
+    }
+
     static func write(refreshToken: String, email: String?) {
         var payload: [String: String] = ["refreshToken": refreshToken]
         if let email { payload["email"] = email }
-        guard let data = try? JSONSerialization.data(withJSONObject: payload) else { return }
+        guard let data = try? JSONSerialization.data(withJSONObject: payload) else {
+            print("[Keychain] could not encode the refresh token — not persisted")
+            return
+        }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ]
-        SecItemDelete(query as CFDictionary)
+        // There is nothing to replace on the very first write, so a missing item is
+        // the expected case here rather than a failure.
+        let deleted = SecItemDelete(query as CFDictionary)
+        if deleted != errSecSuccess, deleted != errSecItemNotFound {
+            print("[Keychain] could not replace the stored token: \(message(deleted))")
+        }
         var add = query
         add[kSecValueData as String] = data
         add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        SecItemAdd(add as CFDictionary, nil)
+        let added = SecItemAdd(add as CFDictionary, nil)
+        if added != errSecSuccess {
+            // This is the one that matters. The session keeps working now, because
+            // the token is still in memory — but nothing reaches disk, so the next
+            // launch finds no token and the user is silently signed out.
+            print("[Keychain] could not store the refresh token: \(message(added)) — "
+                  + "this session will work, but sign-in will not survive a relaunch")
+        }
     }
 
     static func read() -> Stored? {
@@ -225,6 +245,11 @@ private enum Keychain {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ]
-        SecItemDelete(query as CFDictionary)
+        // Same defect as `write` had, one function down: a failure here leaves the
+        // token on disk after signing out, so the next launch signs back in.
+        let status = SecItemDelete(query as CFDictionary)
+        if status != errSecSuccess, status != errSecItemNotFound {
+            print("[Keychain] could not clear the stored token: \(message(status))")
+        }
     }
 }
