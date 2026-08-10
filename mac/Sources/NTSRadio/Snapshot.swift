@@ -106,10 +106,13 @@ enum Snapshot {
         // only way to see it is to render the same state at several sizes. These
         // three are the corners: the window's own minimum, a tall column, and a
         // wide letterbox.
+        // The first two are the corners of what `RadioWindowController.clamped`
+        // allows: as narrow as the window goes, and as short.
         let shapes: [(String, CGSize)] = [
-            ("10-shape-minimum-720x300.png",   CGSize(width: 720, height: 300)),
-            ("11-shape-tall-760x1040.png",     CGSize(width: 760, height: 1040)),
-            ("12-shape-wide-1440x520.png",     CGSize(width: 1440, height: 520)),
+            ("10-shape-narrow-340x582.png",    CGSize(width: 340, height: 582)),
+            ("11-shape-short-547x230.png",     CGSize(width: 547, height: 230)),
+            ("12-shape-tall-760x1040.png",     CGSize(width: 760, height: 1040)),
+            ("13-shape-wide-1440x520.png",     CGSize(width: 1440, height: 520)),
         ]
         for (name, size) in shapes {
             shot(name, size: size) { seedChannels($0); seedMixtapes($0); $0.select(.channel(1)) }

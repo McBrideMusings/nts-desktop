@@ -4,6 +4,13 @@ import AppKit
 struct NowPlayingBar: View {
     @EnvironmentObject var model: AppModel
 
+    /// The window's width. The bar's right-hand cluster costs a fixed ~160pt, so
+    /// in a narrow window it eats the title down to "LO…" — below this width the
+    /// level meter and the equaliser go and the title gets their room. Mute stays:
+    /// it is the control, the meter only shows what it did.
+    let width: CGFloat
+    private var compact: Bool { width < 460 }
+
     var body: some View {
         HStack(spacing: 14) {
             Button { model.togglePlay() } label: {
@@ -40,9 +47,11 @@ struct NowPlayingBar: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            EqBars(playing: model.isPlaying && !model.muted, accent: model.accent)
+            if !compact {
+                EqBars(playing: model.isPlaying && !model.muted, accent: model.accent)
 
-            Rectangle().fill(Theme.hairline(0.12)).frame(width: 1, height: 22)
+                Rectangle().fill(Theme.hairline(0.12)).frame(width: 1, height: 22)
+            }
 
             Button { model.showTracks.toggle() } label: {
                 Image(systemName: "list.bullet")
@@ -64,7 +73,9 @@ struct NowPlayingBar: View {
             }
             .buttonStyle(.plain)
 
-            VolumeMeter(volume: $model.volume, muted: model.muted)
+            if !compact {
+                VolumeMeter(volume: $model.volume, muted: model.muted)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

@@ -4,6 +4,15 @@ struct PopoverView: View {
     @EnvironmentObject var model: AppModel
 
     var body: some View {
+        // The now-playing bar sits outside the body's own reader, so the window
+        // width comes from here.
+        GeometryReader { window in
+            stack(windowWidth: window.size.width)
+        }
+        .ignoresSafeArea(.container, edges: .top)
+    }
+
+    private func stack(windowWidth: CGFloat) -> some View {
         VStack(spacing: 0) {
             // The title-bar band. The window's top-bar accessory paints its own
             // black over everything right of the traffic lights, but AppKit
@@ -50,13 +59,10 @@ struct PopoverView: View {
             .overlay { if model.catalogOpen { CatalogOverlay() } }
             .animation(.easeOut(duration: 0.18), value: model.catalogOpen)
 
-            NowPlayingBar()
+            NowPlayingBar(width: windowWidth)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.popover)
-        // Lay the stack out from the very top of the window, so the strip above
-        // covers the title-bar band exactly instead of being pushed below it.
-        .ignoresSafeArea(.container, edges: .top)
         .overlay { if model.settingsOpen { SettingsView() } }
         .overlay { if model.loginOpen { LoginView() } }
     }

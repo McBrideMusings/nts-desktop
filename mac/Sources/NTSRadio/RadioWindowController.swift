@@ -7,15 +7,29 @@ import AppKit
 /// anywhere on screen — it's a free-floating window that happens to be summoned
 /// from the menu bar.
 @MainActor
-final class RadioWindowController {
-    private let window: KeyableWindow
+final class RadioWindowController: NSObject, NSWindowDelegate {
+    private var window: KeyableWindow!
     private static let frameName = "NTSRadioWindow"
-    /// Smallest window the interface is laid out for. With `.fullSizeContentView`
-    /// the content view spans the whole frame, so this is both the frame minimum
-    /// and the content minimum.
-    static let minContentSize = NSSize(width: 720, height: 300)
+
+    /// The smallest the window may get, in two regimes rather than one rectangle.
+    ///
+    /// A single 340×230 floor would allow both extremes at once, and a window that
+    /// is both narrow and short has nowhere to put the dial — at 340 wide the rail
+    /// alone takes 300 of it. So: never below 340×230, and whichever dimension is
+    /// squeezed, the other has to stay above 520 to hold the layout it forces.
+    /// A narrow window stacks the rail above the dial and needs the height; a
+    /// short one keeps the rail beside the dial and needs the width.
+    static func clamped(_ size: NSSize) -> NSSize {
+        var s = size
+        s.width = max(s.width, 340)
+        s.height = max(s.height, 230)
+        if s.width < 520 { s.height = max(s.height, 520) }
+        if s.height < 430 { s.width = max(s.width, 520) }
+        return s
+    }
 
     init(model: AppModel) {
+        super.init()
         let root = PopoverView()
             .environmentObject(model)
             .environmentObject(model.auth)
@@ -75,14 +89,13 @@ final class RadioWindowController {
         window.level = .normal                        // ordinary window: stays open unfocused, can go behind
         window.isReleasedWhenClosed = false
         window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
-        // The floor the layout is designed against: below 720×300 the two channel
-        // cards stop fitting side by side and the dial shrinks past the point
-        // where its face text can be read. `contentMinSize` on its own did not
-        // hold: the window was draggable down to roughly 340×790 and to a 95pt
-        // strip. `minSize` constrains the frame, which is what a resize drag
-        // actually moves, so both are set.
-        window.contentMinSize = Self.minContentSize
-        window.minSize = Self.minContentSize
+        // The absolute floor. Neither `contentMinSize` nor `minSize` can express
+        // the width-depends-on-height rule, so the real clamp is
+        // `windowWillResize(_:to:)` below — AppKit asks the delegate for every
+        // step of a resize drag, which is the only place a rule like that fits.
+        window.contentMinSize = NSSize(width: 340, height: 230)
+        window.minSize = NSSize(width: 340, height: 230)
+        window.delegate = self
         window.setFrameAutosaveName(Self.frameName)  // remember size + position across launches
         self.window = window
     }
@@ -101,20 +114,23 @@ final class RadioWindowController {
             positionUnderStatusItem(statusButton)
             window.saveFrame(usingName: Self.frameName)
         }
-        // A frame saved before the minimum was enforced can be smaller than the
-        // layout survives; `setFrameUsingName` restores it verbatim, so grow it
-        // back here rather than reopening at 340×90 forever.
+        // A frame saved while the window was smaller than the rule allows comes
+        // back verbatim from `setFrameUsingName`, so grow it here rather than
+        // reopening at that size forever.
         let f = window.frame
-        if f.width < Self.minContentSize.width || f.height < Self.minContentSize.height {
-            window.setFrame(NSRect(x: f.minX,
-                                   y: f.maxY - max(f.height, Self.minContentSize.height),
-                                   width: max(f.width, Self.minContentSize.width),
-                                   height: max(f.height, Self.minContentSize.height)),
+        let ok = Self.clamped(f.size)
+        if ok != f.size {
+            window.setFrame(NSRect(x: f.minX, y: f.maxY - ok.height,
+                                   width: ok.width, height: ok.height),
                             display: false)
             window.saveFrame(usingName: Self.frameName)
         }
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+    }
+
+    nonisolated func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+        MainActor.assumeIsolated { Self.clamped(frameSize) }
     }
 
     private func positionUnderStatusItem(_ statusButton: NSStatusBarButton?) {
