@@ -1,31 +1,58 @@
 import SwiftUI
+import AppKit
 
 struct ChannelRail: View {
     @EnvironmentObject var model: AppModel
 
+    /// `.vertical` stacks the two cards (rail down one side); `.horizontal` puts
+    /// them side by side (rail across the top, or a short rail on the left).
+    let axis: Axis
+    /// Which side the rail's dividing hairline sits on — the edge facing the dial.
+    let edge: Edge
+
     var body: some View {
-        // A GeometryReader here measures the rail's actual slot height and, as a
+        // A GeometryReader here measures the rail's actual slot size and, as a
         // side effect, stops the cards' intrinsic size from forcing a tall window
-        // minimum — the rail now fills whatever height it's given instead.
+        // minimum — the rail now fills whatever space it's given instead.
         GeometryReader { proxy in
-            let cardH = (proxy.size.height - 1) / 2   // minus the 1pt divider
-            VStack(spacing: 0) {
-                ForEach(Array(model.catalog.channels.enumerated()), id: \.element.id) { idx, c in
-                    ChannelCard(channel: c,
-                                active: model.selection == .channel(c.number),
-                                slot: cardH)
-                        .onTapGesture { model.select(.channel(c.number)) }
-                    if idx == 0 {
-                        Rectangle().fill(Theme.hairline(0.1)).frame(height: 1)
+            // The slot height is what decides whether a card can carry its genre
+            // chips, so in a row the card gets the rail's whole height.
+            let slotH = axis == .vertical ? (proxy.size.height - 1) / 2 : proxy.size.height
+            let slotW = axis == .vertical ? proxy.size.width : (proxy.size.width - 1) / 2
+            let cards = Array(model.catalog.channels.enumerated())
+            Group {
+                if axis == .vertical {
+                    VStack(spacing: 0) {
+                        ForEach(cards, id: \.element.id) { idx, c in
+                            card(c, w: slotW, h: slotH)
+                            if idx == 0 { Rectangle().fill(Theme.hairline(0.1)).frame(height: 1) }
+                        }
+                    }
+                } else {
+                    HStack(spacing: 0) {
+                        ForEach(cards, id: \.element.id) { idx, c in
+                            card(c, w: slotW, h: slotH)
+                            if idx == 0 { Rectangle().fill(Theme.hairline(0.1)).frame(width: 1) }
+                        }
                     }
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
-        .frame(width: 268)
-        .overlay(alignment: .trailing) {
-            Rectangle().fill(Theme.hairline(0.08)).frame(width: 1)
+        .overlay(alignment: edge == .bottom ? .bottom : .trailing) {
+            if edge == .bottom {
+                Rectangle().fill(Theme.hairline(0.08)).frame(height: 1)
+            } else {
+                Rectangle().fill(Theme.hairline(0.08)).frame(width: 1)
+            }
         }
+    }
+
+    private func card(_ c: Channel, w: CGFloat, h: CGFloat) -> some View {
+        ChannelCard(channel: c,
+                    active: model.selection == .channel(c.number),
+                    slotW: w, slotH: h)
+            .onTapGesture { model.select(.channel(c.number)) }
     }
 }
 
@@ -39,12 +66,23 @@ struct ChannelRail: View {
 private struct ChannelCard: View {
     let channel: Channel
     let active: Bool
-    let slot: CGFloat
+    let slotW: CGFloat
+    let slotH: CGFloat
+    /// Hovering a card previews it the way hovering a dial wedge does: the photo
+    /// comes back up to full strength and the accent outline appears, so the card
+    /// answers the pointer before it's clicked. Committing is still the click.
+    @State private var hovering = false
 
     /// Below this slot height the card drops the genre chips and shrinks the
     /// title, so two cards still fit when the window is short.
     private static let compactThreshold: CGFloat = 170
-    private var compact: Bool { slot < Self.compactThreshold }
+    private var compact: Bool { slotH < Self.compactThreshold || narrow }
+    /// Side by side, two cards split the rail's width, and the metadata line is
+    /// the first thing that stops fitting: "LONDON · 17:00 — 19:00 · ◉ PLAYING"
+    /// truncates to "LO… · 17:0… · ◉…", which says nothing. Under this width the
+    /// line drops to the times alone — the LED and the accent border already
+    /// carry live and playing.
+    private var narrow: Bool { slotW < 200 }
 
     private var location: String {
         let live = channel.upcoming.first?.location ?? ""
@@ -74,9 +112,19 @@ private struct ChannelCard: View {
         .background(Theme.stage)
         .overlay(alignment: .topLeading) { numeral }
         .overlay(alignment: .topTrailing) { led }
-        .overlay { if active { Rectangle().strokeBorder(channel.accent, lineWidth: 2) } }
+        .overlay {
+            if active {
+                Rectangle().strokeBorder(channel.accent, lineWidth: 2)
+            } else if hovering {
+                Rectangle().strokeBorder(channel.accent.opacity(0.8), lineWidth: 1)
+            }
+        }
         .clipped()
         .contentShape(Rectangle())
+        .onHover { inside in
+            hovering = inside
+            if inside { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+        }
     }
 
     // MARK: Pieces
@@ -104,14 +152,19 @@ private struct ChannelCard: View {
     private var meta: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 8) {
-                Text(location)
-                if !(channel.upcoming.first?.startEnd ?? channel.startEnd).isEmpty {
-                    Text("·").opacity(0.5)
+                if narrow {
                     Text(channel.upcoming.first?.startEnd ?? channel.startEnd).monospacedDigit()
+                        .foregroundStyle(active ? channel.accent : Color(hex: 0xcfcec8))
+                } else {
+                    Text(location)
+                    if !(channel.upcoming.first?.startEnd ?? channel.startEnd).isEmpty {
+                        Text("·").opacity(0.5)
+                        Text(channel.upcoming.first?.startEnd ?? channel.startEnd).monospacedDigit()
+                    }
+                    Text("·").opacity(0.5)
+                    Text(active ? "◉ PLAYING" : "LIVE")
+                        .foregroundStyle(active ? channel.accent : Color(hex: 0xcfcec8))
                 }
-                Text("·").opacity(0.5)
-                Text(active ? "◉ PLAYING" : "LIVE")
-                    .foregroundStyle(active ? channel.accent : Color(hex: 0xcfcec8))
             }
             .font(Theme.mono(9, .bold))
             .tracking(1.6)
@@ -119,7 +172,7 @@ private struct ChannelCard: View {
             .lineLimit(1)
 
             Text(channel.show.uppercased())
-                .font(Theme.display(compact ? 14 : 16, .black))
+                .font(Theme.display(narrow ? 13 : (compact ? 14 : 16), .black))
                 .foregroundStyle(Theme.ink)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -158,9 +211,10 @@ private struct ChannelCard: View {
                 channel.art
             }
         }
-        .saturation(active ? 1 : 0.45)
-        .brightness(active ? 0 : -0.22)
-        .overlay(Color.black.opacity(active ? 0 : 0.28))
+        .saturation(active || hovering ? 1 : 0.45)
+        .brightness(active ? 0 : (hovering ? -0.06 : -0.22))
+        .overlay(Color.black.opacity(active ? 0 : (hovering ? 0.08 : 0.28)))
         .animation(.easeOut(duration: 0.2), value: active)
+        .animation(.easeOut(duration: 0.16), value: hovering)
     }
 }

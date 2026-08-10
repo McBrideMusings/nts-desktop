@@ -15,9 +15,31 @@ struct PopoverView: View {
             Theme.nowBar.frame(height: TopBar.height)
             Rectangle().fill(Theme.hairline(0.08)).frame(height: 1)
 
-            HStack(spacing: 0) {
-                ChannelRail()
-                DialView()
+            // The rail follows the window's long axis. A window taller than it is
+            // wide puts the two channel cards in a row across the top so the dial
+            // gets the full width instead of whatever is left beside a 268pt
+            // column; a short window keeps the rail on the left but lays its cards
+            // out side by side, which is the only way two of them still read at
+            // 300pt of height. Everything else is the original left-column rail.
+            GeometryReader { proxy in
+                let w = proxy.size.width, h = proxy.size.height
+                if h > 0 && w / h <= 1.02 {
+                    VStack(spacing: 0) {
+                        ChannelRail(axis: .horizontal, edge: .bottom)
+                            .frame(height: min(max(150, h * 0.24), 250))
+                        DialView()
+                    }
+                } else if h < 430 {
+                    HStack(spacing: 0) {
+                        ChannelRail(axis: .horizontal, edge: .trailing).frame(width: 300)
+                        DialView()
+                    }
+                } else {
+                    HStack(spacing: 0) {
+                        ChannelRail(axis: .vertical, edge: .trailing).frame(width: 268)
+                        DialView()
+                    }
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // The tracklist is a full-width overlay (covers the rail + dial),

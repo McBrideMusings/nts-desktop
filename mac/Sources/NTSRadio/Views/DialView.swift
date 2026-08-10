@@ -28,7 +28,6 @@ struct DialView: View {
         var iconSize: CGFloat { max(20, d * 0.078) }
         var knob: CGFloat { d * 0.70 }
         var face: CGFloat { knob * 0.84 }
-        var detentRing: CGFloat { d * 0.375 }
         /// Dead zone: a click inside the knob isn't aimed at a wedge.
         var hubRadius: CGFloat { knob / 2 }
         var bleed: CGFloat { max(w, h) * 2 }
@@ -126,7 +125,6 @@ struct DialView: View {
                 .allowsHitTesting(false)
             }
 
-            detentTicks(g)
             knob(g).position(x: g.cx, y: g.cy)
         }
         .frame(width: g.w, height: g.h)
@@ -176,26 +174,6 @@ struct DialView: View {
                startDeg: centerAngle(i) - half,
                endDeg: centerAngle(i) + half,
                radius: g.bleed)
-    }
-
-    /// One tick per detent, on the faceplate just outside the knob — the printed
-    /// position marks the knob clicks into. The selected one is longer and lit.
-    private func detentTicks(_ g: Geo) -> some View {
-        Canvas { ctx, _ in
-            guard !tapes.isEmpty else { return }
-            for i in 0..<tapes.count {
-                let a = centerAngle(i) * .pi / 180
-                let lit = isLit(i)
-                let inner = g.detentRing - (lit ? 8 : 4)
-                let outer = g.detentRing + (lit ? 4 : 2)
-                var p = Path()
-                p.move(to: CGPoint(x: g.cx + inner * cos(a), y: g.cy + inner * sin(a)))
-                p.addLine(to: CGPoint(x: g.cx + outer * cos(a), y: g.cy + outer * sin(a)))
-                ctx.stroke(p, with: .color(lit ? Theme.ink : Theme.ink.opacity(0.18)),
-                           lineWidth: lit ? 2.5 : 1.5)
-            }
-        }
-        .allowsHitTesting(false)
     }
 
     private var pointerRotation: Double {
@@ -248,11 +226,7 @@ struct DialView: View {
             }
 
             VStack(spacing: g.face * 0.035) {
-                if let m = facing, let i = facingIndex {
-                    Text("INFINITE MIXTAPE \(String(format: "%02d", i + 1))/\(tapes.count)")
-                        .font(Theme.mono(max(7, g.face * 0.038), .bold))
-                        .tracking(g.face * 0.012)
-                        .foregroundStyle(Theme.ink.opacity(0.75))
+                if let m = facing {
                     Text(m.title.uppercased())
                         .font(Theme.display(max(13, g.face * 0.115), .black))
                         .foregroundStyle(Theme.ink)

@@ -10,15 +10,16 @@ enum Snapshot {
         let base = URL(fileURLWithPath: dir)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
 
-        func shot(_ name: String, _ configure: (AppModel) -> Void) {
+        // Default window content size; the top bar's traffic-light gap renders
+        // empty here (no real lights offscreen).
+        func shot(_ name: String, size: CGSize = CGSize(width: 880, height: 720),
+                  _ configure: (AppModel) -> Void) {
             let model = AppModel()
             configure(model)
-            // Match the app's default window content size; the top bar's
-            // traffic-light gap renders empty here (no real lights offscreen).
             let view = PopoverView()
                 .environmentObject(model)
                 .environmentObject(model.auth)
-                .frame(width: 880, height: 720)
+                .frame(width: size.width, height: size.height)
             let renderer = ImageRenderer(content: view)
             renderer.scale = 2
             guard let img = renderer.nsImage,
@@ -85,6 +86,19 @@ enum Snapshot {
         }
         shot("04-settings.png") { seedChannels($0); seedMixtapes($0); $0.settingsOpen = true }
         shot("05-login.png") { seedChannels($0); seedMixtapes($0); $0.loginOpen = true }
+        // The rail's arrangement is decided by the window's proportions, so the
+        // only way to see it is to render the same state at several sizes. These
+        // three are the corners: the window's own minimum, a tall column, and a
+        // wide letterbox.
+        let shapes: [(String, CGSize)] = [
+            ("10-shape-minimum-720x300.png",   CGSize(width: 720, height: 300)),
+            ("11-shape-tall-760x1040.png",     CGSize(width: 760, height: 1040)),
+            ("12-shape-wide-1440x520.png",     CGSize(width: 1440, height: 520)),
+        ]
+        for (name, size) in shapes {
+            shot(name, size: size) { seedChannels($0); seedMixtapes($0); $0.select(.channel(1)) }
+        }
+
         // The catalog is deliberately not snapshotted. `ImageRenderer` lays a
         // `ScrollView` out at zero height and never materialises a `LazyVGrid`, so
         // every catalog state renders as an empty pane — a picture of nothing that
