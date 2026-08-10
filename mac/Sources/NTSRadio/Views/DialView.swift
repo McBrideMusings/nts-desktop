@@ -55,69 +55,83 @@ struct DialView: View {
     var body: some View {
         GeometryReader { proxy in
             let g = Geo(w: proxy.size.width, h: proxy.size.height)
-            ZStack {
-                // Full-bleed now-playing backdrop: the mixtape's looping video.
-                stageBackground(g)
+            // The proxy reports `.zero` on the first layout pass, and again while
+            // siblings are still measuring. Every radius below is a fraction of
+            // that, so the whole dial collapses to a point in the top-left corner
+            // for those frames — and worse, the hit layer would measure a tap's
+            // angle from (0, 0) and select a wedge the cursor is nowhere near.
+            // Show the bare stage until there is a real size to build from.
+            if min(g.w, g.h) > 0 {
+                dial(g)
+            } else {
+                Theme.stage
+            }
+        }
+    }
 
-                // Cover-art wedges — a hovered slice previews its still poster with
-                // the looping animation layered on top (clipped to the sector).
-                ForEach(Array(tapes.enumerated()), id: \.element.id) { i, tape in
-                    if model.hoverIndex == i {
-                        ZStack {
-                            AsyncImage(url: tape.coverURL) { img in
-                                img.resizable().scaledToFill()
-                            } placeholder: {
-                                Color.clear
-                            }
-                            if let anim = tape.animationURL {
-                                WedgeAnimation(url: anim)
-                            }
+    private func dial(_ g: Geo) -> some View {
+        ZStack {
+            // Full-bleed now-playing backdrop: the mixtape's looping video.
+            stageBackground(g)
+
+            // Cover-art wedges — a hovered slice previews its still poster with
+            // the looping animation layered on top (clipped to the sector).
+            ForEach(Array(tapes.enumerated()), id: \.element.id) { i, tape in
+                if model.hoverIndex == i {
+                    ZStack {
+                        AsyncImage(url: tape.coverURL) { img in
+                            img.resizable().scaledToFill()
+                        } placeholder: {
+                            Color.clear
                         }
-                        .frame(width: g.w, height: g.h)
-                        .clipShape(sector(i, g))
-                        .opacity(0.5)
-                        .allowsHitTesting(false)
-                    }
-                }
-
-                // Single hit layer (under the knob, over the wedges)
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onContinuousHover { phase in
-                        switch phase {
-                        case .active(let loc): model.hoverIndex = wedgeIndex(at: loc, g)
-                        case .ended: model.hoverIndex = nil
+                        if let anim = tape.animationURL {
+                            WedgeAnimation(url: anim)
                         }
                     }
-                    .gesture(SpatialTapGesture().onEnded { ev in
-                        if let i = wedgeIndex(at: ev.location, g) { model.select(.mixtape(tapes[i].alias)) }
-                    })
-
-                // Icons printed on the faceplate, outside the knob — where the
-                // Atonemo puts them. Always visible: they're how you aim.
-                ForEach(Array(tapes.enumerated()), id: \.element.id) { i, tape in
-                    let lit = isLit(i)
-                    let a = centerAngle(i) * .pi / 180
-                    AsyncImage(url: tape.iconURL) { img in
-                        img.resizable().scaledToFit()
-                    } placeholder: {
-                        Color.clear
-                    }
-                    .frame(width: g.iconSize, height: g.iconSize)
-                    .opacity(lit ? 1 : 0.42)
-                    .scaleEffect(lit ? 1.12 : 1)
-                    .animation(.easeOut(duration: 0.14), value: lit)
-                    .position(x: g.cx + g.iconRing * cos(a), y: g.cy + g.iconRing * sin(a))
+                    .frame(width: g.w, height: g.h)
+                    .clipShape(sector(i, g))
+                    .opacity(0.5)
                     .allowsHitTesting(false)
                 }
-
-                detentTicks(g)
-                knob(g).position(x: g.cx, y: g.cy)
             }
-            .frame(width: g.w, height: g.h)
-            .background(Theme.stage)
-            .clipped()
+
+            // Single hit layer (under the knob, over the wedges)
+            Color.clear
+                .contentShape(Rectangle())
+                .onContinuousHover { phase in
+                    switch phase {
+                    case .active(let loc): model.hoverIndex = wedgeIndex(at: loc, g)
+                    case .ended: model.hoverIndex = nil
+                    }
+                }
+                .gesture(SpatialTapGesture().onEnded { ev in
+                    if let i = wedgeIndex(at: ev.location, g) { model.select(.mixtape(tapes[i].alias)) }
+                })
+
+            // Icons printed on the faceplate, outside the knob — where the
+            // Atonemo puts them. Always visible: they're how you aim.
+            ForEach(Array(tapes.enumerated()), id: \.element.id) { i, tape in
+                let lit = isLit(i)
+                let a = centerAngle(i) * .pi / 180
+                AsyncImage(url: tape.iconURL) { img in
+                    img.resizable().scaledToFit()
+                } placeholder: {
+                    Color.clear
+                }
+                .frame(width: g.iconSize, height: g.iconSize)
+                .opacity(lit ? 1 : 0.42)
+                .scaleEffect(lit ? 1.12 : 1)
+                .animation(.easeOut(duration: 0.14), value: lit)
+                .position(x: g.cx + g.iconRing * cos(a), y: g.cy + g.iconRing * sin(a))
+                .allowsHitTesting(false)
+            }
+
+            detentTicks(g)
+            knob(g).position(x: g.cx, y: g.cy)
         }
+        .frame(width: g.w, height: g.h)
+        .background(Theme.stage)
+        .clipped()
     }
 
     /// Map a point in dial space to a wedge index (nil inside the knob).
