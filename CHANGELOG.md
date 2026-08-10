@@ -53,6 +53,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed the "Hide Dial Dot When Small" setting along with the dial dot it
   controlled.
 
+### Fixed
+
+- The Keychain helper behind sign-in no longer discards the `OSStatus` from
+  `SecItemDelete` and `SecItemAdd`. A failed write meant the refresh token never
+  reached disk while the app carried on as if signed in, so the session ended at
+  the next launch with nothing said. Failures now name themselves, and a missing
+  item on the first write is correctly not treated as one.
+
 ## [0.1.0]
 
 ### Added
