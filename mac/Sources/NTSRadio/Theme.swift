@@ -35,6 +35,11 @@ enum Theme {
 
     static func hairline(_ a: Double = 0.08) -> Color { .white.opacity(a) }
 
+    /// The dial face's edge. Opaque on purpose: a translucent white hairline
+    /// takes its colour from whatever cover art sits under it, so the ring
+    /// changed shade as the artwork moved behind it.
+    static let dialEdge = Color(hex: 0x2e2e31)
+
     // App backdrop gradient (behind the popover)
     static var appBackdrop: some View {
         ZStack {

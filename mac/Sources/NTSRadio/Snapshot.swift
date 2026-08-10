@@ -86,6 +86,22 @@ enum Snapshot {
         }
         shot("04-settings.png") { seedChannels($0); seedMixtapes($0); $0.settingsOpen = true }
         shot("05-login.png") { seedChannels($0); seedMixtapes($0); $0.loginOpen = true }
+        // The knob face only carries a title once a mixtape is selected, and the
+        // longest names are the ones that reach the circle's edge — this is the
+        // shot that shows whether they fit.
+        shot("06-dial-face.png") { m in
+            seedChannels(m); seedMixtapes(m)
+            if let i = m.catalog.mixtapes.firstIndex(where: { $0.alias == "4-to-the-floor" }) {
+                let t = m.catalog.mixtapes[i]
+                m.catalog.mixtapes[i] = Mixtape(
+                    alias: t.alias, title: t.title,
+                    subtitle: "House, four to the floor, no let-up.",
+                    streamURL: t.streamURL, coverURL: t.coverURL, iconURL: t.iconURL,
+                    animationURL: t.animationURL, hue: t.hue, credits: t.credits)
+            }
+            m.select(.mixtape("4-to-the-floor"))
+        }
+
         // The rail's arrangement is decided by the window's proportions, so the
         // only way to see it is to render the same state at several sizes. These
         // three are the corners: the window's own minimum, a tall column, and a

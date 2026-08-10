@@ -227,7 +227,7 @@ struct DialView: View {
                         .foregroundStyle(Theme.ink)
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
-                        .minimumScaleFactor(0.7)
+                        .minimumScaleFactor(0.6)
                     Text(m.subtitle)
                         .font(Theme.ui(max(9, g.face * 0.05)))
                         .foregroundStyle(Theme.ink.opacity(0.7))
@@ -243,11 +243,16 @@ struct DialView: View {
                         .foregroundStyle(Theme.ink.opacity(0.85))
                 }
             }
-            .padding(.horizontal, g.face * 0.16)
+            // The text sits in the largest square that fits inside the face, so a
+            // line can never be wider than the circle is at the height it lands
+            // on. Horizontal padding could not do that: it left the box as wide
+            // as the disc, and titles that reach the sides — EXPANSIONS, SHEET
+            // MUSIC, ISLAND TIME, 4 TO THE FLOOR — were cut off by the clip.
+            .frame(width: g.face * 0.70)
         }
         .frame(width: g.face, height: g.face)
         .clipShape(Circle())
-        .overlay(Circle().stroke(Theme.hairline(0.10), lineWidth: 1))
+        .overlay(Circle().stroke(Theme.dialEdge, lineWidth: 1))
         .shadow(color: .black.opacity(0.55), radius: g.face * 0.06, y: g.face * 0.02)
     }
 }
