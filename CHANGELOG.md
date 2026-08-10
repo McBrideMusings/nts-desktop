@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Three bars beside the NTS wordmark in the menu bar, animating while audio
+  plays and flat when it doesn't. They track `AVPlayer.timeControlStatus` rather
+  than the play button, so a stalled stream stops the bars instead of bouncing
+  through the silence. The image is a fixed 32×16pt in every state, so starting
+  or stopping playback never shifts the menu-bar icons beside it.
 - A catalog that covers the whole window, opened with the grid button in the
   title bar. Three tabs — **Schedule**, **Saved**, **Mixtapes** — plus a search
   field that is always present rather than a tab of its own. Every tile opens a
