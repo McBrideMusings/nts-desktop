@@ -15,17 +15,24 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
     ///
     /// A single 340×230 floor would allow both extremes at once, and a window that
     /// is both narrow and short has nowhere to put the dial — at 340 wide the rail
-    /// alone takes 300 of it. So: never below 340×230, and whichever dimension is
-    /// squeezed, the other has to stay above 520 to hold the layout it forces.
-    /// A narrow window stacks the rail above the dial and needs the height; a
-    /// short one keeps the rail beside the dial and needs the width.
-    static func clamped(_ size: NSSize) -> NSSize {
-        var s = size
-        s.width = max(s.width, 340)
-        s.height = max(s.height, 230)
-        if s.width < 520 { s.height = max(s.height, 520) }
-        if s.height < 430 { s.width = max(s.width, 520) }
-        return s
+    /// alone takes 300 of it. So one of the two has to stay above 520: a narrow
+    /// window stacks the rail above the dial and needs the height, a short one
+    /// keeps the rail beside the dial and needs the width. Allowed is therefore
+    /// `width ≥ 520` (with height ≥ 230) **or** `height ≥ 520` (with width ≥ 340).
+    ///
+    /// Each dimension's floor is read off the size the window **already has**, and
+    /// only ever stops that dimension — nothing here grows the other one. Growing
+    /// the other one is what made dragging feel wrong: pulling a 600×300 window
+    /// narrower shoved its height from 300 up to 520, and pulling the width back
+    /// out left the height at 520, so the same drag out and back changed the
+    /// window's height. Reading the floor off the current size means a drag stops
+    /// at the edge of what is allowed and leaves every other dimension where the
+    /// hand left it. Because a live resize arrives as a stream of small steps, a
+    /// diagonal drag out of one regime and into the other still gets there — the
+    /// floor relaxes as soon as the other dimension has cleared 520.
+    static func clamped(_ size: NSSize, current: NSSize) -> NSSize {
+        NSSize(width: max(size.width, current.height < 520 ? 520 : 340),
+               height: max(size.height, current.width < 520 ? 520 : 230))
     }
 
     init(model: AppModel) {
@@ -118,7 +125,7 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
         // back verbatim from `setFrameUsingName`, so grow it here rather than
         // reopening at that size forever.
         let f = window.frame
-        let ok = Self.clamped(f.size)
+        let ok = Self.clamped(f.size, current: f.size)
         if ok != f.size {
             window.setFrame(NSRect(x: f.minX, y: f.maxY - ok.height,
                                    width: ok.width, height: ok.height),
@@ -130,7 +137,7 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
     }
 
     nonisolated func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
-        MainActor.assumeIsolated { Self.clamped(frameSize) }
+        MainActor.assumeIsolated { Self.clamped(frameSize, current: sender.frame.size) }
     }
 
     private func positionUnderStatusItem(_ statusButton: NSStatusBarButton?) {
