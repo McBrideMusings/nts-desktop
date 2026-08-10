@@ -22,6 +22,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowController: RadioWindowController!
     private var parentWatch: DispatchSourceProcess?
     private var bag = Set<AnyCancellable>()
+    private var barTimer: Timer?
+    private var barStep = 0
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // When run from source under `admin dev` / `swift run`, stdout is a pipe,
@@ -56,11 +58,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         windowController = RadioWindowController(model: model)
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.image = MenuBarIcon.logoImage
+        item.button?.image = MenuBarIcon.idleFrame
         item.button?.target = self
         item.button?.action = #selector(statusItemClicked)
         item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         statusItem = item
+
+        // Bars move only while audio is genuinely rendering, not merely while the
+        // play button is down — so a stalled stream visibly stops instead of
+        // bouncing through the silence. Subscribed after `statusItem` is assigned,
+        // because this fires immediately with the current value.
+        model.engine.$isRendering
+            .sink { [weak self] in self?.setBarsAnimating($0) }
+            .store(in: &bag)
+    }
+
+    /// Drive the status-item bars. Animating steps through the frame cycle at
+    /// 10fps; otherwise the bars sit flat. Added in `.common` run-loop mode so the
+    /// animation keeps running while a menu is open.
+    private func setBarsAnimating(_ animating: Bool) {
+        barTimer?.invalidate()
+        barTimer = nil
+        guard animating else {
+            statusItem.button?.image = MenuBarIcon.idleFrame
+            return
+        }
+        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.barStep = (self.barStep + 1) % MenuBarIcon.playingFrames.count
+                self.statusItem.button?.image = MenuBarIcon.playingFrames[self.barStep]
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        barTimer = timer
     }
 
     /// When run from source (`swift run` / `admin dev`) the app is a bare binary,
