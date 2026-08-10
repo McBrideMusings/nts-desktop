@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Archivo's `OFL.txt` alongside the bundled font, so the app ships the SIL Open
+  Font License the way that license requires. It lands in the app's resource
+  bundle next to `Archivo.ttf`.
 - Three bars beside the NTS wordmark in the menu bar, animating while audio
   plays and flat when it doesn't. They track `AVPlayer.timeControlStatus` rather
   than the play button, so a stalled stream stops the bars instead of bouncing
