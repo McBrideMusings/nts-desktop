@@ -53,11 +53,15 @@ struct CatalogOverlay: View {
                         .background(Theme.ink)
                 }
                 .buttonStyle(.plain)
+                .layoutPriority(1)
             } else {
-                tabs
+                // Protected from the squeeze below: with a fixed-width search
+                // field and nothing else able to give, a narrow window took the
+                // room from these instead, down to unreadable slivers.
+                tabs.layoutPriority(1)
             }
 
-            Spacer(minLength: 12)
+            Spacer(minLength: 8)
             searchField
 
             Button { model.toggleCatalog() } label: {
@@ -68,6 +72,7 @@ struct CatalogOverlay: View {
                     .background(Theme.hairline(0.08))
             }
             .buttonStyle(.plain)
+            .layoutPriority(1)
             .help("Close the catalog")
         }
         .padding(.horizontal, 18)
@@ -114,7 +119,10 @@ struct CatalogOverlay: View {
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 9)
-        .frame(width: 300)
+        // Flexible rather than fixed: `tabs` and the close button are given
+        // layout priority, so this is what gives way first in a narrow window
+        // instead of squeezing them down to a sliver.
+        .frame(minWidth: 60, maxWidth: 300)
         .background(Theme.hairline(searchFocused ? 0.10 : 0.06))
         .overlay(Rectangle().stroke(Theme.hairline(searchFocused ? 0.34 : 0.08), lineWidth: 1))
     }
