@@ -53,6 +53,10 @@ enum ScriptState {
             "catalogOpen": m.catalogOpen,
             "mixtapeCount": m.catalog.mixtapes.count,
             "channelCount": m.catalog.channels.count,
+            // Unwrapped, so consecutive readings show which way the dial turned
+            // and by how much — a step of -22.5 and one of +337.5 land the index
+            // mark in the same place but are not the same movement.
+            "knobAngle": (m.knobAngle * 100).rounded() / 100,
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: dict,
                                                      options: [.sortedKeys, .prettyPrinted]),
@@ -141,6 +145,10 @@ extension NSApplication {
 
     @objc var ntsWindowVisible: Bool {
         MainActor.assumeIsolated { RadioWindowController.scriptTarget?.isWindowVisible ?? false }
+    }
+
+    @objc var ntsKnobAngle: Double {
+        MainActor.assumeIsolated { AppModel.scriptTarget?.knobAngle ?? 0 }
     }
 }
 

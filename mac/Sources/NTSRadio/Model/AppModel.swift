@@ -60,6 +60,11 @@ final class AppModel: ObservableObject {
     @Published var volume: Double = 72 { didSet { engine.apply(volume: volume, muted: muted) } }
     @Published var showTracks = false
     @Published var hoverIndex: Int? = nil
+    /// Where the dial's index mark is pointing, in degrees, accumulated across
+    /// turns rather than wrapped into 0..<360 — so it is free to wind past a full
+    /// turn in either direction and always takes the short way to the next tape.
+    /// It lives here rather than in `DialView` so a script can read it back.
+    @Published var knobAngle: Double = 0
     /// Which modal popover is up, if any — one at a time (settings and the account
     /// sheet are mutually exclusive). `settingsOpen`/`loginOpen` wrap it so callers
     /// stay simple while only one can ever be open.

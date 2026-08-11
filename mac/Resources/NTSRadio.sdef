@@ -71,6 +71,11 @@
                       description="Whether the radio window is on screen.">
                 <cocoa key="ntsWindowVisible"/>
             </property>
+
+            <property name="knob angle" code="pKNB" type="real" access="r"
+                      description="Where the dial's index mark points, in degrees clockwise from the top. It counts turns instead of wrapping at 360, so comparing two readings tells you which way the dial turned and how far.">
+                <cocoa key="ntsKnobAngle"/>
+            </property>
         </class-extension>
 
         <command name="tune to" code="NTSrTUNE"

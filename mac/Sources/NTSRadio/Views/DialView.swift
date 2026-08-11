@@ -176,9 +176,20 @@ struct DialView: View {
                radius: g.bleed)
     }
 
-    private var pointerRotation: Double {
-        guard let i = facingIndex else { return 0 }
+    /// Where the index mark should point, wrapped into 0..<360 like a compass.
+    /// `model.knobAngle` is the unwrapped position it actually travels to.
+    private var pointerTarget: Double {
+        guard let i = facingIndex else { return model.knobAngle }
         return Double(i) * pitch
+    }
+
+    /// The signed turn from the knob's current angle to `target`, taking whichever
+    /// way round is shorter — never more than half a turn.
+    private func shortestTurn(to target: Double) -> Double {
+        var d = (target - model.knobAngle).truncatingRemainder(dividingBy: 360)
+        if d > 180 { d -= 360 }
+        if d < -180 { d += 360 }
+        return d
     }
 
     /// The knob: a plain disc carrying the mixtape's cover, and a triangular index
@@ -198,9 +209,11 @@ struct DialView: View {
                 .fill(Theme.ink)
                 .frame(width: g.knob * 0.075, height: g.knob * 0.05)
                 .offset(y: -g.knob / 2 + g.knob * 0.038)
-                .rotationEffect(.degrees(pointerRotation))
+                .rotationEffect(.degrees(model.knobAngle))
                 .opacity(facing == nil ? 0 : 1)
-                .animation(.spring(response: 0.45, dampingFraction: 0.72), value: pointerRotation)
+                .animation(.spring(response: 0.45, dampingFraction: 0.72), value: model.knobAngle)
+                .onAppear { model.knobAngle = pointerTarget }
+                .onChange(of: pointerTarget) { _, new in model.knobAngle += shortestTurn(to: new) }
         }
         .frame(width: g.knob, height: g.knob)
         .allowsHitTesting(false)

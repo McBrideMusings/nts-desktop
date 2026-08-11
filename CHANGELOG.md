@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `knob angle` in the AppleScript dictionary and the `state` blob — where the
+  dial's index mark points, in degrees clockwise from the top, counting turns
+  rather than wrapping at 360. Two readings therefore say which way the dial
+  turned and how far, which is what makes the rotation checkable from a script.
 - Archivo's `OFL.txt` alongside the bundled font, so the app ships the SIL Open
   Font License the way that license requires. It lands in the app's resource
   bundle next to `Archivo.ttf`.
@@ -73,6 +77,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   zero it collapsed to a point in the top-left corner — and a click landing in
   that frame was measured from the corner and could select a mixtape nowhere
   near the cursor.
+- The dial's index mark takes the short way round. Its angle was the position's
+  number times 22.5°, which always landed between 0° and 360°, so stepping from
+  the last mixtape (337.5°) to the first (0°) read as a 337.5° journey backwards
+  instead of a 22.5° nudge forwards — the knob unwound almost a full turn every
+  time the selection wrapped. The angle now counts turns instead of wrapping, and
+  each move takes whichever direction is shorter.
 - The Keychain helper behind sign-in no longer discards the `OSStatus` from
   `SecItemDelete` and `SecItemAdd`. A failed write meant the refresh token never
   reached disk while the app carried on as if signed in, so the session ended at
