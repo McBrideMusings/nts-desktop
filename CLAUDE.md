@@ -28,7 +28,7 @@ Requires macOS 15+ and Xcode 16+ / Swift 6 to build.
 
 The whole app lives in the `mac/` Swift package (root `Makefile`/`admin.toml` just delegate into it):
 
-- `mac/Sources/NTSRadio/Model/` — `Catalog.swift` (mixtape catalog fetch/cache), `PlayerEngine.swift` (AVPlayer), `NTSAPI.swift` / `NTSAuth.swift` (NTS REST API + sign-in), `AppModel.swift` (app state), `NowPlayingCenter.swift` (system media keys + the Control Center tile), `TracklistAdapter.swift`, `Cache.swift`, `ShowIndex.swift` (local searchable show index), `Saved.swift` (local bookmarks), `CatalogRow.swift` (one tile type for the catalog grid)
+- `mac/Sources/NTSRadio/Model/` — `Catalog.swift` (mixtape catalog fetch/cache), `PlayerEngine.swift` (AVPlayer), `NTSAPI.swift` / `NTSAuth.swift` (NTS REST API + sign-in), `AppModel.swift` (app state), `NowPlayingCenter.swift` (system media keys + the Control Center tile), `TracklistAdapter.swift`, `Cache.swift`, `ShowIndex.swift` (local searchable show index), `Saved.swift` (local bookmarks), `CatalogRow.swift` (one tile type for the catalog grid), `Scripting.swift` (the AppleScript control surface)
 - `mac/Sources/NTSRadio/Views/` — `DialView.swift` (radial mixtape dial), `ChannelRail.swift`, `NowPlayingBar.swift`, `TracklistOverlay.swift`, `CatalogOverlay.swift` (schedule / saved / mixtapes / search + detail), `TopBar.swift`, `SettingsView.swift`, `LoginView.swift`, `MenuBarIcon.swift`, `PopoverView.swift`
 
 ### NTS API limits worth knowing before extending the catalog
@@ -56,4 +56,18 @@ The whole app lives in the `mac/` Swift package (root `Makefile`/`admin.toml` ju
 - `CLAUDE.local.md` documents the dev-loop convention in more detail: after code changes, press **R** in the already-running `admin dev` session rather than starting a second one.
 - `mac/Sources/NTSFirestore/Generated/` is generated protobuf/gRPC code, not hand-written — regenerate via `mac/Proto/regenerate.sh` rather than editing directly.
 - `tmp/` at the repo root is gitignored and used for scratch/design output (e.g. `admin snapshot` writes PNGs to `tmp/claude/design/swift-shots`).
-- **Verifying a change: `.claude/skills/verify/SKILL.md`** shadows the bundled `verify` skill, which is marked `disable-model-invocation` and so only runs when the user types `/verify` — stalling any unattended `implement` / `iterate` / `orchestrate` pass. The project version carries this app's build-install-drive-capture recipe: `cliclick` coordinates, the pixel-scan technique for the menu-bar status item (it owns no enumerable window), and the locked-display check that otherwise yields an all-black screenshot at exit 0.
+- **Control surface — drive the app with `osascript`, never the mouse.** The
+  scripting dictionary is `mac/Resources/NTSRadio.sdef`; its implementation is
+  `mac/Sources/NTSRadio/Model/Scripting.swift`. Every command answers with the
+  same JSON blob `state` returns, so one call both acts and reports:
+
+  ```
+  osascript -e 'tell application "NTS Radio" to get state'
+  osascript -e 'tell application "NTS Radio" to tune to "mixtape:slow-focus"'
+  osascript -e 'tell application "NTS Radio" to skip by 1'
+  ```
+
+  `tune to` is the code path a click takes; `skip by` is the one the media keys
+  take. Adding a command means editing both halves. Only the installed `.app`
+  carries the dictionary — `admin dev`'s bare binary answers nothing.
+- **Verifying a change: `.claude/skills/verify/SKILL.md`** shadows the bundled `verify` skill, which is marked `disable-model-invocation` and so only runs when the user types `/verify` — stalling any unattended `implement` / `iterate` / `orchestrate` pass. The project version carries this app's build-install-drive-observe recipe: the scripting calls above, the pixel-scan technique for the menu-bar status item (it owns no enumerable window, and no scripted surface either), and the locked-display check that otherwise yields an all-black screenshot at exit 0.

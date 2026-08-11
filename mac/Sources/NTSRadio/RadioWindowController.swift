@@ -118,6 +118,27 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
     }
 
     func show(relativeTo statusButton: NSStatusBarButton?) {
+        placeFrame(relativeTo: statusButton)
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    /// Whether the window is on screen — the scripting dictionary's
+    /// `window visible`.
+    var isWindowVisible: Bool { window.isVisible }
+
+    /// Put the window on screen without activating the app. A scripted open must
+    /// not take keyboard focus from whatever the person at the machine is typing
+    /// into, so this is `show` minus the activation.
+    func showWithoutActivating() {
+        placeFrame(relativeTo: nil)
+        window.orderFrontRegardless()
+    }
+
+    /// Take the window off screen. The app lives on in the menu bar.
+    func hide() { window.orderOut(nil) }
+
+    private func placeFrame(relativeTo statusButton: NSStatusBarButton?) {
         if !window.isVisible, !window.setFrameUsingName(Self.frameName) {
             // First ever open (no saved frame): drop it just below the menu-bar icon.
             positionUnderStatusItem(statusButton)
@@ -134,8 +155,6 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
                             display: false)
             window.saveFrame(usingName: Self.frameName)
         }
-        NSApp.activate(ignoringOtherApps: true)
-        window.makeKeyAndOrderFront(nil)
     }
 
     nonisolated func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {

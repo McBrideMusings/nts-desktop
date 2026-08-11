@@ -38,6 +38,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   open on nts.live. Mixtape detail lists the shows feeding it, each one a link
   into that show's page.
 
+- An AppleScript dictionary, so a program can drive the radio and read back what
+  it did without anyone touching the mouse. `tell application "NTS Radio" to get
+  state` answers with a JSON object — what is tuned, whether audio is genuinely
+  rendering as opposed to merely buffering, the current track, volume, whether
+  the window is up — and `tune to`, `play`, `pause`, `skip by`, `open window` and
+  `close window` each answer with that same blob, so one call both acts and
+  reports. `open window` deliberately does not activate the app: a scripted open
+  must never take the keyboard from whoever is at the machine.
+
 ### Changed
 
 - The channel cards are now the programme's photograph, shown for **both**

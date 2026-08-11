@@ -57,6 +57,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         windowController = RadioWindowController(model: model)
 
+        // Publish both to the scripting layer, so `osascript` reaches the same
+        // objects the UI drives (see Scripting.swift / Resources/NTSRadio.sdef).
+        AppModel.scriptTarget = model
+        RadioWindowController.scriptTarget = windowController
+
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.image = MenuBarIcon.idleFrame
         item.button?.target = self

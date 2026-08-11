@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE dictionary SYSTEM "file://localhost/System/Library/DTDs/sdef.dtd">
+
+<!--
+  NTS Radio's scripting dictionary — the app's control surface for anything that
+  is not a human with a mouse.
+
+      osascript -e 'tell application "NTS Radio" to get state'
+      osascript -e 'tell application "NTS Radio" to tune to "mixtape:rap-house"'
+      osascript -e 'tell application "NTS Radio" to pause'
+
+  Every command answers with the same JSON blob `state` returns, so a script can
+  act and observe what the act did in one round trip.
+
+  Deliberately absent: anything that activates the app or takes keyboard focus.
+  `open window` uses orderFrontRegardless, so a scripted open puts the window on
+  screen without stealing what the person at the keyboard is typing into.
+-->
+
+<dictionary title="NTS Radio Terminology" xmlns:xi="http://www.w3.org/2003/XInclude">
+
+    <xi:include href="file:///System/Library/ScriptingDefinitions/CocoaStandard.sdef"
+                xpointer="xpointer(/dictionary/suite)"/>
+
+    <suite name="NTS Radio Suite" code="NTSr" description="Read and drive the radio.">
+
+        <class-extension extends="application" description="The NTS Radio application.">
+            <cocoa class="NSApplication"/>
+
+            <property name="state" code="pSTA" type="text" access="r"
+                      description="Everything the app knows about itself right now, as a JSON object.">
+                <cocoa key="ntsState"/>
+            </property>
+
+            <property name="playing" code="pPLY" type="boolean" access="r"
+                      description="Whether the play button is down. True even while a stream is still buffering.">
+                <cocoa key="ntsPlaying"/>
+            </property>
+
+            <property name="rendering" code="pRND" type="boolean" access="r"
+                      description="Whether audio is genuinely coming out. False during a stall, unlike playing.">
+                <cocoa key="ntsRendering"/>
+            </property>
+
+            <property name="source" code="pSRC" type="text" access="r"
+                      description="What is tuned in, as an identifier: mixtape:&lt;alias&gt;, channel:&lt;number&gt;, or idle.">
+                <cocoa key="ntsSource"/>
+            </property>
+
+            <property name="source name" code="pSNM" type="text" access="r"
+                      description="The tuned source's display title — the mixtape's name, or the channel's current show.">
+                <cocoa key="ntsSourceName"/>
+            </property>
+
+            <property name="current track" code="pTRK" type="text" access="r"
+                      description="The newest tracklist entry as 'artist — title'. Empty when signed out; the feed is supporter-gated.">
+                <cocoa key="ntsCurrentTrack"/>
+            </property>
+
+            <property name="volume" code="pVOL" type="integer"
+                      description="Output level, 0 to 100.">
+                <cocoa key="ntsVolume"/>
+            </property>
+
+            <property name="muted" code="pMUT" type="boolean"
+                      description="Whether output is silenced without changing volume.">
+                <cocoa key="ntsMuted"/>
+            </property>
+
+            <property name="window visible" code="pWIN" type="boolean" access="r"
+                      description="Whether the radio window is on screen.">
+                <cocoa key="ntsWindowVisible"/>
+            </property>
+        </class-extension>
+
+        <command name="tune to" code="NTSrTUNE"
+                 description="Tune to a mixtape or a channel and start playing it, the same as clicking it.">
+            <cocoa class="NTSTuneCommand"/>
+            <direct-parameter type="text"
+                              description="mixtape:&lt;alias&gt; or channel:&lt;number&gt; — for example mixtape:rap-house or channel:1."/>
+            <result type="text" description="The state after tuning, as JSON."/>
+        </command>
+
+        <command name="play" code="NTSrPLAY"
+                 description="Start the tuned source. Does nothing when nothing is tuned.">
+            <cocoa class="NTSPlayCommand"/>
+            <result type="text" description="The state after starting, as JSON."/>
+        </command>
+
+        <command name="pause" code="NTSrPAUS" description="Pause playback, keeping the tuned source.">
+            <cocoa class="NTSPauseCommand"/>
+            <result type="text" description="The state after pausing, as JSON."/>
+        </command>
+
+        <command name="skip" code="NTSrSKIP"
+                 description="Move to a neighbouring source within the current group, as the next/previous-track keys do. Playing state carries over.">
+            <cocoa class="NTSSkipCommand"/>
+            <parameter name="by" code="pBY_" type="integer" optional="yes"
+                       description="How many positions to move, negative for backwards. Defaults to 1.">
+                <cocoa key="by"/>
+            </parameter>
+            <result type="text" description="The state after skipping, as JSON."/>
+        </command>
+
+        <command name="open window" code="NTSrOPNW"
+                 description="Put the radio window on screen without activating the app or taking keyboard focus.">
+            <cocoa class="NTSOpenWindowCommand"/>
+            <result type="text" description="The state after opening, as JSON."/>
+        </command>
+
+        <command name="close window" code="NTSrCLSW" description="Take the radio window off screen.">
+            <cocoa class="NTSCloseWindowCommand"/>
+            <result type="text" description="The state after closing, as JSON."/>
+        </command>
+
+    </suite>
+</dictionary>

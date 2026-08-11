@@ -27,6 +27,9 @@ app: build ## Assemble the .app bundle (fonts bundled, mixtapes fetched live)
 	# Bundle.module checks Bundle.main.resourceURL first, and a flat resource
 	# bundle inside MacOS/ makes codesign --deep treat it as nested code and fail.
 	cp -R "$(BUILD_DIR)/$(RES_BUNDLE)" "$(APP_BUNDLE)/Contents/Resources/" 2>/dev/null || true
+	# Scripting dictionary — the app's control surface. Info.plist points at it
+	# by name (OSAScriptingDefinition), so it has to land in Resources/.
+	cp Resources/NTSRadio.sdef "$(APP_BUNDLE)/Contents/Resources/NTSRadio.sdef"
 	# Icon (reuse the existing NTS icon)
 	cp "$(ICON_SRC)" "$(APP_BUNDLE)/Contents/Resources/AppIcon.icns" 2>/dev/null || true
 	# Stable-sign (Apple Development identity, fixed identifier) so macOS Keychain
