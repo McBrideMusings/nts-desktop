@@ -12,6 +12,24 @@ struct NowPlayingBar: View {
     private var compact: Bool { width < 460 }
 
     var body: some View {
+        VStack(spacing: 0) {
+            // Only a finite recording has a position to show. The engine decides
+            // that from the item's own duration, so nothing here has to know what
+            // kind of source is tuned.
+            if model.engine.isSeekable {
+                SeekBar()
+                    .padding(.horizontal, 16)
+                    .padding(.top, 9)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+            controls
+        }
+        .background(Theme.nowBar)
+        .overlay(alignment: .top) { Rectangle().fill(Theme.hairline(0.08)).frame(height: 1) }
+        .animation(.easeOut(duration: 0.2), value: model.engine.isSeekable)
+    }
+
+    private var controls: some View {
         HStack(spacing: 14) {
             Button { model.togglePlay() } label: {
                 Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
@@ -79,8 +97,6 @@ struct NowPlayingBar: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(Theme.nowBar)
-        .overlay(alignment: .top) { Rectangle().fill(Theme.hairline(0.08)).frame(height: 1) }
     }
 }
 

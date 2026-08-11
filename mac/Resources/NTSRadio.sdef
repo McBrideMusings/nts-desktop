@@ -107,6 +107,13 @@
             <result type="text" description="The state after skipping, as JSON."/>
         </command>
 
+        <command name="seek to" code="NTSrSEEK"
+                 description="Move the playhead within a past episode, the same as dragging the seek bar. Fails on a live channel or a mixtape, which have no position to move to.">
+            <cocoa class="NTSSeekCommand"/>
+            <direct-parameter type="real" description="Seconds from the start of the episode."/>
+            <result type="text" description="The state after seeking, as JSON."/>
+        </command>
+
         <command name="open window" code="NTSrOPNW"
                  description="Put the radio window on screen without activating the app or taking keyboard focus.">
             <cocoa class="NTSOpenWindowCommand"/>

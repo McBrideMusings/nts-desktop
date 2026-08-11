@@ -17,7 +17,29 @@ final class PlayerEngine: ObservableObject {
     /// because a button should reflect what you pressed.
     @Published private(set) var isRendering = false
 
+    /// How far into the current item playback has reached, in seconds.
+    @Published private(set) var position: Double = 0
+
+    /// How long the current item runs, in seconds — 0 when that is not a
+    /// question with an answer.
+    ///
+    /// The live channels and the mixtapes are endless: AVPlayer reports their
+    /// duration as `indefinite`, which is the truth, not a failure to load. A
+    /// past episode is a finite recording, so its playlist carries a real
+    /// length. That difference is what `isSeekable` is reading — the app never
+    /// has to be told which kind of thing is playing.
+    @Published private(set) var duration: Double = 0
+
+    /// Whether there is a position within this item to move to.
+    var isSeekable: Bool { duration > 0 }
+
+    /// How many times the playhead has been moved. The system tile extrapolates
+    /// elapsed time from the playback rate, so it only needs re-telling when the
+    /// playhead jumps — this is what makes a jump observable to it.
+    @Published private(set) var seeks = 0
+
     private var currentURL: URL?
+    private var ticker: Any?
 
     /// What is actually loaded, for a script to read back. An episode's audio is
     /// resolved at play time, so this is the only place the resulting stream is
@@ -30,14 +52,52 @@ final class PlayerEngine: ObservableObject {
             .map { $0 == .playing }
             .removeDuplicates()
             .assign(to: &$isRendering)
+
+        // Twice a second: fast enough that a scrubber tracks the audio, slow
+        // enough to be nothing. The observer outlives each item, so it is added
+        // once here rather than rebuilt on every load.
+        ticker = player.addPeriodicTimeObserver(
+            forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
+            queue: .main
+        ) { [weak self] time in
+            MainActor.assumeIsolated { self?.tick(time) }
+        }
+    }
+
+    deinit {
+        if let ticker { player.removeTimeObserver(ticker) }
+    }
+
+    private func tick(_ time: CMTime) {
+        let seconds = CMTimeGetSeconds(time)
+        position = seconds.isFinite ? max(0, seconds) : 0
+
+        let length = player.currentItem.map { CMTimeGetSeconds($0.duration) } ?? Double.nan
+        duration = (length.isFinite && length > 0) ? length : 0
     }
 
     func load(_ url: URL, autoplay: Bool) {
         if url != currentURL {
             currentURL = url
+            // A new item starts at zero with an unknown length. Leaving the old
+            // values up would show the previous episode's scrubber against this
+            // one's audio for the second before the first tick lands.
+            position = 0
+            duration = 0
             player.replaceCurrentItem(with: AVPlayerItem(url: url))
         }
         if autoplay { play() }
+    }
+
+    /// Move the playhead. A no-op on an endless stream: there is nowhere to move
+    /// to, and AVPlayer would seek within the buffered live tail.
+    func seek(to seconds: Double) {
+        guard isSeekable else { return }
+        let target = max(0, min(duration, seconds))
+        position = target
+        seeks += 1
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
+                    toleranceBefore: .zero, toleranceAfter: .zero)
     }
 
     func play() {

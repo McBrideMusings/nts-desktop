@@ -12,8 +12,10 @@ import SwiftUI
 /// playing — and publishing is also what makes macOS route the keys here at all,
 /// so an app that only registers commands never hears from them.
 ///
-/// Everything here is a continuous stream, so the tile is marked live: no
-/// scrubber, no elapsed time, and the seek/skip commands stay switched off.
+/// The channels and mixtapes are continuous streams, so their tile is marked
+/// live — no scrubber, no elapsed time. A past episode is a finite recording and
+/// gets both, plus a working scrubber; `push` switches between the two from the
+/// item's own duration.
 @MainActor
 final class NowPlayingCenter {
     private unowned let model: AppModel
@@ -41,13 +43,17 @@ final class NowPlayingCenter {
         // and art in place). `receive(on:)` defers to after the change lands —
         // these fire in willSet, so reading the model in the handler would
         // otherwise see the old value.
-        Publishers.Merge5(
-            model.$selection.map { _ in () },
-            model.$tracks.map { _ in () },
-            model.$mixtapeEpisode.map { _ in () },
-            model.engine.$isPlaying.map { _ in () },
-            model.catalog.objectWillChange.map { _ in () }
-        )
+        // `duration` is in here because it arrives late: an episode's length is
+        // only known once its playlist has loaded, and that is the moment the
+        // tile has to stop calling it a live stream.
+        Publishers.MergeMany([
+            model.$selection.map { _ in () }.eraseToAnyPublisher(),
+            model.$tracks.map { _ in () }.eraseToAnyPublisher(),
+            model.$mixtapeEpisode.map { _ in () }.eraseToAnyPublisher(),
+            model.engine.$isPlaying.map { _ in () }.eraseToAnyPublisher(),
+            model.engine.$duration.map { _ in () }.eraseToAnyPublisher(),
+            model.catalog.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
+        ])
         .receive(on: RunLoop.main)
         .sink { [weak self] _ in self?.refresh() }
         .store(in: &bag)
@@ -65,9 +71,13 @@ final class NowPlayingCenter {
         }
         center.nextTrackCommand.addTarget { [weak self] _ in self?.run { $0.step(by: 1) } ?? .commandFailed }
         center.previousTrackCommand.addTarget { [weak self] _ in self?.run { $0.step(by: -1) } ?? .commandFailed }
-        // A live stream has no timeline to move around in — leave these off so
-        // the system never offers a scrubber or skip buttons for it.
-        center.changePlaybackPositionCommand.isEnabled = false
+        // A past episode is a finite recording, so the Control Center tile gets a
+        // working scrubber for it. `push` turns this on and off with the source:
+        // a live stream has no timeline to move around in.
+        center.changePlaybackPositionCommand.addTarget { [weak self] event in
+            guard let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
+            return self?.run { $0.engine.seek(to: event.positionTime) } ?? .commandFailed
+        }
         center.seekForwardCommand.isEnabled = false
         center.seekBackwardCommand.isEnabled = false
         center.skipForwardCommand.isEnabled = false
@@ -96,6 +106,12 @@ final class NowPlayingCenter {
         var album: String
         var isPlaying: Bool
         var artwork: ArtworkKey?
+        /// How many times the playhead has been moved. The tile is told the
+        /// elapsed time once and extrapolates it from the playback rate, so it
+        /// only needs re-telling when the playhead jumps — counting the jumps
+        /// makes that a change this struct can see, without putting a position
+        /// in here that would differ twice a second and push the tile forever.
+        var seeks: Int = 0
     }
 
     /// Identifies the cover image without holding it: a remote URL for mixtape
@@ -139,7 +155,8 @@ final class NowPlayingCenter {
                 artist: nonEmpty(episode.location) ?? episode.genres.first ?? "NTS",
                 album: nonEmpty(episode.date).map { "NTS · \($0)" } ?? "NTS",
                 isPlaying: model.engine.isPlaying,
-                artwork: episode.image.map(ArtworkKey.remote)
+                artwork: episode.image.map(ArtworkKey.remote),
+                seeks: model.engine.seeks
             )
         case .channel:
             guard let channel = model.currentChannel else { return nil }
@@ -171,14 +188,24 @@ final class NowPlayingCenter {
             center.playbackState = .stopped
             return
         }
+        // A finite item tells the system its length and where it has got to, which
+        // is what draws the scrubber on the tile. A live stream says so instead —
+        // claiming `isLiveStream` for a two-hour archive show would leave the
+        // tile with no timeline for something that has one.
+        let seekable = model.engine.isSeekable
         var fields: [String: Any] = [
             MPMediaItemPropertyTitle: info.title,
             MPMediaItemPropertyArtist: info.artist,
             MPMediaItemPropertyAlbumTitle: info.album,
-            MPNowPlayingInfoPropertyIsLiveStream: true,
+            MPNowPlayingInfoPropertyIsLiveStream: !seekable,
             MPNowPlayingInfoPropertyPlaybackRate: info.isPlaying ? 1.0 : 0.0,
             MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
         ]
+        if seekable {
+            fields[MPMediaItemPropertyPlaybackDuration] = model.engine.duration
+            fields[MPNowPlayingInfoPropertyElapsedPlaybackTime] = model.engine.position
+        }
+        MPRemoteCommandCenter.shared().changePlaybackPositionCommand.isEnabled = seekable
         if let artwork { fields[MPMediaItemPropertyArtwork] = artwork }
         center.nowPlayingInfo = fields
         center.playbackState = info.isPlaying ? .playing : .paused

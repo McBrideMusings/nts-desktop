@@ -62,6 +62,13 @@ enum ScriptState {
             "episodeLoading": m.episodeLoading,
             "episodeError": m.episodeError ?? "",
             "episodeStream": m.engine.currentURLString,
+            // Where the playhead is, and whether it can be moved at all. The
+            // seek bar's whole rule is `seekable` — reading it back is how a
+            // script checks the bar is absent for a live channel without
+            // looking at pixels.
+            "seekable": m.engine.isSeekable,
+            "position": (m.engine.position * 10).rounded() / 10,
+            "duration": (m.engine.duration * 10).rounded() / 10,
             // Whether nts.live is answering. A stale catalog and a healthy one
             // hold the same contents, so this is the only way a script can tell
             // "nothing new" from "nothing got through".
@@ -297,6 +304,26 @@ final class NTSCloseWindowCommand: NTSCommand {
     override func performDefaultImplementation() -> Any? {
         run {
             RadioWindowController.scriptTarget?.hide()
+            return true
+        }
+    }
+}
+
+@objc(NTSSeekCommand)
+final class NTSSeekCommand: NTSCommand {
+    override func performDefaultImplementation() -> Any? {
+        run {
+            guard let m = AppModel.scriptTarget else { return false }
+            guard m.engine.isSeekable else {
+                self.scriptErrorNumber = -1708   // errAEEventNotHandled
+                self.scriptErrorString = """
+                    What’s tuned has no position to seek to — the channels and the \
+                    mixtapes are continuous streams. Tune an episode first.
+                    """
+                return false
+            }
+            let seconds = (self.directParameter as? NSNumber)?.doubleValue ?? 0
+            m.engine.seek(to: seconds)
             return true
         }
     }
