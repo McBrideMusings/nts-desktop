@@ -295,6 +295,8 @@ enum NTSAPI {
         let media: Media?
         let broadcast: String?
         let external_links: [String]?
+        let audio_sources: [AudioSource]?
+        struct AudioSource: Decodable { let url: String? }
         struct Media: Decodable {
             let picture_medium_large: String?
             let picture_medium: String?
@@ -365,6 +367,117 @@ enum NTSAPI {
                 image: (e.thumb ?? e.picture).flatMap { URL(string: $0) }
             )
         }
+    }
+
+    // MARK: - Episodes on demand
+
+    /// A single episode: what it is, and where its audio actually lives.
+    ///
+    /// The audio is not an NTS URL — it is a SoundCloud or Mixcloud page, which
+    /// AVPlayer cannot open. `resolveStream` turns one into a playable HLS
+    /// playlist.
+    struct EpisodeDetail {
+        let showAlias: String
+        let episodeAlias: String
+        let name: String
+        let description: String
+        let genres: [String]
+        let location: String
+        let date: String
+        let image: URL?
+        let audioSources: [URL]
+
+        var pageURL: URL? {
+            guard !showAlias.isEmpty, !episodeAlias.isEmpty else { return nil }
+            return URL(string: "https://www.nts.live/shows/\(showAlias)/episodes/\(episodeAlias)")
+        }
+    }
+
+    static func episode(show: String, episode: String) async throws -> EpisodeDetail {
+        let url = URL(string: "https://www.nts.live/api/v2/shows/\(show)/episodes/\(episode)")!
+        let (data, _) = try await URLSession.shared.data(from: url)
+        let e = try JSONDecoder().decode(ShowJSON.self, from: data)
+        return EpisodeDetail(
+            showAlias: e.show_alias ?? show,
+            episodeAlias: e.episode_alias ?? episode,
+            name: decodeEntities(e.name ?? "").trimmingCharacters(in: .whitespaces),
+            description: decodeEntities(e.description ?? ""),
+            genres: (e.genres ?? []).compactMap { $0.value }.map { decodeEntities($0).trimmingCharacters(in: .whitespaces) },
+            location: e.location_short ?? "",
+            date: e.broadcast.flatMap(parse).map { dayMonthYear.string(from: $0) } ?? "",
+            image: (e.picture).flatMap { URL(string: $0) },
+            audioSources: (e.audio_sources ?? []).compactMap { $0.url.flatMap(URL.init(string:)) }
+        )
+    }
+
+    // MARK: - Playable streams
+
+    enum StreamError: LocalizedError {
+        case noAudio
+        case tokenMissing
+        case refused(Int)
+
+        var errorDescription: String? {
+            switch self {
+            case .noAudio:          return "This episode has no audio on NTS."
+            case .tokenMissing:     return "Could not read nts.live's stream token."
+            case .refused(let code): return "nts.live refused the stream (HTTP \(code))."
+            }
+        }
+    }
+
+    /// Turn an episode's SoundCloud/Mixcloud page into a playable HLS URL.
+    ///
+    /// `/api/v2/resolve-stream` answers 401 without an `Authorization: Basic`
+    /// header carrying the token nts.live ships in the HTML of every page — see
+    /// `siteToken()`. The playlist it hands back is signed and expires, so it is
+    /// resolved per play rather than cached.
+    static func resolveStream(_ source: URL) async throws -> URL {
+        do {
+            return try await resolve(source, token: await siteToken())
+        } catch StreamError.refused(401) {
+            // The token rotated under us. Re-read it from the site and retry once
+            // rather than making the user restart the app.
+            cachedToken = nil
+            return try await resolve(source, token: await siteToken())
+        }
+    }
+
+    private static func resolve(_ source: URL, token: String) async throws -> URL {
+        var components = URLComponents(string: "https://www.nts.live/api/v2/resolve-stream")!
+        components.queryItems = [URLQueryItem(name: "url", value: source.absoluteString)]
+        var request = URLRequest(url: components.url!)
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("Basic \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard code == 200 else { throw StreamError.refused(code) }
+
+        struct Resolved: Decodable { let hls: String? }
+        guard let hls = try JSONDecoder().decode(Resolved.self, from: data).hls,
+              let url = URL(string: hls) else { throw StreamError.refused(code) }
+        return url
+    }
+
+    private static var cachedToken: String?
+
+    /// The API token nts.live embeds in every page it serves, as
+    /// `"NTS_API_TOKEN":"…"`.
+    ///
+    /// It is read off the site rather than compiled in: it is their constant,
+    /// not ours, and scraping it means a rotation costs one extra request
+    /// instead of an app release. Held in memory only — a launch that never
+    /// plays an episode never fetches it.
+    private static func siteToken() async throws -> String {
+        if let cachedToken { return cachedToken }
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "https://www.nts.live/")!)
+        guard let html = String(data: data, encoding: .utf8),
+              let range = html.range(of: #""NTS_API_TOKEN":"[^"]+""#, options: .regularExpression),
+              let token = html[range].split(separator: "\"").last.map(String.init)
+        else { throw StreamError.tokenMissing }
+        cachedToken = token
+        return token
     }
 
     /// Decode the handful of HTML entities NTS leaves in broadcast titles/genres

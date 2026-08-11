@@ -6,6 +6,10 @@ enum Selection: Equatable {
     case idle              // nothing selected — the default empty state on launch
     case mixtape(String)   // mixtape alias — stable across catalog rebuilds
     case channel(Int)
+    /// A past episode, played on demand. Unlike the other two this has no stream
+    /// URL of its own: the audio lives on SoundCloud or Mixcloud and has to be
+    /// resolved through NTS before it can be played, so loading it is async.
+    case episode(show: String, episode: String)
 }
 
 /// The one modal popover that can be open at a time.
@@ -77,6 +81,17 @@ final class AppModel: ObservableObject {
         get { activeSheet == .login }
         set { if newValue { activeSheet = .login } else if activeSheet == .login { activeSheet = nil } }
     }
+
+    /// The episode currently tuned, once its details have arrived. Nil for the
+    /// live channels and the mixtapes, which carry their own metadata.
+    @Published var episode: NTSAPI.EpisodeDetail?
+    /// True between picking an episode and its audio starting — the two fetches
+    /// behind it take long enough to need saying so.
+    @Published var episodeLoading = false
+    /// Why the last episode failed to start, in words fit for the now-playing
+    /// bar. Cleared on the next attempt.
+    @Published var episodeError: String?
+    private var episodeLoad: Task<Void, Never>?
 
     /// Tracklist for the current source — populated by the Firestore listener for
     /// both mixtapes and live channels when signed in (empty when signed out).
@@ -176,10 +191,20 @@ final class AppModel: ObservableObject {
     }
 
     var displayName: String {
-        (currentMixtape?.title ?? currentChannel?.show ?? "").uppercased()
+        if case .episode = selection {
+            return (episode?.name ?? "LOADING…").uppercased()
+        }
+        return (currentMixtape?.title ?? currentChannel?.show ?? "").uppercased()
     }
 
     var subtitle: String {
+        if case .episode = selection {
+            if let episodeError { return episodeError.uppercased() }
+            if episodeLoading { return "FINDING THE AUDIO…" }
+            guard let episode else { return "" }
+            let bits = [episode.date, episode.location, episode.genres.first ?? ""]
+            return bits.filter { !$0.isEmpty }.joined(separator: " · ").uppercased()
+        }
         if currentMixtape != nil {
             // Source episode (mixed case, as NTS formats it). The feed is
             // supporter-gated: signed-in shows a loading label until the first
@@ -207,7 +232,10 @@ final class AppModel: ObservableObject {
 
     /// Link for the primary label: the nts.live episode page for a live channel's
     /// current broadcast. Nil for mixtapes and when the live feed gave no aliases.
-    var nowPlayingShowURL: URL? { currentChannel?.episodeURL }
+    var nowPlayingShowURL: URL? {
+        if case .episode = selection { return episode?.pageURL }
+        return currentChannel?.episodeURL
+    }
 
     var accent: Color {
         currentMixtape?.accent ?? currentChannel?.accent ?? Theme.ink
@@ -339,8 +367,42 @@ final class AppModel: ObservableObject {
     }
 
     func loadCurrent(autoplay: Bool) {
+        if case .episode(let show, let episode) = selection {
+            loadEpisode(show: show, episode: episode, autoplay: autoplay)
+            return
+        }
         let url = currentMixtape?.streamURL ?? currentChannel?.streamURL
         if let url { engine.load(url, autoplay: autoplay) }
+    }
+
+    /// Fetch an episode and start it.
+    ///
+    /// Two hops, both of which can fail and neither of which the live channels
+    /// need: the episode names a SoundCloud or Mixcloud page, and NTS turns that
+    /// into a signed HLS playlist. The signature expires, so this runs per play
+    /// rather than being cached. A failure leaves the reason on screen instead of
+    /// a silent dead transport.
+    private func loadEpisode(show: String, episode: String, autoplay: Bool) {
+        episodeLoad?.cancel()
+        episodeError = nil
+        episodeLoading = true
+        episodeLoad = Task { [weak self] in
+            defer { Task { @MainActor in self?.episodeLoading = false } }
+            do {
+                let detail = try await NTSAPI.episode(show: show, episode: episode)
+                guard let source = detail.audioSources.first else { throw NTSAPI.StreamError.noAudio }
+                let stream = try await NTSAPI.resolveStream(source)
+                guard !Task.isCancelled, let self else { return }
+                // The selection can move on while the two requests are in flight;
+                // landing this audio then would start the wrong thing playing.
+                guard self.selection == .episode(show: show, episode: episode) else { return }
+                self.episode = detail
+                self.engine.load(stream, autoplay: autoplay)
+            } catch {
+                guard !Task.isCancelled, let self else { return }
+                self.episodeError = error.localizedDescription
+            }
+        }
     }
 
     func togglePlay() {
@@ -365,6 +427,10 @@ final class AppModel: ObservableObject {
     func step(by delta: Int) {
         switch selection {
         case .idle:
+            return
+        // An episode is one thing you chose, not a position in a group — there is
+        // no neighbour to step to, so the keys hold it where it is.
+        case .episode:
             return
         case .channel(let number):
             let all = catalog.channels

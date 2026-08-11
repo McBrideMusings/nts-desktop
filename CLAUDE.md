@@ -60,6 +60,18 @@ The whole app lives in the `mac/` Swift package (root `Makefile`/`admin.toml` ju
   user (`writeToFavourites`, `favouriteShows`, `favouriteEpisodes`, keyed by
   show + episode alias), reachable with the same Firebase credentials the
   tracklist listener already uses. Bookmarks are local-only until that's wired.
+- Episode audio is a SoundCloud/Mixcloud page URL in `audio_sources`, which
+  AVPlayer cannot open. `/api/v2/resolve-stream?url=<encoded>` returns
+  `{"hls": "…m3u8?Policy=…&Signature=…"}` — signed and expiring, so resolve per
+  play. It answers 401 without `Authorization: Basic <token>`, where the token is
+  the `"NTS_API_TOKEN":"…"` constant in the HTML of every nts.live page. The app
+  scrapes it at first play (`NTSAPI.siteToken`) rather than compiling it in, and
+  re-reads it once on a 401.
+- Explore is `/api/v2/search/episodes` with repeatable `genres[]` and `moods[]`,
+  plus `intensity=<lo>-<hi>` (their 0–10 slider ×10) and `genre_count=<n>`.
+  nts.live's "Focused" toggle is that `genre_count`; "Music Only" is just
+  `moods[]=no-talkin`. 10 moods, 20 primary genres, 438 subgenres. None of it
+  needs a user account.
 - Every endpoint above is served `cache-control: max-age=900` with an ETag.
 - `mac/Sources/NTSFirestore/` — a Firestore Listen (gRPC) client for live channel/mixtape tracklists, with generated protobuf/gRPC Swift code under `Generated/` and source `.proto` files in `mac/Proto/` (see `mac/Proto/regenerate.sh`)
 - `mac/Sources/FSProbe/` — standalone probe binary, separate from the main app target
@@ -82,6 +94,7 @@ The whole app lives in the `mac/` Swift package (root `Makefile`/`admin.toml` ju
   ```
   osascript -e 'tell application "NTS Radio" to get state'
   osascript -e 'tell application "NTS Radio" to tune to "mixtape:slow-focus"'
+  osascript -e 'tell application "NTS Radio" to tune to "episode:lung-dart/lung-dart-10th-august-2026"'
   osascript -e 'tell application "NTS Radio" to skip by 1'
   osascript -e 'tell application "NTS Radio" to open catalog showing "schedule"'
   osascript -e 'tell application "NTS Radio" to open catalog searching for "veronica"'

@@ -19,6 +19,11 @@ final class PlayerEngine: ObservableObject {
 
     private var currentURL: URL?
 
+    /// What is actually loaded, for a script to read back. An episode's audio is
+    /// resolved at play time, so this is the only place the resulting stream is
+    /// observable — the selection just names the episode.
+    var currentURLString: String { currentURL?.absoluteString ?? "" }
+
     init() {
         player.automaticallyWaitsToMinimizeStalling = true
         player.publisher(for: \.timeControlStatus)

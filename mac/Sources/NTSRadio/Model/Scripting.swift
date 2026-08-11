@@ -56,6 +56,12 @@ enum ScriptState {
             "volume": Int(m.volume.rounded()),
             "muted": m.muted,
             "signedIn": m.auth.isAuthenticated,
+            // An episode takes two requests before any audio exists, either of
+            // which can fail. Without these, a stuck resolve and a playing
+            // episode both read as "not playing".
+            "episodeLoading": m.episodeLoading,
+            "episodeError": m.episodeError ?? "",
+            "episodeStream": m.engine.currentURLString,
             "windowVisible": RadioWindowController.scriptTarget?.isWindowVisible ?? false,
             "catalogOpen": m.catalogOpen,
             // What the catalog is actually listing. Without these, a list that
@@ -110,6 +116,7 @@ enum ScriptState {
         case .idle: return "idle"
         case .mixtape(let alias): return "mixtape:\(alias)"
         case .channel(let n): return "channel:\(n)"
+        case .episode(let show, let episode): return "episode:\(show)/\(episode)"
         }
     }
 
@@ -129,6 +136,14 @@ enum ScriptState {
         case "channel":
             guard let n = Int(value), m.catalog.channels.contains(where: { $0.number == n }) else { return nil }
             return .channel(n)
+        // `episode:<show>/<episode>`. Unlike a mixtape or a channel there is
+        // nothing local to check it against — the catalog holds no list of the
+        // ~89,000 episodes — so both halves being present is the whole test, and
+        // a wrong alias surfaces as the fetch failing.
+        case "episode":
+            let halves = value.split(separator: "/", maxSplits: 1, omittingEmptySubsequences: true)
+            guard halves.count == 2 else { return nil }
+            return .episode(show: String(halves[0]), episode: String(halves[1]))
         default:
             return nil
         }

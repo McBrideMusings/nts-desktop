@@ -82,7 +82,7 @@
                  description="Tune to a mixtape or a channel and start playing it, the same as clicking it.">
             <cocoa class="NTSTuneCommand"/>
             <direct-parameter type="text"
-                              description="mixtape:&lt;alias&gt; or channel:&lt;number&gt; — for example mixtape:rap-house or channel:1."/>
+                              description="mixtape:&lt;alias&gt;, channel:&lt;number&gt;, or episode:&lt;show&gt;/&lt;episode&gt; — for example mixtape:rap-house, channel:1, or episode:lung-dart/lung-dart-10th-august-2026."/>
             <result type="text" description="The state after tuning, as JSON."/>
         </command>
 

@@ -21,6 +21,11 @@ enum TracklistAdapter {
         switch selection {
         case .idle:
             return nil
+        // `live_tracks` is what is being played out right now on a channel or a
+        // mixtape. A past episode is not being played out by NTS at all, so there
+        // is no document to listen to.
+        case .episode:
+            return nil
         case .mixtape:
             guard let mix = mixtape else { return nil }
             return Stream(filter: .mixtape(mix.alias), hue: mix.hue)

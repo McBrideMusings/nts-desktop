@@ -560,8 +560,13 @@ private struct ActionButton: View {
 }
 
 private struct EpisodeRow: View {
+    @EnvironmentObject var model: AppModel
     let episode: NTSAPI.Episode
     @State private var hovering = false
+
+    private var playing: Bool {
+        model.selection == .episode(show: episode.showAlias, episode: episode.alias)
+    }
 
     var body: some View {
         HStack(spacing: 11) {
@@ -577,17 +582,28 @@ private struct EpisodeRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(episode.name.uppercased())
                     .font(Theme.display(12, .heavy))
-                    .foregroundStyle(Theme.ink)
+                    .foregroundStyle(playing ? Theme.liveDot : Theme.ink)
                     .lineLimit(1)
-                Text(episode.date)
-                    .font(Theme.mono(9))
-                    .foregroundStyle(Theme.inkMuted)
+                HStack(spacing: 6) {
+                    Text(episode.date)
+                    if playing {
+                        Text(model.episodeLoading ? "LOADING" : "PLAYING")
+                            .foregroundStyle(Theme.liveDot)
+                    }
+                }
+                .font(Theme.mono(9))
+                .foregroundStyle(Theme.inkMuted)
             }
             Spacer(minLength: 0)
-            if hovering, episode.pageURL != nil {
-                Image(systemName: "arrow.up.right")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.inkMuted)
+            if let url = episode.pageURL, hovering {
+                Button { NSWorkspace.shared.open(url) } label: {
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.inkMuted)
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.plain)
+                .help("Open on nts.live")
             }
         }
         .frame(maxWidth: 620, alignment: .leading)
@@ -597,7 +613,12 @@ private struct EpisodeRow: View {
         }
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
-        .onTapGesture { if let url = episode.pageURL { NSWorkspace.shared.open(url) } }
+        // Tapping the row plays the episode; the arrow is the way out to the web
+        // page. It was the other way round when nothing here could be played.
+        .onTapGesture {
+            guard !episode.alias.isEmpty, !episode.showAlias.isEmpty else { return }
+            model.select(.episode(show: episode.showAlias, episode: episode.alias))
+        }
     }
 }
 

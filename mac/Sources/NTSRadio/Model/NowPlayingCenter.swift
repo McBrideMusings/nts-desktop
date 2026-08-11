@@ -132,6 +132,15 @@ final class NowPlayingCenter {
                 isPlaying: model.engine.isPlaying,
                 artwork: mix.coverURL.map(ArtworkKey.remote)
             )
+        case .episode:
+            guard let episode = model.episode else { return nil }
+            return Info(
+                title: episode.name,
+                artist: nonEmpty(episode.location) ?? episode.genres.first ?? "NTS",
+                album: nonEmpty(episode.date).map { "NTS · \($0)" } ?? "NTS",
+                isPlaying: model.engine.isPlaying,
+                artwork: episode.image.map(ArtworkKey.remote)
+            )
         case .channel:
             guard let channel = model.currentChannel else { return nil }
             return Info(
