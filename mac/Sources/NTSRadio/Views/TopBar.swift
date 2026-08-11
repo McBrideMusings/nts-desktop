@@ -22,24 +22,31 @@ struct TopBar: View {
     /// traffic lights vertically centred in it.
     static let height: CGFloat = 32
 
+    /// The button cluster's own width: three 26pt buttons, two 8pt gaps between
+    /// them, and the 14pt trailing padding that follows.
+    private static let trailingWidth: CGFloat = 26 * 3 + 8 * 2 + 14
+
     var body: some View {
-        ZStack {
-            // Centred NTS mark. Non-interactive so it never steals a drag.
+        HStack(spacing: 8) {
+            // Mirrors `trailingWidth` on the left so the logo centres between
+            // the two chrome clusters rather than in the raw window width. The
+            // traffic lights only need ~78pt of that; this reserves the wider
+            // 108pt the button cluster takes on the right, which is what was
+            // pushing the mark right of true visual centre before.
+            Color.clear.frame(width: Self.trailingWidth)
+            Spacer(minLength: 0)
             Image(nsImage: MenuBarIcon.logoImage)
                 .resizable()
                 .renderingMode(.template)
                 .frame(width: 13, height: 13)
                 .foregroundStyle(Theme.ink.opacity(0.9))
                 .allowsHitTesting(false)
-
-            HStack(spacing: 8) {
-                Spacer()
-                catalogButton
-                settingsButton
-                profileButton
-            }
-            .padding(.trailing, 14)
+            Spacer(minLength: 0)
+            catalogButton
+            settingsButton
+            profileButton
         }
+        .padding(.trailing, 14)
         .frame(maxWidth: .infinity)
         .frame(height: Self.height)
         .background(Theme.nowBar)
