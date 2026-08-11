@@ -45,38 +45,6 @@ final class ShowIndex: ObservableObject {
 
     func ref(_ alias: String) -> NTSAPI.ShowRef? { shows[alias] }
 
-    /// Alias-per-normalised-name, rebuilt whenever `shows` changes. The schedule's
-    /// later slots carry no alias, so a title is the only handle onto them.
-    private var byName: [String: String] = [:]
-    private var byNameStamp = -1
-
-    /// The indexed show whose name matches this broadcast title, if any.
-    /// Case, punctuation and the "(R)" repeat marker are all stripped, because a
-    /// broadcast title is the show's name shouted in caps with that suffix bolted
-    /// on: `"SOUP TO NUTS W/ JOHN GÓMEZ (R)"` against `"Soup To Nuts w/ John Gómez"`.
-    func match(title: String) -> NTSAPI.ShowRef? {
-        rebuildNamesIfNeeded()
-        guard let alias = byName[Self.normalise(title)] else { return nil }
-        return shows[alias]
-    }
-
-    private func rebuildNamesIfNeeded() {
-        guard byNameStamp != shows.count else { return }
-        byNameStamp = shows.count
-        byName = [:]
-        for s in shows.values { byName[Self.normalise(s.name)] = s.alias }
-    }
-
-    static func normalise(_ s: String) -> String {
-        var t = s.lowercased()
-        t = t.replacingOccurrences(of: "(r)", with: "")
-        return t.unicodeScalars
-            .filter { CharacterSet.alphanumerics.contains($0) }
-            .map(String.init)
-            .joined()
-            .folding(options: .diacriticInsensitive, locale: nil)
-    }
-
     /// Fold a show the app encountered into the index. Cheap and idempotent: an
     /// alias already present keeps its richer entry rather than being overwritten
     /// by a sparser one (a schedule slot has no genres; the walk's entry does).

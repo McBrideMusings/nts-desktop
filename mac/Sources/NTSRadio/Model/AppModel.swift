@@ -405,8 +405,7 @@ final class AppModel: ObservableObject {
     /// A schedule slot as a grid row, flagged if it's the one on air — the only
     /// place the LIVE badge comes from, so it can't disagree with the rail.
     private func row(for b: NTSAPI.Broadcast) -> CatalogRow {
-        let resolved = showIndex.ref(b.showAlias) ?? showIndex.match(title: b.title)
-        let row = CatalogRow(b, resolved: resolved)
+        let row = CatalogRow(b, resolved: showIndex.ref(b.showAlias))
         return isOnAir(b) ? row.markedLive() : row
     }
 
@@ -524,13 +523,40 @@ final class AppModel: ObservableObject {
                 // the aliases when we got real ones or the broadcast actually changed.
                 if !upd.showAlias.isEmpty || showChanged { catalog.channels[idx].showAlias = upd.showAlias }
                 if !upd.episodeAlias.isEmpty || showChanged { catalog.channels[idx].episodeAlias = upd.episodeAlias }
-                catalog.channels[idx].upcoming = upd.schedule
-                // Every slot names a show; folding them in is how the index covers
-                // shows past the endpoint's reachable 1012.
-                for b in upd.schedule where !b.showAlias.isEmpty {
-                    showIndex.note(alias: b.showAlias, name: b.title, location: b.location,
-                                   genres: b.genres, picture: b.image?.absoluteString)
-                }
+            }
+        }
+    }
+
+    /// How long a fetched grid is trusted. NTS serves the schedule with
+    /// `cache-control: max-age=900`, so asking more often than that re-reads the
+    /// same bytes.
+    private static let scheduleMaxAge: TimeInterval = 900
+    private var scheduleFetched: Date?
+
+    /// Pull both channels' published programme grids — fourteen days each, every
+    /// slot timed and named.
+    ///
+    /// This replaces reading the grid out of `/api/v2/live`, which only embedded
+    /// details for the current and next slot and left the other sixteen to be
+    /// matched back to a show by their title. Finished slots are dropped on the
+    /// way in so `upcoming` still means what it says.
+    func refreshSchedule() async {
+        var grids: [Int: [NTSAPI.Broadcast]] = [:]
+        for number in catalog.channels.map(\.number) {
+            guard let slots = try? await NTSAPI.schedule(channel: number) else { continue }
+            grids[number] = slots
+        }
+        guard !grids.isEmpty else { return }
+        scheduleFetched = Date()
+
+        let now = Date()
+        for idx in catalog.channels.indices {
+            guard let slots = grids[catalog.channels[idx].number] else { continue }
+            catalog.channels[idx].upcoming = slots.filter { ($0.end ?? .distantPast) > now }
+            // Every slot names its show; folding those in is how the index covers
+            // shows past the 1012 the shows endpoint will hand out.
+            for b in slots where !b.showAlias.isEmpty {
+                showIndex.note(alias: b.showAlias, name: b.title)
             }
         }
     }
@@ -538,8 +564,8 @@ final class AppModel: ObservableObject {
     /// Move each channel on to the programme the clock is actually in, dropping
     /// the slots that have finished.
     ///
-    /// The live feed already names every upcoming slot and the minute it ends, so
-    /// a changeover is something the app can do on its own — it doesn't have to be
+    /// The grid already names every upcoming slot and the minute it ends, so a
+    /// changeover is something the app can do on its own — it doesn't have to be
     /// told. Waiting to be told left the rail showing the previous show: NTS serves
     /// `/api/v2/live` with `cache-control: max-age=900`, so for up to 15 minutes
     /// after the hour every poll returns the same pre-changeover JSON.
@@ -551,11 +577,14 @@ final class AppModel: ObservableObject {
             catalog.channels[idx].upcoming = Array(live)
             catalog.channels[idx].show = current.title
             catalog.channels[idx].startEnd = current.startEnd
-            catalog.channels[idx].genre = current.genres.first ?? ""
-            catalog.channels[idx].background = current.image
+            // The grid carries no genres or artwork, so the handover shows the
+            // show's own — the episode's photograph arrives with the next
+            // `/api/v2/live` poll, which embeds it for whatever is on now.
+            let indexed = showIndex.ref(current.showAlias)
+            catalog.channels[idx].genre = indexed?.genres.first ?? ""
+            catalog.channels[idx].background = indexed?.pictureURL
             // A new broadcast means the old episode link is wrong, so these are
-            // replaced even when the slot carried none — NTS embeds `details` for
-            // only the first two slots, and the next poll fills them back in.
+            // replaced outright rather than merged.
             catalog.channels[idx].showAlias = current.showAlias
             catalog.channels[idx].episodeAlias = current.episodeAlias
         }
@@ -587,6 +616,9 @@ final class AppModel: ObservableObject {
     /// a boundary catches up on the next cycle.
     private func pollLive() async {
         while !Task.isCancelled {
+            if scheduleFetched.map({ Date().timeIntervalSince($0) > Self.scheduleMaxAge }) ?? true {
+                await refreshSchedule()
+            }
             await refreshLive()
             advanceSlots()
             scheduleSlotAdvance()

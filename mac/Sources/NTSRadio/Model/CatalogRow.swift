@@ -32,12 +32,11 @@ struct CatalogRow: Identifiable, Hashable {
 
     // MARK: Sources
 
-    /// `resolved` is the show this slot turned out to be, looked up by title.
+    /// `resolved` is the indexed show this slot's alias points at.
     ///
-    /// It has to be looked up because the live response only embeds details for
-    /// the current and next broadcast — the other sixteen slots per channel arrive
-    /// as a title and a time with no alias, no genres and no artwork. Without the
-    /// lookup those tiles are blank rectangles that can't be opened or saved.
+    /// The schedule gives every slot a show alias but no genres, location or
+    /// artwork, so the index supplies those. Without it the tile is a titled
+    /// rectangle — still openable and saveable, just bare.
     init(_ b: NTSAPI.Broadcast, resolved: NTSAPI.ShowRef? = nil) {
         id = "b:\(b.id)"
         title = b.title

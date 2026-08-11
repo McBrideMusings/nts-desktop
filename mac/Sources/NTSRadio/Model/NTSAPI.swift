@@ -11,14 +11,13 @@ enum NTSAPI {
         let background: String?   // current program's full-bleed artwork
         let showAlias: String     // for linking the title to its episode page
         let episodeAlias: String
-        /// `now` plus every `next…` slot the same response carried, in order.
-        let schedule: [Broadcast]
     }
 
-    /// One programme slot on a channel — `now` or any of the seventeen `next`
-    /// entries the live endpoint already returns in the same response. The app
-    /// used to decode only `now` and drop the rest; the schedule tab is built
-    /// entirely out of what that one request was already carrying.
+    /// One programme slot on a channel, as published in NTS's own schedule.
+    ///
+    /// Every slot carries a real start and end and the aliases of the show and
+    /// episode filling it, because it comes from `/api/v2/radio/schedule/N`
+    /// rather than being scraped out of the now-playing payload.
     struct Broadcast: Hashable, Identifiable {
         let channel: Int
         let title: String
@@ -27,9 +26,8 @@ enum NTSAPI {
         let startEnd: String
         let genres: [String]
         let location: String
-        /// Programme artwork. Nil for most future slots — NTS only fills `media`
-        /// for the current and next broadcast, so the rest fall back to the
-        /// show's own artwork, fetched lazily by alias.
+        /// Programme artwork. The schedule carries none, so this is nil and the
+        /// row falls back to the show's own artwork, looked up by alias.
         let image: URL?
         let showAlias: String
         let episodeAlias: String
@@ -42,38 +40,15 @@ enum NTSAPI {
         }
     }
 
+    /// The now-playing feed. Only `now` is read: the response also carries
+    /// `next` … `next17`, but those slots come from the schedule endpoint, which
+    /// publishes fourteen days of them with the aliases attached.
     private struct Response: Decodable {
         let results: [Result]
 
-        /// `now`, `next`, `next2` … `next17` are separate top-level keys rather
-        /// than an array, so the slots are collected by walking the keys until one
-        /// is missing. A dynamic key container keeps that in one place instead of
-        /// eighteen hand-written properties.
         struct Result: Decodable {
             let channel_name: String?
-            let slots: [Raw]
-
-            private struct DynKey: CodingKey {
-                var stringValue: String
-                var intValue: Int? { nil }
-                init(_ s: String) { stringValue = s }
-                init?(stringValue: String) { self.stringValue = stringValue }
-                init?(intValue: Int) { nil }
-            }
-
-            init(from decoder: Decoder) throws {
-                let c = try decoder.container(keyedBy: DynKey.self)
-                channel_name = try? c.decode(String.self, forKey: DynKey("channel_name"))
-                var out: [Raw] = []
-                if let now = try? c.decode(Raw.self, forKey: DynKey("now")) { out.append(now) }
-                if let nxt = try? c.decode(Raw.self, forKey: DynKey("next")) { out.append(nxt) }
-                var i = 2
-                while let b = try? c.decode(Raw.self, forKey: DynKey("next\(i)")) {
-                    out.append(b)
-                    i += 1
-                }
-                slots = out
-            }
+            let now: Raw?
         }
 
         struct Raw: Decodable {
@@ -180,7 +155,7 @@ enum NTSAPI {
 
         return decoded.results.compactMap { r -> LiveUpdate? in
             guard let chName = r.channel_name, let ch = Int(chName),
-                  let now = r.slots.first else { return nil }
+                  let now = r.now else { return nil }
             let details = now.embeds?.details
             let show = decodeEntities(now.broadcast_title ?? "")
             let genre = decodeEntities(details?.genres?.first?.value ?? "")
@@ -188,27 +163,76 @@ enum NTSAPI {
             let background = details?.media?.background_large
             return LiveUpdate(
                 channel: ch, show: show, startEnd: startEnd, genre: genre, background: background,
-                showAlias: details?.show_alias ?? "", episodeAlias: details?.episode_alias ?? "",
-                schedule: r.slots.map { broadcast($0, channel: ch) }
+                showAlias: details?.show_alias ?? "", episodeAlias: details?.episode_alias ?? ""
             )
         }
     }
 
-    private static func broadcast(_ raw: Response.Raw, channel: Int) -> Broadcast {
-        let d = raw.embeds?.details
-        let art = d?.media?.background_medium_large ?? d?.media?.background_large
-        return Broadcast(
-            channel: channel,
-            title: decodeEntities(raw.broadcast_title ?? ""),
-            start: parse(raw.start_timestamp),
-            end: parse(raw.end_timestamp),
-            startEnd: timeRange(raw.start_timestamp, raw.end_timestamp),
-            genres: (d?.genres ?? []).compactMap { $0.value }.map(decodeEntities),
-            location: d?.location_short ?? "",
-            image: art.flatMap { URL(string: $0) },
-            showAlias: d?.show_alias ?? "",
-            episodeAlias: d?.episode_alias ?? ""
-        )
+    // MARK: - Schedule
+
+    /// NTS's published programme grid for one channel: fourteen days of slots,
+    /// each with a real start and end and a link naming the episode filling it.
+    private struct ScheduleResponse: Decodable {
+        let results: [Day]
+        struct Day: Decodable {
+            let date: String?
+            let broadcasts: [Slot]?
+        }
+        struct Slot: Decodable {
+            let broadcast_title: String?
+            let start_timestamp: String?
+            let end_timestamp: String?
+            let links: [Link]?
+        }
+        struct Link: Decodable {
+            let href: String?
+            let rel: String?
+        }
+    }
+
+    /// Fetch a channel's programme grid — fourteen days, roughly sixteen slots a
+    /// day, every one of them named and timed.
+    ///
+    /// This is the whole schedule, not the eighteen slots `/api/v2/live` carries,
+    /// and it names the show and episode on every slot rather than only the first
+    /// two — so nothing here has to be matched back to a show by its title.
+    /// Genres, location and artwork are not in this payload; they come from the
+    /// show index, keyed by the alias each slot supplies.
+    static func schedule(channel: Int) async throws -> [Broadcast] {
+        let url = URL(string: "https://www.nts.live/api/v2/radio/schedule/\(channel)")!
+        let (data, _) = try await URLSession.shared.data(from: url)
+        let decoded = try JSONDecoder().decode(ScheduleResponse.self, from: data)
+
+        return decoded.results.flatMap { day -> [Broadcast] in
+            (day.broadcasts ?? []).map { slot in
+                let (show, episode) = aliases(slot.links)
+                return Broadcast(
+                    channel: channel,
+                    title: decodeEntities(slot.broadcast_title ?? ""),
+                    start: parse(slot.start_timestamp),
+                    end: parse(slot.end_timestamp),
+                    startEnd: timeRange(slot.start_timestamp, slot.end_timestamp),
+                    genres: [],
+                    location: "",
+                    image: nil,
+                    showAlias: show,
+                    episodeAlias: episode
+                )
+            }
+        }
+    }
+
+    /// The show and episode aliases carried by a slot's `details` link, whose
+    /// href is `…/api/v2/shows/<show>/episodes/<episode>`. Empty strings when the
+    /// link is missing or shaped differently — a slot without them still renders,
+    /// it just can't be opened.
+    private static func aliases(_ links: [ScheduleResponse.Link]?) -> (show: String, episode: String) {
+        guard let href = (links ?? []).first(where: { $0.rel == "details" })?.href,
+              let path = URLComponents(string: href)?.path else { return ("", "") }
+        let parts = path.split(separator: "/").map(String.init)
+        guard let i = parts.firstIndex(of: "shows"), parts.count > i + 1 else { return ("", "") }
+        let episode = (parts.count > i + 3 && parts[i + 2] == "episodes") ? parts[i + 3] : ""
+        return (parts[i + 1], episode)
     }
 
     // MARK: - Shows

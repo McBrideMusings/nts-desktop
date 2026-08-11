@@ -118,5 +118,25 @@
             <result type="text" description="The state after closing, as JSON."/>
         </command>
 
+        <command name="open catalog" code="NTSrOPNC"
+                 description="Cover the faceplate with the catalog, the same as clicking the grid button, and optionally choose which list it shows.">
+            <cocoa class="NTSOpenCatalogCommand"/>
+            <parameter name="showing" code="pTAB" type="text" optional="yes"
+                       description="schedule, saved or mixtapes. Defaults to whichever list was last open.">
+                <cocoa key="showing"/>
+            </parameter>
+            <parameter name="searching for" code="pQRY" type="text" optional="yes"
+                       description="A search term. A non-empty term searches shows and mixtapes together instead of showing the list.">
+                <cocoa key="searchingFor"/>
+            </parameter>
+            <result type="text" description="The state after opening, as JSON."/>
+        </command>
+
+        <command name="close catalog" code="NTSrCLSC"
+                 description="Uncover the faceplate, dropping any search term and open detail.">
+            <cocoa class="NTSCloseCatalogCommand"/>
+            <result type="text" description="The state after closing, as JSON."/>
+        </command>
+
     </suite>
 </dictionary>

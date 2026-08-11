@@ -181,10 +181,10 @@ private struct Tile: View {
                 Rectangle()
                     .fill(Theme.hairline(0.05))
                     .aspectRatio(1, contentMode: .fit)
-                    // NTS supplies artwork for the current and next broadcast only,
-                    // and the show index can't reach every show, so some slots
-                    // genuinely have no picture. The mark makes that read as an
-                    // empty sleeve rather than a failed download.
+                    // The schedule carries no artwork and the show index can't
+                    // reach every show, so some slots genuinely have no picture.
+                    // The mark makes that read as an empty sleeve rather than a
+                    // failed download.
                     .overlay { ArtworkPlaceholder() }
                     .overlay {
                         if let url = row.image {

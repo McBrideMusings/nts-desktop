@@ -58,14 +58,30 @@ enum ScriptState {
             "signedIn": m.auth.isAuthenticated,
             "windowVisible": RadioWindowController.scriptTarget?.isWindowVisible ?? false,
             "catalogOpen": m.catalogOpen,
+            // What the catalog is actually listing. Without these, a list that
+            // came back empty and one that was never asked for read the same.
+            "catalogTab": m.catalogTab.rawValue,
+            "catalogQuery": m.query,
+            "catalogRows": m.catalogRows.count,
+            "catalogFirstRows": m.catalogRows.prefix(3).map { "\($0.title) · \($0.meta)" },
             "mixtapeCount": m.catalog.mixtapes.count,
             "channelCount": m.catalog.channels.count,
             // What each channel is airing, readable whatever the app is playing —
             // `sourceName` only ever describes the current source, so with a
             // mixtape on, the rail's contents were unobservable from outside.
+            // `slots` is how much programme grid the channel is holding; the two
+            // counts beside it are how much of it is usable — a slot with no show
+            // alias can't be opened, and one with no artwork renders as an empty
+            // sleeve. Both were unreadable from outside, so a schedule that
+            // silently lost its links looked identical to a healthy one.
             "channels": m.catalog.channels.map { ch -> [String: Any] in
                 ["number": ch.number, "show": ch.show, "startEnd": ch.startEnd,
-                 "slots": ch.upcoming.count]
+                 "slots": ch.upcoming.count,
+                 "slotsWithShow": ch.upcoming.filter { !$0.showAlias.isEmpty }.count,
+                 "slotsWithEpisode": ch.upcoming.filter { !$0.episodeAlias.isEmpty }.count,
+                 "nextSlots": ch.upcoming.prefix(3).map {
+                     "\($0.startEnd) \($0.title) [\($0.showAlias)]"
+                 }]
             },
             // Unwrapped, so consecutive readings show which way the dial turned
             // and by how much — a step of -22.5 and one of +337.5 land the index
@@ -252,6 +268,42 @@ final class NTSCloseWindowCommand: NTSCommand {
     override func performDefaultImplementation() -> Any? {
         run {
             RadioWindowController.scriptTarget?.hide()
+            return true
+        }
+    }
+}
+
+@objc(NTSOpenCatalogCommand)
+final class NTSOpenCatalogCommand: NTSCommand {
+    override func performDefaultImplementation() -> Any? {
+        run {
+            guard let m = AppModel.scriptTarget else { return false }
+            if let name = self.evaluatedArguments?["showing"] as? String,
+               !name.isEmpty {
+                guard let tab = CatalogTab(rawValue: name.lowercased()) else {
+                    self.scriptErrorNumber = -1703   // errAETypeError
+                    self.scriptErrorString = """
+                        \"\(name)\" is not a catalog list. Use \
+                        \(CatalogTab.allCases.map(\.rawValue).joined(separator: ", ")).
+                        """
+                    return false
+                }
+                m.catalogTab = tab
+            }
+            m.query = (self.evaluatedArguments?["searchingFor"] as? String) ?? ""
+            m.detail = nil
+            m.catalogOpen = true
+            return true
+        }
+    }
+}
+
+@objc(NTSCloseCatalogCommand)
+final class NTSCloseCatalogCommand: NTSCommand {
+    override func performDefaultImplementation() -> Any? {
+        run {
+            guard let m = AppModel.scriptTarget, m.catalogOpen else { return true }
+            m.toggleCatalog()
             return true
         }
     }

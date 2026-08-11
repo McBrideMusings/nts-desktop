@@ -33,16 +33,34 @@ The whole app lives in the `mac/` Swift package (root `Makefile`/`admin.toml` ju
 
 ### NTS API limits worth knowing before extending the catalog
 
+- `/api/v2/radio/schedule/{1,2}` is the programme grid: fourteen days per
+  channel, ~16 slots a day, each with `start_timestamp`, `end_timestamp` and a
+  `links[rel=details]` href naming the show and episode. Every slot carries a
+  show alias; about 30% of them (the furthest-out ones) have no episode alias
+  yet. No genres, location or artwork — those come from `ShowIndex` by alias.
 - `/api/v2/live` returns `now` plus `next` … `next17` per channel, but embeds
-  `details` (alias, genres, artwork, location) for only the first two. The other
-  slots are matched to the show index by title.
-- `/api/v2/search` answers 200 with an empty `results` array for every `type`.
-  Search is local; there is no server search to fall back to.
+  `details` (alias, genres, artwork, location) for only the first two. Only
+  `now` is read — the grid above is the schedule.
+- `/api/v2/search` answers 200 with an empty `results` array — even called
+  exactly as nts.live calls it (`?q=…&types[]=show`) with browser headers, and
+  even for terms in its own `metadata.popular_terms`. Search is local; there is
+  no server search to fall back to.
 - `/api/v2/shows` clamps `limit` to 12 and rejects any `offset` above 1000 with
   HTTP 422, so at most 1012 of the ~1733 shows are reachable. `ShowIndex` walks
   what it can and merges in anything the app encounters.
-- There is no favourites endpoint. `/api/v2/users/me`, `/api/v2/favourites` and
-  `/api/v2/users/me/favourites` all answer HTTP 400. Bookmarks are local-only.
+- `sitemap.xml.gz` → `sitemap{1,2}.xml.gz` is the complete public index: 1834
+  show aliases and 89,260 episode URLs in ~1.9MB gzipped, and `robots.txt` is
+  `Allow: /`. Regenerated about daily, so the current day's episodes are missing
+  from it; `/api/v2/collections/recently-added` (newest broadcast first, with
+  `audio_sources`) covers the tail. Every `<lastmod>` is just the generation
+  stamp — use the file's `Last-Modified`/`ETag` for a conditional GET.
+- There is no favourites REST endpoint — `/api/v2/users/me`, `/api/v2/favourites`
+  and `/api/v2/users/me/favourites` return the site's HTML shell, not JSON.
+  nts.live keeps follows and saved episodes in Firestore under the signed-in
+  user (`writeToFavourites`, `favouriteShows`, `favouriteEpisodes`, keyed by
+  show + episode alias), reachable with the same Firebase credentials the
+  tracklist listener already uses. Bookmarks are local-only until that's wired.
+- Every endpoint above is served `cache-control: max-age=900` with an ETag.
 - `mac/Sources/NTSFirestore/` — a Firestore Listen (gRPC) client for live channel/mixtape tracklists, with generated protobuf/gRPC Swift code under `Generated/` and source `.proto` files in `mac/Proto/` (see `mac/Proto/regenerate.sh`)
 - `mac/Sources/FSProbe/` — standalone probe binary, separate from the main app target
 - `mixtapes/<slug>/` — per-mixtape assets checked into the repo (cover art, icons, animation `.mp4`s); the `animation_*.mp4` files are gitignored (kept locally, not tracked — the dial doesn't use them yet)
@@ -65,6 +83,9 @@ The whole app lives in the `mac/` Swift package (root `Makefile`/`admin.toml` ju
   osascript -e 'tell application "NTS Radio" to get state'
   osascript -e 'tell application "NTS Radio" to tune to "mixtape:slow-focus"'
   osascript -e 'tell application "NTS Radio" to skip by 1'
+  osascript -e 'tell application "NTS Radio" to open catalog showing "schedule"'
+  osascript -e 'tell application "NTS Radio" to open catalog searching for "veronica"'
+  osascript -e 'tell application "NTS Radio" to close catalog'
   ```
 
   `tune to` is the code path a click takes; `skip by` is the one the media keys
