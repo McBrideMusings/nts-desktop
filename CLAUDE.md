@@ -46,14 +46,17 @@ The whole app lives in the `mac/` Swift package (root `Makefile`/`admin.toml` ju
   even for terms in its own `metadata.popular_terms`. Search is local; there is
   no server search to fall back to.
 - `/api/v2/shows` clamps `limit` to 12 and rejects any `offset` above 1000 with
-  HTTP 422, so at most 1012 of the ~1733 shows are reachable. `ShowIndex` walks
-  what it can and merges in anything the app encounters.
-- `sitemap.xml.gz` → `sitemap{1,2}.xml.gz` is the complete public index: 1834
-  show aliases and 89,260 episode URLs in ~1.9MB gzipped, and `robots.txt` is
-  `Allow: /`. Regenerated about daily, so the current day's episodes are missing
-  from it; `/api/v2/collections/recently-added` (newest broadcast first, with
-  `audio_sources`) covers the tail. Every `<lastmod>` is just the generation
-  stamp — use the file's `Last-Modified`/`ETag` for a conditional GET.
+  HTTP 422 — at most 1012 of the 1834 shows. Not used: `ShowIndex` seeds from the
+  sitemap instead (below), which has no ceiling.
+- `sitemap.xml.gz` → `sitemap{1,2}.xml.gz` is the complete public index and the
+  source `ShowIndex` builds from: 1834 show aliases and 89,260 episode URLs in
+  ~1.9MB gzipped, three requests, and `robots.txt` is `Allow: /`. Served with
+  `Content-Encoding: gzip`, so URLSession decompresses them and the parser only
+  sees XML. Regenerated about daily, so the current day's shows are missing from
+  it; `/api/v2/collections/recently-added` (newest broadcast first, with
+  `audio_sources`) covers the tail and is polled alongside it. Every `<lastmod>`
+  inside is just the generation stamp — only the file's own `Last-Modified`/
+  `ETag` mean anything.
 - There is no favourites REST endpoint — `/api/v2/users/me`, `/api/v2/favourites`
   and `/api/v2/users/me/favourites` return the site's HTML shell, not JSON.
   nts.live keeps follows and saved episodes in Firestore under the signed-in

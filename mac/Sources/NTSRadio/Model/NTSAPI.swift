@@ -369,19 +369,64 @@ enum NTSAPI {
         var thumb: String? { media?.picture_small ?? media?.picture_thumb ?? picture }
     }
 
-    /// `offset` past this returns HTTP 422, so the shows endpoint only exposes the
-    /// first 1012 of the 1733 shows it reports. The index is capped accordingly and
-    /// the catalog states its own size rather than implying it covers everything.
-    static let showIndexCeiling = 1000
-    /// The endpoint clamps `limit` to 12 whatever you ask for, so paging is fixed
-    /// at 12 and the ceiling above costs ~85 requests to walk.
-    static let showPageSize = 12
+    /// Every show NTS publishes, from its own sitemap.
+    ///
+    /// This replaces walking `/api/v2/shows`, which clamps `limit` to 12 and
+    /// answers `422 Unprocessable Entity: The requested offset is not allowed`
+    /// past `offset=1000` — 85 requests to reach 1012 of them, with the rest
+    /// simply unreachable. The sitemap is the same catalogue with no ceiling:
+    /// 1,834 aliases, ~1.9MB gzipped, three requests including the index that
+    /// names the parts.
+    ///
+    /// The files are served with `Content-Encoding: gzip`, so URLSession
+    /// decompresses them on the way in and this only ever sees XML.
+    static func sitemapShowAliases() async throws -> [String] {
+        let index = try await fetchData(from: URL(string: "https://www.nts.live/sitemap.xml.gz")!,
+                                        endpoint: "sitemap")
+        let parts = locations(in: index).filter { $0.hasSuffix(".xml.gz") }
 
-    /// One page of the show list.
-    static func showPage(offset: Int) async throws -> [ShowRef] {
-        let url = URL(string: "https://www.nts.live/api/v2/shows?offset=\(offset)&limit=\(showPageSize)")!
-        let decoded = try await fetch(ShowEnvelope.self, from: url, endpoint: "shows")
-        return decoded.results.compactMap(showRef)
+        var aliases: Set<String> = []
+        for part in parts {
+            guard let url = URL(string: part) else { continue }
+            let data = try await fetchData(from: url, endpoint: "sitemap")
+            for location in locations(in: data) {
+                // `/shows/<alias>` and `/shows/<alias>/episodes/<episode>` both
+                // name the show; only the first segment is wanted.
+                let parts = location.split(separator: "/").map(String.init)
+                guard let i = parts.firstIndex(of: "shows"), parts.count > i + 1 else { continue }
+                aliases.insert(parts[i + 1])
+            }
+        }
+        return aliases.sorted()
+    }
+
+    /// Every `<loc>` in a sitemap, without pulling in an XML parser for two tags.
+    private static func locations(in data: Data) -> [String] {
+        guard let xml = String(data: data, encoding: .utf8) else { return [] }
+        return xml.components(separatedBy: "<loc>").dropFirst().compactMap {
+            $0.components(separatedBy: "</loc>").first
+        }
+    }
+
+    /// The newest episodes NTS has published, newest broadcast first.
+    ///
+    /// This is what covers the gap the sitemap cannot: it is regenerated about
+    /// daily, so today's shows are missing from it while they are already here.
+    static func recentlyAdded(limit: Int = 24) async throws -> [EpisodeCard] {
+        let url = URL(string: "https://www.nts.live/api/v2/collections/recently-added?offset=0&limit=\(limit)")!
+        let decoded = try await fetch(ShowEnvelope.self, from: url, endpoint: "recently-added")
+        return decoded.results.compactMap { e -> EpisodeCard? in
+            guard let show = e.show_alias, !show.isEmpty else { return nil }
+            return EpisodeCard(
+                showAlias: show,
+                episodeAlias: e.episode_alias ?? "",
+                title: decodeEntities(e.name ?? show).trimmingCharacters(in: .whitespaces),
+                date: e.broadcast.flatMap(parse).map { dayMonthYear.string(from: $0) } ?? "",
+                location: e.location_short ?? "",
+                genres: (e.genres ?? []).compactMap { $0.value }.map(decodeEntities),
+                image: e.picture.flatMap { URL(string: $0) }
+            )
+        }
     }
 
     private static func showRef(_ s: ShowJSON) -> ShowRef? {

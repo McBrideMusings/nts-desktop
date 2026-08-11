@@ -684,13 +684,13 @@ final class AppModel: ObservableObject {
         return rows
     }
 
-    /// The line under the search field — states how much was actually searched,
-    /// because the index cannot reach every show NTS has and a bare result count
-    /// would imply it did.
+    /// The line under the search field — states how much was actually searched.
+    /// The index now covers every show NTS publishes, so this is a statement of
+    /// coverage rather than the apology it used to be.
     var searchScope: String {
         let n = showIndex.count
         if showIndex.building { return "INDEXING SHOWS — \(n) SO FAR" }
-        return "\(catalog.mixtapes.count) MIXTAPES · \(schedule.count) SCHEDULED · \(n) SHOWS INDEXED"
+        return "\(catalog.mixtapes.count) MIXTAPES · \(schedule.count) SCHEDULED · \(n) SHOWS"
     }
 
     // MARK: Saving
