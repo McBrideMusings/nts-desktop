@@ -19,13 +19,22 @@ final class Saved: ObservableObject {
     /// A starred thing. Shows are keyed by alias, mixtapes by alias too; the kind
     /// keeps the two namespaces apart and tells the catalog how to open it.
     struct Item: Codable, Hashable, Identifiable {
-        enum Kind: String, Codable { case show, mixtape }
+        enum Kind: String, Codable { case show, mixtape, episode }
         let kind: Kind
+        /// The show alias for every kind — a mixtape's own alias for `.mixtape`.
         let alias: String
+        /// Set only for `.episode`, where `alias` alone is the show, not the
+        /// saved thing itself.
+        var episodeAlias: String? = nil
         let title: String
         let subtitle: String
         let image: String?
-        var id: String { "\(kind.rawValue):\(alias)" }
+        var id: String {
+            switch kind {
+            case .episode: return "episode:\(alias)/\(episodeAlias ?? "")"
+            default: return "\(kind.rawValue):\(alias)"
+            }
+        }
         var imageURL: URL? { image.flatMap { URL(string: $0) } }
     }
 
@@ -39,6 +48,12 @@ final class Saved: ObservableObject {
 
     func contains(_ kind: Item.Kind, _ alias: String) -> Bool {
         items.contains { $0.kind == kind && $0.alias == alias }
+    }
+
+    /// Same check, but by full identity — the only form that tells two
+    /// episodes of the same show apart.
+    func contains(_ item: Item) -> Bool {
+        items.contains { $0.id == item.id }
     }
 
     /// Star or unstar, returning the new state. The whole list is rewritten on
@@ -73,12 +88,9 @@ final class Saved: ObservableObject {
     /// follows" from "not asked yet".
     @Published private(set) var syncedWithAccount = false
 
-    /// Merge the account's follows into the local list, and register this Mac so
-    /// stars written here are found by the same device lookup nts.live does.
-    ///
-    /// Only shows are merged in. The account also holds saved *episodes*, which
-    /// this list has no row type for yet — they are counted, not dropped, so the
-    /// gap is visible rather than silent.
+    /// Merge the account's follows and saved episodes into the local list, and
+    /// register this Mac so stars written here are found by the same device
+    /// lookup nts.live does.
     func sync() async {
         guard let token = try? await token?() else { return }
         try? await NTSFavourites.registerDevice(token: token)
@@ -99,29 +111,43 @@ final class Saved: ObservableObject {
                                subtitle: indexed?.location ?? "",
                                image: indexed?.picture))
         }
+        // Episodes carry no local index the way shows do, so each one missing
+        // locally is fetched for its real title and artwork — sixteen requests
+        // at most, and only on a sync, not on every launch.
+        for favourite in favourites where favourite.isEpisode {
+            let id = "episode:\(favourite.showAlias)/\(favourite.episodeAlias)"
+            guard !merged.contains(where: { $0.id == id }) else { continue }
+            if let detail = try? await NTSAPI.episode(show: favourite.showAlias, episode: favourite.episodeAlias) {
+                merged.append(Item(kind: .episode, alias: favourite.showAlias,
+                                   episodeAlias: favourite.episodeAlias,
+                                   title: detail.name, subtitle: detail.date,
+                                   image: detail.image?.absoluteString))
+            } else {
+                merged.append(Item(kind: .episode, alias: favourite.showAlias,
+                                   episodeAlias: favourite.episodeAlias,
+                                   title: ShowIndex.title(from: favourite.episodeAlias),
+                                   subtitle: "", image: nil))
+            }
+        }
         guard merged.count != items.count else { return }
         items = merged
         persist()
     }
 
-    /// How many of the account's favourites are episodes — rows this list can't
-    /// hold yet. Shown rather than hidden.
-    var accountEpisodeCount: Int { remote.values.filter(\.isEpisode).count }
-
     private func starOnAccount(_ item: Item) {
         // Mixtapes are this app's own idea of a bookmark; NTS files favourites
         // against shows and episodes only, so there is nowhere to put one.
-        guard item.kind == .show, let token else { return }
+        guard item.kind != .mixtape, let token else { return }
         Task {
             guard let token = try? await token() else { return }
-            try? await NTSFavourites.add(showAlias: item.alias, token: token)
+            try? await NTSFavourites.add(showAlias: item.alias, episodeAlias: item.episodeAlias ?? "", token: token)
         }
     }
 
     private func unstarOnAccount(_ item: Item) {
-        guard item.kind == .show, let token,
-              let favourite = remote[item.alias + ":"] else { return }
-        remote[item.alias + ":"] = nil
+        let key = item.alias + ":" + (item.episodeAlias ?? "")
+        guard item.kind != .mixtape, let token, let favourite = remote[key] else { return }
+        remote[key] = nil
         Task {
             guard let token = try? await token() else { return }
             try? await NTSFavourites.remove(name: favourite.name, token: token)

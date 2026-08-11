@@ -122,35 +122,68 @@ struct CatalogOverlay: View {
     // MARK: Grid
 
     private var grid: some View {
-        let rows = model.catalogRows
-        return ScrollView {
+        ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
-                if !model.query.isEmpty {
-                    HStack {
-                        Text("\(rows.count) MATCH\(rows.count == 1 ? "" : "ES")")
-                        Text("·").opacity(0.5)
-                        Text(model.searchScope)
-                    }
-                    .font(Theme.mono(9, .bold))
-                    .tracking(1.4)
-                    .foregroundStyle(Theme.inkMuted)
-                    .padding(.horizontal, 18)
-                    .padding(.top, 14)
-                }
-
-                if rows.isEmpty {
-                    emptyState
+                // Followed shows and saved episodes are different objects with
+                // different views — a followed show opens to every episode of
+                // it, a saved episode plays on its own — so Saved gets two
+                // lists rather than one grid with a kind badge on each tile.
+                if model.catalogTab == .saved, model.query.isEmpty {
+                    savedSections
                 } else {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 152, maximum: 240), spacing: 14)],
-                              alignment: .leading, spacing: 16) {
-                        ForEach(rows) { row in
-                            Tile(row: row)
-                        }
-                    }
-                    .padding(18)
+                    standardGrid
                 }
             }
         }
+    }
+
+    @ViewBuilder private var standardGrid: some View {
+        let rows = model.catalogRows
+        if !model.query.isEmpty {
+            HStack {
+                Text("\(rows.count) MATCH\(rows.count == 1 ? "" : "ES")")
+                Text("·").opacity(0.5)
+                Text(model.searchScope)
+            }
+            .font(Theme.mono(9, .bold))
+            .tracking(1.4)
+            .foregroundStyle(Theme.inkMuted)
+            .padding(.horizontal, 18)
+            .padding(.top, 14)
+        }
+
+        if rows.isEmpty { emptyState } else { tileGrid(rows) }
+    }
+
+    @ViewBuilder private var savedSections: some View {
+        let rows = model.catalogRows
+        let following = rows.filter { $0.savedItem?.kind != .episode }
+        let episodes = rows.filter { $0.savedItem?.kind == .episode }
+
+        if following.isEmpty, episodes.isEmpty {
+            emptyState
+        } else {
+            if !following.isEmpty {
+                SectionLabel("FOLLOWING · \(following.count)")
+                    .padding(.horizontal, 18).padding(.top, 14)
+                tileGrid(following)
+            }
+            if !episodes.isEmpty {
+                SectionLabel("SAVED EPISODES · \(episodes.count)")
+                    .padding(.horizontal, 18).padding(.top, following.isEmpty ? 14 : 4)
+                tileGrid(episodes)
+            }
+        }
+    }
+
+    private func tileGrid(_ rows: [CatalogRow]) -> some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 152, maximum: 240), spacing: 14)],
+                  alignment: .leading, spacing: 16) {
+            ForEach(rows) { row in
+                Tile(row: row)
+            }
+        }
+        .padding(18)
     }
 
     @ViewBuilder private var emptyState: some View {
@@ -159,7 +192,7 @@ struct CatalogOverlay: View {
                 .font(Theme.ui(13))
                 .foregroundStyle(Theme.inkMuted)
             if model.query.isEmpty, model.catalogTab == .saved {
-                Text("Star a show or a mixtape and it lands here.")
+                Text("Follow a show, star an episode, or bookmark a mixtape and it lands here.")
                     .font(Theme.mono(9))
                     .tracking(1.2)
                     .foregroundStyle(Theme.inkMuted.opacity(0.7))
@@ -292,6 +325,12 @@ private struct ShowDetailPane: View {
 
     private var detail: NTSAPI.ShowDetail? { model.showDetails[alias] }
     private var episodes: [NTSAPI.Episode] { model.showEpisodes[alias] ?? [] }
+    private var episodeCountLabel: String {
+        guard let total = model.showEpisodeTotals[alias], total > episodes.count else {
+            return "\(episodes.count)"
+        }
+        return "\(episodes.count) OF \(total)"
+    }
     private var indexed: NTSAPI.ShowRef? { model.showIndex.ref(alias) }
     private var slot: NTSAPI.Broadcast? { model.schedule.first { $0.showAlias == alias } }
 
@@ -347,9 +386,15 @@ private struct ShowDetailPane: View {
                 actions.padding(.top, 18)
 
                 if !episodes.isEmpty {
-                    SectionLabel("PAST EPISODES · \(episodes.count)").padding(.top, 24)
+                    SectionLabel("PAST EPISODES · \(episodeCountLabel)").padding(.top, 24)
                     ForEach(episodes) { ep in
                         EpisodeRow(episode: ep)
+                            .onAppear {
+                                // Paging is driven by the last row appearing, same
+                                // as Explore's grid — there's no fixed list height
+                                // to measure a scroll offset against.
+                                if ep.id == episodes.last?.id { model.loadMoreEpisodes(for: alias) }
+                            }
                     }
                 }
             }

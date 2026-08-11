@@ -172,9 +172,9 @@
         </command>
 
         <command name="star" code="NTSrSTAR"
-                 description="Star or unstar a show, the same as clicking the star on its tile. Signed in, this also writes to (or deletes from) your NTS account's favourites.">
+                 description="Star or unstar a show or an episode, the same as clicking the star on its tile. Signed in, this also writes to (or deletes from) your NTS account's favourites.">
             <cocoa class="NTSStarCommand"/>
-            <direct-parameter type="text" description="A show alias, e.g. lung-dart."/>
+            <direct-parameter type="text" description="A show alias, e.g. lung-dart, or episode:&lt;show&gt;/&lt;episode&gt;, e.g. episode:lung-dart/lung-dart-10th-august-2026."/>
             <result type="text" description="The state after starring, as JSON."/>
         </command>
 

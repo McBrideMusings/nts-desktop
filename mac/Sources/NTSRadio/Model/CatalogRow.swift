@@ -70,8 +70,8 @@ struct CatalogRow: Identifiable, Hashable {
         live = false
         target = .show(alias: e.showAlias, title: e.title)
         playable = .episode(show: e.showAlias, episode: e.episodeAlias)
-        savedItem = Saved.Item(kind: .show, alias: e.showAlias, title: e.title,
-                               subtitle: e.date, image: e.image?.absoluteString)
+        savedItem = Saved.Item(kind: .episode, alias: e.showAlias, episodeAlias: e.episodeAlias,
+                               title: e.title, subtitle: e.date, image: e.image?.absoluteString)
     }
 
     init(_ m: Mixtape, detent: Int) {
@@ -102,7 +102,11 @@ struct CatalogRow: Identifiable, Hashable {
     init(_ item: Saved.Item) {
         id = "v:\(item.id)"
         title = item.title
-        meta = item.kind == .mixtape ? "MIXTAPE" : "SHOW"
+        switch item.kind {
+        case .show: meta = "SHOW"
+        case .mixtape: meta = "MIXTAPE"
+        case .episode: meta = "EPISODE"
+        }
         image = item.imageURL
         live = false
         switch item.kind {
@@ -112,6 +116,9 @@ struct CatalogRow: Identifiable, Hashable {
         case .mixtape:
             target = .mixtape(alias: item.alias)
             playable = .mixtape(item.alias)
+        case .episode:
+            target = .show(alias: item.alias, title: item.title)
+            playable = .episode(show: item.alias, episode: item.episodeAlias ?? "")
         }
         savedItem = item
     }

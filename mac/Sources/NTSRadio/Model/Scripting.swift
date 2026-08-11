@@ -56,13 +56,11 @@ enum ScriptState {
             "volume": Int(m.volume.rounded()),
             "muted": m.muted,
             "signedIn": m.auth.isAuthenticated,
-            // Whether the account's own follows have actually been read, and how
-            // many of its favourites are episodes this list can't hold yet.
-            // Without these, "no follows on the account" and "never asked" are
-            // the same empty list.
+            // Whether the account's own follows and saved episodes have
+            // actually been read. Without this, "nothing on the account" and
+            // "never asked" are the same empty list.
             "savedCount": m.saved.items.count,
             "syncedWithAccount": m.saved.syncedWithAccount,
-            "accountEpisodeFavourites": m.saved.accountEpisodeCount,
             // An episode takes two requests before any audio exists, either of
             // which can fail. Without these, a stuck resolve and a playing
             // episode both read as "not playing".
@@ -382,16 +380,37 @@ final class NTSStarCommand: NTSCommand {
     override func performDefaultImplementation() -> Any? {
         run {
             guard let m = AppModel.scriptTarget else { return false }
-            let alias = ((self.directParameter as? String) ?? "")
+            let raw = ((self.directParameter as? String) ?? "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !alias.isEmpty else {
+            guard !raw.isEmpty else {
                 self.scriptErrorNumber = -1703   // errAETypeError
-                self.scriptErrorString = "Give a show alias, e.g. star \"lung-dart\"."
+                self.scriptErrorString = """
+                    Give a show alias or episode:<show>/<episode>, e.g. \
+                    star "lung-dart" or star "episode:lung-dart/lung-dart-10th-august-2026".
+                    """
                 return false
             }
-            let indexed = m.showIndex.ref(alias)
-            m.saved.toggle(Saved.Item(kind: .show, alias: alias,
-                                      title: indexed?.name ?? ShowIndex.title(from: alias),
+            // `episode:<show>/<episode>` saves the episode, not its show — the
+            // same distinction `tune to` already makes.
+            if raw.hasPrefix("episode:") {
+                let value = String(raw.dropFirst("episode:".count))
+                let halves = value.split(separator: "/", maxSplits: 1, omittingEmptySubsequences: true)
+                guard halves.count == 2 else {
+                    self.scriptErrorNumber = -1703
+                    self.scriptErrorString = """
+                        episode:<show>/<episode> needs both halves, e.g. \
+                        episode:lung-dart/lung-dart-10th-august-2026.
+                        """
+                    return false
+                }
+                let show = String(halves[0]), episode = String(halves[1])
+                m.saved.toggle(Saved.Item(kind: .episode, alias: show, episodeAlias: episode,
+                                          title: ShowIndex.title(from: episode), subtitle: "", image: nil))
+                return true
+            }
+            let indexed = m.showIndex.ref(raw)
+            m.saved.toggle(Saved.Item(kind: .show, alias: raw,
+                                      title: indexed?.name ?? ShowIndex.title(from: raw),
                                       subtitle: indexed?.location ?? "",
                                       image: indexed?.picture))
             return true

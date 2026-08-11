@@ -60,7 +60,12 @@ final class AppModel: ObservableObject {
     /// Fetched lazily when a show detail opens, keyed by alias so reopening the
     /// same show is instant and a slow fetch can't land under a different show.
     @Published var showDetails: [String: NTSAPI.ShowDetail] = [:]
+    /// Loaded a page at a time as the episode list scrolls — `/shows/<alias>/episodes`
+    /// clamps to 12 regardless of what's asked for, so a show with more than that
+    /// (Lung Dart has 102) needs one request per twelve.
     @Published var showEpisodes: [String: [NTSAPI.Episode]] = [:]
+    @Published private(set) var showEpisodeTotals: [String: Int] = [:]
+    @Published private(set) var showEpisodesLoading = false
 
     @Published var selection: Selection = .idle
     @Published var muted = false { didSet { engine.apply(volume: volume, muted: muted) } }
@@ -702,7 +707,7 @@ final class AppModel: ObservableObject {
 
     func isSaved(_ row: CatalogRow) -> Bool {
         guard let item = row.savedItem else { return false }
-        return saved.contains(item.kind, item.alias)
+        return saved.contains(item)
     }
 
     func toggleSaved(_ row: CatalogRow) {
@@ -724,16 +729,32 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Fetch a show's page and its recent episodes, once. Both are best-effort:
-    /// a failure leaves the detail view on what the schedule row already knew.
+    /// Fetch a show's page and its first page of episodes, once. Both are
+    /// best-effort: a failure leaves the detail view on what the schedule row
+    /// already knew.
     func loadShow(_ alias: String) async {
         if showDetails[alias] == nil, let d = try? await NTSAPI.show(alias: alias) {
             showDetails[alias] = d
             showIndex.note(alias: alias, name: d.name, location: d.location,
                            genres: d.genres, picture: d.image?.absoluteString)
         }
-        if showEpisodes[alias] == nil, let eps = try? await NTSAPI.episodes(alias: alias) {
-            showEpisodes[alias] = eps
+        if showEpisodes[alias] == nil { loadMoreEpisodes(for: alias) }
+    }
+
+    /// Fetch the next twelve episodes of a show, if there are more and nothing
+    /// is already in flight. The episode list calls this as its last row
+    /// appears, same as Explore's grid.
+    func loadMoreEpisodes(for alias: String) {
+        guard !showEpisodesLoading else { return }
+        let loaded = showEpisodes[alias]?.count ?? 0
+        if let total = showEpisodeTotals[alias], loaded >= total { return }
+        showEpisodesLoading = true
+        Task { [weak self] in
+            defer { Task { @MainActor in self?.showEpisodesLoading = false } }
+            guard let page = try? await NTSAPI.episodes(alias: alias, offset: loaded) else { return }
+            guard let self else { return }
+            self.showEpisodes[alias, default: []] += page.episodes
+            self.showEpisodeTotals[alias] = page.total
         }
     }
 

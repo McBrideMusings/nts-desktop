@@ -341,6 +341,11 @@ enum NTSAPI {
 
     private struct ShowEnvelope: Decodable {
         let results: [ShowJSON]
+        let metadata: Metadata?
+        struct Metadata: Decodable {
+            let resultset: Resultset?
+            struct Resultset: Decodable { let count: Int? }
+        }
     }
 
     private struct ShowJSON: Decodable {
@@ -456,10 +461,16 @@ enum NTSAPI {
         )
     }
 
-    static func episodes(alias: String, limit: Int = 12) async throws -> [Episode] {
-        let url = URL(string: "https://www.nts.live/api/v2/shows/\(alias)/episodes?offset=0&limit=\(limit)")!
+    /// One page of a show's episodes, oldest-broadcast-first-among-equals as
+    /// nts.live orders them. `limit` is clamped to 12 by the server whatever is
+    /// asked for, but unlike `/api/v2/shows` an offset past the end just answers
+    /// with zero results rather than 422 — so `total` (from
+    /// `metadata.resultset.count`) is how a caller knows when to stop paging.
+    static func episodes(alias: String, offset: Int = 0, limit: Int = 12) async throws
+        -> (episodes: [Episode], total: Int) {
+        let url = URL(string: "https://www.nts.live/api/v2/shows/\(alias)/episodes?offset=\(offset)&limit=\(limit)")!
         let decoded = try await fetch(ShowEnvelope.self, from: url, endpoint: "episodes")
-        return decoded.results.map { e in
+        let episodes = decoded.results.map { e in
             Episode(
                 name: decodeEntities(e.name ?? "").trimmingCharacters(in: .whitespaces),
                 date: e.broadcast.flatMap(parse).map { dayMonthYear.string(from: $0) } ?? "",
@@ -468,6 +479,7 @@ enum NTSAPI {
                 image: (e.thumb ?? e.picture).flatMap { URL(string: $0) }
             )
         }
+        return (episodes, decoded.metadata?.resultset?.count ?? episodes.count)
     }
 
     // MARK: - Episodes on demand
