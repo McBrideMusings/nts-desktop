@@ -6,6 +6,13 @@ struct TracklistOverlay: View {
 
     private static let colDim = Color(hex: 0x6f6f6b)   // column-header / faint label
 
+    /// Which row is "now playing" — `AppModel.currentTrack`, resolved to its
+    /// index in the list this view is actually iterating.
+    private var currentIndex: Int? {
+        guard let current = model.currentTrack else { return nil }
+        return model.tracks.firstIndex(of: current)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Header: small label + now-playing block (title + subtitle) + close.
@@ -44,7 +51,7 @@ struct TracklistOverlay: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         ForEach(Array(model.tracks.enumerated()), id: \.element.id) { idx, track in
-                            TrackRow(track: track, playing: idx == 0)
+                            TrackRow(track: track, playing: idx == currentIndex)
                         }
                     }
                 }

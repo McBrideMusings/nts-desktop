@@ -261,7 +261,23 @@ final class AppModel: ObservableObject {
         currentMixtape?.accent ?? currentChannel?.accent ?? Theme.ink
     }
 
-    var tracksLabel: String { isLive ? "TRACKLIST" : "RECENTLY PLAYED" }
+    /// A past episode's tracklist is the whole thing, known up front — not a
+    /// live feed's rolling history, so it reads the same as a channel's.
+    var tracksLabel: String {
+        if case .episode = selection { return "TRACKLIST" }
+        return isLive ? "TRACKLIST" : "RECENTLY PLAYED"
+    }
+
+    /// Which track is "now playing". A live push already lists newest-first, so
+    /// it's the top row; a past episode's tracklist is the whole thing at once,
+    /// known up front, so this picks it out by the seek position instead — the
+    /// last track whose start the playhead has already passed.
+    var currentTrack: Track? {
+        if case .episode = selection {
+            return tracks.last { ($0.offsetSeconds ?? 0) <= engine.position }
+        }
+        return tracks.first
+    }
 
     // MARK: Actions
 
@@ -417,6 +433,10 @@ final class AppModel: ObservableObject {
                 // landing this audio then would start the wrong thing playing.
                 guard self.selection == .episode(show: show, episode: episode) else { return }
                 self.episode = detail
+                // Not a Firestore stream — the whole tracklist is already here,
+                // known in advance rather than revealed as it airs, so it goes
+                // straight in rather than through `receive`'s live-buffer delay.
+                self.publish(TracklistAdapter.tracks(from: detail.tracklist, hue: 0))
                 self.engine.load(stream, autoplay: autoplay)
             } catch {
                 guard !Task.isCancelled, let self else { return }

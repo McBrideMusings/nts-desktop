@@ -10,6 +10,11 @@ struct Track: Identifiable, Hashable {
     let title: String
     let artist: String
     let hue: Double
+    /// Seconds into the recording, for a past episode's tracklist only — nil for
+    /// a live push, which has no seek position to highlight against. What picks
+    /// out "now playing" in a fixed, known-in-advance list instead of always
+    /// being the first row.
+    var offsetSeconds: Double? = nil
 
     /// What the track is, rather than which instance it is. Every Firestore push
     /// rebuilds the whole list, so `id` — and `==` along with it — is fresh each

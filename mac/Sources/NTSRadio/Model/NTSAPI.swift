@@ -360,7 +360,22 @@ enum NTSAPI {
         let broadcast: String?
         let external_links: [String]?
         let audio_sources: [AudioSource]?
+        let embeds: Embeds?
         struct AudioSource: Decodable { let url: String? }
+        /// A past episode's tracklist, when NTS has one on file — the same data
+        /// nts.live's own "Tracklist" tab reads. Absent for a lot of older or
+        /// unidentified episodes, present for anything Shazam-style track ID has
+        /// run against; `EpisodeDetail` treats a missing one as an empty list
+        /// rather than a failure.
+        struct Embeds: Decodable {
+            let tracklist: Tracklist?
+            struct Tracklist: Decodable { let results: [TrackJSON]? }
+        }
+        struct TrackJSON: Decodable {
+            let artist: String?
+            let title: String?
+            let offset: Double?
+        }
         struct Media: Decodable {
             let picture_medium_large: String?
             let picture_medium: String?
@@ -499,6 +514,10 @@ enum NTSAPI {
         let date: String
         let image: URL?
         let audioSources: [URL]
+        /// Ordered by `offset`, earliest first — empty when NTS has no ID'd
+        /// tracklist for this episode, which is common for older or spoken-word
+        /// shows and is not an error.
+        let tracklist: [EpisodeTrack]
 
         var pageURL: URL? {
             guard !showAlias.isEmpty, !episodeAlias.isEmpty else { return nil }
@@ -506,9 +525,24 @@ enum NTSAPI {
         }
     }
 
+    /// One row of a past episode's tracklist: who and what, and how far into the
+    /// recording it starts — the offset is what lets a saved episode's tracklist
+    /// highlight the same way a live one does, off the seek position instead of
+    /// the live edge.
+    struct EpisodeTrack: Hashable {
+        let artist: String
+        let title: String
+        let offsetSeconds: Double
+    }
+
     static func episode(show: String, episode: String) async throws -> EpisodeDetail {
         let url = URL(string: "https://www.nts.live/api/v2/shows/\(show)/episodes/\(episode)")!
         let e = try await fetch(ShowJSON.self, from: url, endpoint: "episode")
+        let tracklist = (e.embeds?.tracklist?.results ?? []).map {
+            EpisodeTrack(artist: decodeEntities($0.artist ?? "").trimmingCharacters(in: .whitespaces),
+                        title: decodeEntities($0.title ?? "").trimmingCharacters(in: .whitespaces),
+                        offsetSeconds: $0.offset ?? 0)
+        }
         return EpisodeDetail(
             showAlias: e.show_alias ?? show,
             episodeAlias: e.episode_alias ?? episode,
@@ -518,7 +552,8 @@ enum NTSAPI {
             location: e.location_short ?? "",
             date: e.broadcast.flatMap(parse).map { dayMonthYear.string(from: $0) } ?? "",
             image: (e.picture).flatMap { URL(string: $0) },
-            audioSources: (e.audio_sources ?? []).compactMap { $0.url.flatMap(URL.init(string:)) }
+            audioSources: (e.audio_sources ?? []).compactMap { $0.url.flatMap(URL.init(string:)) },
+            tracklist: tracklist
         )
     }
 

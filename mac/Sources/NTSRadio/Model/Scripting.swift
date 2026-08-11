@@ -36,7 +36,7 @@ enum ScriptState {
         guard let m = AppModel.scriptTarget else {
             return #"{"running":false}"#
         }
-        let track = m.tracks.first
+        let track = m.currentTrack
         let dict: [String: Any] = [
             "running": true,
             "playing": m.isPlaying,

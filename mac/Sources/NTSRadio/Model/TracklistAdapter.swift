@@ -47,6 +47,18 @@ enum TracklistAdapter {
         }
     }
 
+    /// A past episode's own tracklist, already ordered earliest-first. The time
+    /// column reads as a position in the recording (`SeekBar`'s own clock),
+    /// unlike a live push's wall-clock time — there is no broadcast time to show,
+    /// only where the seek bar would need to be.
+    static func tracks(from episode: [NTSAPI.EpisodeTrack], hue: Double) -> [Track] {
+        episode.compactMap { t in
+            t.title.isEmpty ? nil
+                : Track(time: SeekBar.clock(t.offsetSeconds), title: t.title, artist: t.artist,
+                        hue: hue, offsetSeconds: t.offsetSeconds)
+        }
+    }
+
     private static let hhmm: DateFormatter = {
         let f = DateFormatter(); f.dateFormat = "HH:mm"; return f
     }()
