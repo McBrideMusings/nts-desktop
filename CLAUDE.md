@@ -59,12 +59,16 @@ The whole app lives in the `mac/` Swift package (root `Makefile`/`admin.toml` ju
   `ETag` mean anything.
 - There is no favourites REST endpoint — `/api/v2/users/me`, `/api/v2/favourites`
   and `/api/v2/users/me/favourites` return the site's HTML shell, not JSON.
-  Favourites live in two top-level Firestore collections, and **a favourite
-  belongs to a device, not a user**: `favourites` holds
-  `{show_alias, episode_alias, device_id, created_at}`, and `user_devices` (doc
-  id = installation id) holds `{device_id, firebase_user_uid, …}`. Reading an
-  account's stars means looking up its devices, then querying `favourites` for
-  `device_id IN [those]`. `NTSFavourites` does this over Firestore's REST API
+  Favourites live in two top-level Firestore collections: `favourites` holds
+  `{show_alias, episode_alias, device_id, created_at, session}` — follows are the
+  rows with an empty `episode_alias`, saved episodes the rest — and `user_devices`
+  (doc id = installation id) holds `{device_id, firebase_user_uid, …}`.
+  **`device_id` is a misnomer**: nts.live fills it with
+  `getUserUid() || getInstallationId() || gaClientId`, so while signed in it is
+  the Firebase uid, which is why favourites follow you across browsers. The
+  installation id only carries stars made before signing in, and `user_devices`
+  is how those are found later. Read `device_id IN [uid] + registered
+  installation ids`; write `device_id = uid`. `NTSFavourites` does this over Firestore's REST API
   with the Firebase ID token; the gRPC client in `NTSFirestore` is Listen-only.
   **No `orderBy` in those queries** — filtering one field and ordering by
   another needs a composite index that does not exist in NTS's project, and

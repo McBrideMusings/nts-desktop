@@ -12,12 +12,20 @@ import Foundation
 /// - `user_devices` — doc id is an installation id, holding
 ///   `{ device_id, firebase_user_uid, device_description, created_at }`
 ///
-/// Note what that means: **a favourite belongs to a device, not to a user.**
-/// nts.live reads yours by looking up every device registered to your Firebase
-/// uid and then querying `favourites` for `device_id in [those]`. So this app
-/// registers itself as one more of your devices, writes its own favourites
-/// under that id, and reads across all of them — which is how a show starred on
-/// the website or the phone shows up here.
+/// The field named `device_id` is the trap. nts.live fills it with
+///
+///     getUserUid() || getInstallationId() || gaClientId
+///
+/// so for anyone signed in it holds **the Firebase user uid**, not a device at
+/// all — which is why favourites follow you between browsers with no device
+/// registry involved. The installation id is only the fallback for someone who
+/// stars something before signing in, and `user_devices` is how those orphaned
+/// ids are later found and read alongside the uid.
+///
+/// So this writes `device_id = uid`, exactly as the website does, and reads
+/// `device_id IN [uid] + any installation ids registered to the account`.
+/// Writing a per-Mac id here instead would have produced favourites nothing
+/// else could see.
 ///
 /// This talks Firestore's REST API rather than the gRPC client in
 /// `NTSFirestore`: that one is a Listen (streaming read) client for tracklists,
@@ -53,10 +61,10 @@ enum NTSFavourites {
         "https://firestore.googleapis.com/v1/projects/\(project)/databases/(default)/documents"
     }
 
-    /// This Mac's device id, generated once and kept. It is the id the account's
-    /// `user_devices` entry is filed under, so it has to survive relaunch or
-    /// every launch would look like a new device and strand the last one's stars.
-    static var deviceID: String {
+    /// This installation's own id, kept only for the `user_devices` row. It is
+    /// *not* what favourites are filed under while signed in — see the note
+    /// above — so nothing depends on it matching anything the website knows.
+    static var installationID: String {
         if let existing = UserDefaults.standard.string(forKey: "ntsDeviceID") { return existing }
         let fresh = UUID().uuidString
         UserDefaults.standard.set(fresh, forKey: "ntsDeviceID")
@@ -101,14 +109,15 @@ enum NTSFavourites {
             ],
         ]
         let rows = try await runQuery(collection: "user_devices", where: filter, token: token)
-        let ids = rows.compactMap { doc -> String? in
+        let installations = rows.compactMap { doc -> String? in
             guard let fields = doc["fields"] as? [String: Any] else { return nil }
             let id = string(fields["device_id"])
             return id.isEmpty ? nil : id
         }
-        // This Mac may not be registered yet — include it so a star written here
-        // is readable here even before the registration lands.
-        return ids.contains(deviceID) ? ids : ids + [deviceID]
+        // The uid first: that is where every favourite made while signed in
+        // lives, on every browser and every phone. The installation ids only
+        // carry stars made before signing in.
+        return [uid] + installations.filter { $0 != uid }
     }
 
     // MARK: Writing
@@ -118,24 +127,32 @@ enum NTSFavourites {
     static func registerDevice(token: String) async throws {
         let uid = try accountID(from: token)
         let fields: [String: Any] = [
-            "device_id": ["stringValue": deviceID],
+            "device_id": ["stringValue": installationID],
             "firebase_user_uid": ["stringValue": uid],
             "device_description": ["stringValue": "NTS Radio for Mac"],
             "created_at": ["timestampValue": timestamp()],
         ]
         // PATCH with the id in the path is Firestore's create-or-update; the
-        // device is the same device every launch, so this must not make a new row.
-        _ = try await send("PATCH", path: "\(root)/user_devices/\(deviceID)",
+        // installation is the same one every launch, so this must not make a
+        // new row.
+        _ = try await send("PATCH", path: "\(root)/user_devices/\(installationID)",
                            body: ["fields": fields], token: token)
     }
 
     /// Star something on the account.
     static func add(showAlias: String, episodeAlias: String = "", token: String) async throws {
+        let uid = try accountID(from: token)
         let fields: [String: Any] = [
             "show_alias": ["stringValue": showAlias],
             "episode_alias": ["stringValue": episodeAlias],
-            "device_id": ["stringValue": deviceID],
+            // The uid, because that is what the website files its own under and
+            // what its reader queries for. A per-Mac id here would be invisible
+            // everywhere but here.
+            "device_id": ["stringValue": uid],
             "created_at": ["timestampValue": timestamp()],
+            // The website hangs a session map off every favourite. Only the uid
+            // in it is meaningful to anything that reads these back.
+            "session": ["mapValue": ["fields": ["firebase_user_uid": ["stringValue": uid]]]],
         ]
         _ = try await send("POST", path: "\(root)/favourites",
                            body: ["fields": fields], token: token)
