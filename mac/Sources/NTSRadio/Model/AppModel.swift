@@ -203,9 +203,11 @@ final class AppModel: ObservableObject {
 
     // MARK: Actions
 
-    func select(_ s: Selection) {
+    /// Tune to a source. Picking one is a request to hear it, so this starts
+    /// playback by default; the media keys and the snapshot renderer opt out.
+    func select(_ s: Selection, autoplay: Bool = true) {
         selection = s
-        loadCurrent(autoplay: engine.isPlaying)
+        loadCurrent(autoplay: autoplay)
         updateTracklist()
         updateMixtapeTitle()
     }
@@ -288,7 +290,7 @@ final class AppModel: ObservableObject {
     /// what the next/previous-track buttons on a headset do. The two live
     /// channels toggle between themselves; mixtapes walk the dial and wrap
     /// around at both ends. Idle does nothing: there's no group to walk yet.
-    /// Playing state carries over, matching a click on the dial.
+    /// Playing state carries over: skipping while paused stays paused.
     func step(by delta: Int) {
         switch selection {
         case .idle:
@@ -296,11 +298,11 @@ final class AppModel: ObservableObject {
         case .channel(let number):
             let all = catalog.channels
             guard let i = all.firstIndex(where: { $0.number == number }) else { return }
-            select(.channel(all[wrap(i + delta, all.count)].number))
+            select(.channel(all[wrap(i + delta, all.count)].number), autoplay: engine.isPlaying)
         case .mixtape(let alias):
             let all = catalog.mixtapes
             guard let i = all.firstIndex(where: { $0.alias == alias }) else { return }
-            select(.mixtape(all[wrap(i + delta, all.count)].alias))
+            select(.mixtape(all[wrap(i + delta, all.count)].alias), autoplay: engine.isPlaying)
         }
     }
 
@@ -429,8 +431,8 @@ final class AppModel: ObservableObject {
     /// channel it will air on rather than pretending to seek.
     func play(_ row: CatalogRow) {
         switch row.playable {
-        case .channel(let n): select(.channel(n)); loadCurrent(autoplay: true)
-        case .mixtape(let alias): select(.mixtape(alias)); loadCurrent(autoplay: true)
+        case .channel(let n): select(.channel(n))
+        case .mixtape(let alias): select(.mixtape(alias))
         case .none: break
         }
     }

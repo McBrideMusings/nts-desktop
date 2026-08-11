@@ -77,10 +77,10 @@ enum Snapshot {
         // Default launch state is now idle — nothing selected (empty center, idle
         // now-playing bar). This shot verifies that empty state.
         shot("01-default-mix-dial.png") { seedChannels($0); seedMixtapes($0) }
-        shot("02-channel1-live.png") { seedChannels($0); seedMixtapes($0); $0.select(.channel(1)) }
+        shot("02-channel1-live.png") { seedChannels($0); seedMixtapes($0); $0.select(.channel(1), autoplay: false) }
         shot("03-tracklist.png") {
             $0.catalog.mixtapes = [sampleMix]
-            $0.select(.mixtape("rap-house"))
+            $0.select(.mixtape("rap-house"), autoplay: false)
             $0.tracks = sampleTracks
             $0.showTracks = true
         }
@@ -99,7 +99,7 @@ enum Snapshot {
                     streamURL: t.streamURL, coverURL: t.coverURL, iconURL: t.iconURL,
                     animationURL: t.animationURL, hue: t.hue, credits: t.credits)
             }
-            m.select(.mixtape("4-to-the-floor"))
+            m.select(.mixtape("4-to-the-floor"), autoplay: false)
         }
 
         // The rail's arrangement is decided by the window's proportions, so the
@@ -116,7 +116,7 @@ enum Snapshot {
             ("13-shape-wide-1440x520.png",     CGSize(width: 1440, height: 520)),
         ]
         for (name, size) in shapes {
-            shot(name, size: size) { seedChannels($0); seedMixtapes($0); $0.select(.channel(1)) }
+            shot(name, size: size) { seedChannels($0); seedMixtapes($0); $0.select(.channel(1), autoplay: false) }
         }
 
         // The catalog is deliberately not snapshotted. `ImageRenderer` lays a
