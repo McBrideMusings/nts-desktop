@@ -67,6 +67,11 @@ struct PopoverView: View {
             .overlay { if model.catalogOpen { CatalogOverlay() } }
             .animation(.easeOut(duration: 0.18), value: model.catalogOpen)
 
+            // Above the now-playing bar rather than inside the catalog: an
+            // outage stales the faceplate too — the channel cards are what
+            // `/api/v2/live` fills — and the catalog is not always open.
+            if !model.catalogOpen { ServiceBanner() }
+
             NowPlayingBar(width: windowWidth)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

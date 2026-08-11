@@ -16,6 +16,7 @@ struct CatalogOverlay: View {
         VStack(spacing: 0) {
             header
             Rectangle().fill(Theme.hairline(0.08)).frame(height: 1)
+            ServiceBanner()
 
             if let detail = model.detail {
                 ScrollView { DetailPane(detail: detail) }

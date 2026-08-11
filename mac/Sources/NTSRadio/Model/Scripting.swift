@@ -62,6 +62,13 @@ enum ScriptState {
             "episodeLoading": m.episodeLoading,
             "episodeError": m.episodeError ?? "",
             "episodeStream": m.engine.currentURLString,
+            // Whether nts.live is answering. A stale catalog and a healthy one
+            // hold the same contents, so this is the only way a script can tell
+            // "nothing new" from "nothing got through".
+            "outage": ServiceStatus.shared.outage.map {
+                ["what": $0.what, "headline": $0.headline, "detail": $0.detail,
+                 "endpoint": $0.endpoint, "failures": $0.failures] as [String: Any]
+            } ?? [:],
             "windowVisible": RadioWindowController.scriptTarget?.isWindowVisible ?? false,
             "catalogOpen": m.catalogOpen,
             // What the catalog is actually listing. Without these, a list that

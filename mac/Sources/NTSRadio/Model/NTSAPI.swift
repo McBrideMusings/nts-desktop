@@ -3,6 +3,68 @@ import Foundation
 /// Minimal client for NTS's public live endpoint. Best-effort + defensive:
 /// every field is optional, and anything that doesn't parse is just omitted.
 enum NTSAPI {
+
+    // MARK: - Requests
+
+    enum APIError: LocalizedError {
+        /// nts.live answered, but not with what was asked for.
+        case http(Int)
+        /// nts.live answered 200 with a body this app can't read.
+        case malformed
+        case noAudio
+        case tokenMissing
+
+        var errorDescription: String? {
+            switch self {
+            case .http(let code):  return "nts.live answered HTTP \(code)."
+            case .malformed:       return "nts.live sent something this app couldn’t read."
+            case .noAudio:         return "This episode has no audio on NTS."
+            case .tokenMissing:    return "Could not read nts.live’s stream token."
+            }
+        }
+    }
+
+    /// Every request to nts.live goes through here.
+    ///
+    /// Not for tidiness: each call site used to swallow its own error with
+    /// `try?`, so a schedule that had silently stopped refreshing was
+    /// indistinguishable from one where nothing had changed. Funnelling them
+    /// means each failure is logged once and reported to `ServiceStatus` once,
+    /// and callers keep deciding for themselves whether to carry on with stale
+    /// data — they just can't do it silently any more.
+    ///
+    /// `endpoint` is the short name the banner and the log use, not a URL.
+    private static func fetch<T: Decodable>(_ type: T.Type,
+                                            from url: URL,
+                                            endpoint: String,
+                                            headers: [String: String] = [:]) async throws -> T {
+        let data = try await fetchData(from: url, endpoint: endpoint, headers: headers)
+        do {
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch {
+            await ServiceStatus.shared.failed(endpoint, APIError.malformed)
+            throw APIError.malformed
+        }
+    }
+
+    private static func fetchData(from url: URL,
+                                  endpoint: String,
+                                  headers: [String: String] = [:]) async throws -> Data {
+        var request = URLRequest(url: url)
+        for (field, value) in headers { request.setValue(value, forHTTPHeaderField: field) }
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard (200..<300).contains(code) else { throw APIError.http(code) }
+            Log.api.debug("\(endpoint, privacy: .public) ok, \(data.count) bytes")
+            await ServiceStatus.shared.succeeded(endpoint)
+            return data
+        } catch {
+            await ServiceStatus.shared.failed(endpoint, error)
+            throw error
+        }
+    }
+
     struct LiveUpdate {
         let channel: Int
         let show: String
@@ -124,8 +186,7 @@ enum NTSAPI {
     /// URL are dropped; everything else is best-effort optional.
     static func mixtapes() async throws -> [MixtapeFeed] {
         let url = URL(string: "https://www.nts.live/api/v2/mixtapes")!
-        let (data, _) = try await URLSession.shared.data(from: url)
-        let decoded = try JSONDecoder().decode(MixtapeResponse.self, from: data)
+        let decoded = try await fetch(MixtapeResponse.self, from: url, endpoint: "mixtapes")
 
         return decoded.results.compactMap { e -> MixtapeFeed? in
             guard let stream = e.audio_stream_endpoint_hls_aac else { return nil }
@@ -150,8 +211,7 @@ enum NTSAPI {
 
     static func live() async throws -> [LiveUpdate] {
         let url = URL(string: "https://www.nts.live/api/v2/live")!
-        let (data, _) = try await URLSession.shared.data(from: url)
-        let decoded = try JSONDecoder().decode(Response.self, from: data)
+        let decoded = try await fetch(Response.self, from: url, endpoint: "live")
 
         return decoded.results.compactMap { r -> LiveUpdate? in
             guard let chName = r.channel_name, let ch = Int(chName),
@@ -200,8 +260,7 @@ enum NTSAPI {
     /// show index, keyed by the alias each slot supplies.
     static func schedule(channel: Int) async throws -> [Broadcast] {
         let url = URL(string: "https://www.nts.live/api/v2/radio/schedule/\(channel)")!
-        let (data, _) = try await URLSession.shared.data(from: url)
-        let decoded = try JSONDecoder().decode(ScheduleResponse.self, from: data)
+        let decoded = try await fetch(ScheduleResponse.self, from: url, endpoint: "schedule")
 
         return decoded.results.flatMap { day -> [Broadcast] in
             (day.broadcasts ?? []).map { slot in
@@ -321,8 +380,7 @@ enum NTSAPI {
     /// One page of the show list.
     static func showPage(offset: Int) async throws -> [ShowRef] {
         let url = URL(string: "https://www.nts.live/api/v2/shows?offset=\(offset)&limit=\(showPageSize)")!
-        let (data, _) = try await URLSession.shared.data(from: url)
-        let decoded = try JSONDecoder().decode(ShowEnvelope.self, from: data)
+        let decoded = try await fetch(ShowEnvelope.self, from: url, endpoint: "shows")
         return decoded.results.compactMap(showRef)
     }
 
@@ -340,8 +398,7 @@ enum NTSAPI {
 
     static func show(alias: String) async throws -> ShowDetail {
         let url = URL(string: "https://www.nts.live/api/v2/shows/\(alias)")!
-        let (data, _) = try await URLSession.shared.data(from: url)
-        let s = try JSONDecoder().decode(ShowJSON.self, from: data)
+        let s = try await fetch(ShowJSON.self, from: url, endpoint: "show")
         return ShowDetail(
             alias: alias,
             name: decodeEntities(s.name ?? alias).trimmingCharacters(in: .whitespaces),
@@ -356,8 +413,7 @@ enum NTSAPI {
 
     static func episodes(alias: String, limit: Int = 12) async throws -> [Episode] {
         let url = URL(string: "https://www.nts.live/api/v2/shows/\(alias)/episodes?offset=0&limit=\(limit)")!
-        let (data, _) = try await URLSession.shared.data(from: url)
-        let decoded = try JSONDecoder().decode(ShowEnvelope.self, from: data)
+        let decoded = try await fetch(ShowEnvelope.self, from: url, endpoint: "episodes")
         return decoded.results.map { e in
             Episode(
                 name: decodeEntities(e.name ?? "").trimmingCharacters(in: .whitespaces),
@@ -395,8 +451,7 @@ enum NTSAPI {
 
     static func episode(show: String, episode: String) async throws -> EpisodeDetail {
         let url = URL(string: "https://www.nts.live/api/v2/shows/\(show)/episodes/\(episode)")!
-        let (data, _) = try await URLSession.shared.data(from: url)
-        let e = try JSONDecoder().decode(ShowJSON.self, from: data)
+        let e = try await fetch(ShowJSON.self, from: url, endpoint: "episode")
         return EpisodeDetail(
             showAlias: e.show_alias ?? show,
             episodeAlias: e.episode_alias ?? episode,
@@ -412,20 +467,6 @@ enum NTSAPI {
 
     // MARK: - Playable streams
 
-    enum StreamError: LocalizedError {
-        case noAudio
-        case tokenMissing
-        case refused(Int)
-
-        var errorDescription: String? {
-            switch self {
-            case .noAudio:          return "This episode has no audio on NTS."
-            case .tokenMissing:     return "Could not read nts.live's stream token."
-            case .refused(let code): return "nts.live refused the stream (HTTP \(code))."
-            }
-        }
-    }
-
     /// Turn an episode's SoundCloud/Mixcloud page into a playable HLS URL.
     ///
     /// `/api/v2/resolve-stream` answers 401 without an `Authorization: Basic`
@@ -435,28 +476,29 @@ enum NTSAPI {
     static func resolveStream(_ source: URL) async throws -> URL {
         do {
             return try await resolve(source, token: await siteToken())
-        } catch StreamError.refused(401) {
+        } catch APIError.http(401) {
             // The token rotated under us. Re-read it from the site and retry once
             // rather than making the user restart the app.
+            Log.player.notice("resolve-stream 401 — re-reading the site token")
             cachedToken = nil
             return try await resolve(source, token: await siteToken())
         }
     }
 
+    private struct Resolved: Decodable { let hls: String? }
+
     private static func resolve(_ source: URL, token: String) async throws -> URL {
         var components = URLComponents(string: "https://www.nts.live/api/v2/resolve-stream")!
         components.queryItems = [URLQueryItem(name: "url", value: source.absoluteString)]
-        var request = URLRequest(url: components.url!)
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("Basic \(token)", forHTTPHeaderField: "Authorization")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard code == 200 else { throw StreamError.refused(code) }
-
-        struct Resolved: Decodable { let hls: String? }
-        guard let hls = try JSONDecoder().decode(Resolved.self, from: data).hls,
-              let url = URL(string: hls) else { throw StreamError.refused(code) }
+        let resolved = try await fetch(Resolved.self, from: components.url!,
+                                       endpoint: "resolve-stream",
+                                       headers: ["Accept": "application/json",
+                                                 "Authorization": "Basic \(token)"])
+        guard let hls = resolved.hls, let url = URL(string: hls) else {
+            await ServiceStatus.shared.failed("resolve-stream", APIError.malformed)
+            throw APIError.malformed
+        }
         return url
     }
 
@@ -471,11 +513,14 @@ enum NTSAPI {
     /// plays an episode never fetches it.
     private static func siteToken() async throws -> String {
         if let cachedToken { return cachedToken }
-        let (data, _) = try await URLSession.shared.data(from: URL(string: "https://www.nts.live/")!)
+        let data = try await fetchData(from: URL(string: "https://www.nts.live/")!, endpoint: "site-token")
         guard let html = String(data: data, encoding: .utf8),
               let range = html.range(of: #""NTS_API_TOKEN":"[^"]+""#, options: .regularExpression),
               let token = html[range].split(separator: "\"").last.map(String.init)
-        else { throw StreamError.tokenMissing }
+        else {
+            await ServiceStatus.shared.failed("site-token", APIError.tokenMissing)
+            throw APIError.tokenMissing
+        }
         cachedToken = token
         return token
     }

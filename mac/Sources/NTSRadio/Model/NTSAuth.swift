@@ -196,7 +196,7 @@ private enum Keychain {
         var payload: [String: String] = ["refreshToken": refreshToken]
         if let email { payload["email"] = email }
         guard let data = try? JSONSerialization.data(withJSONObject: payload) else {
-            print("[Keychain] could not encode the refresh token — not persisted")
+            Log.auth.error("could not encode the refresh token — not persisted")
             return
         }
         let query: [String: Any] = [
@@ -208,7 +208,7 @@ private enum Keychain {
         // the expected case here rather than a failure.
         let deleted = SecItemDelete(query as CFDictionary)
         if deleted != errSecSuccess, deleted != errSecItemNotFound {
-            print("[Keychain] could not replace the stored token: \(message(deleted))")
+            Log.auth.error("could not replace the stored token: \(message(deleted), privacy: .public)")
         }
         var add = query
         add[kSecValueData as String] = data
@@ -218,8 +218,10 @@ private enum Keychain {
             // This is the one that matters. The session keeps working now, because
             // the token is still in memory — but nothing reaches disk, so the next
             // launch finds no token and the user is silently signed out.
-            print("[Keychain] could not store the refresh token: \(message(added)) — "
-                  + "this session will work, but sign-in will not survive a relaunch")
+            Log.auth.error("""
+                could not store the refresh token: \(message(added), privacy: .public) — this \
+                session will work, but sign-in will not survive a relaunch
+                """)
         }
     }
 
@@ -249,7 +251,7 @@ private enum Keychain {
         // token on disk after signing out, so the next launch signs back in.
         let status = SecItemDelete(query as CFDictionary)
         if status != errSecSuccess, status != errSecItemNotFound {
-            print("[Keychain] could not clear the stored token: \(message(status))")
+            Log.auth.error("could not clear the stored token: \(message(status), privacy: .public)")
         }
     }
 }

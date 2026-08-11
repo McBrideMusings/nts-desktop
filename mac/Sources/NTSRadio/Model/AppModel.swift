@@ -192,7 +192,10 @@ final class AppModel: ObservableObject {
 
     var displayName: String {
         if case .episode = selection {
-            return (episode?.name ?? "LOADING…").uppercased()
+            if let name = episode?.name, !name.isEmpty { return name.uppercased() }
+            // Nothing arrived, so there is no name to show. "LOADING…" would keep
+            // claiming something is on its way after it has already failed.
+            return episodeError == nil ? "LOADING…" : "COULDN’T PLAY"
         }
         return (currentMixtape?.title ?? currentChannel?.show ?? "").uppercased()
     }
@@ -390,7 +393,7 @@ final class AppModel: ObservableObject {
             defer { Task { @MainActor in self?.episodeLoading = false } }
             do {
                 let detail = try await NTSAPI.episode(show: show, episode: episode)
-                guard let source = detail.audioSources.first else { throw NTSAPI.StreamError.noAudio }
+                guard let source = detail.audioSources.first else { throw NTSAPI.APIError.noAudio }
                 let stream = try await NTSAPI.resolveStream(source)
                 guard !Task.isCancelled, let self else { return }
                 // The selection can move on while the two requests are in flight;
