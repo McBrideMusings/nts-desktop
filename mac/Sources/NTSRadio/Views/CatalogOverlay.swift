@@ -19,6 +19,11 @@ struct CatalogOverlay: View {
 
             if let detail = model.detail {
                 ScrollView { DetailPane(detail: detail) }
+            } else if model.catalogTab == .schedule, model.query.isEmpty {
+                // The schedule is read down a time column, so it gets a timeline
+                // rather than the tile grid. A query still answers in tiles: it
+                // mixes schedule slots, shows and mixtapes, which share no clock.
+                ScheduleTimeline()
             } else {
                 grid
             }
@@ -163,7 +168,6 @@ struct CatalogOverlay: View {
         switch model.catalogTab {
         case .saved:    return "Nothing saved yet."
         case .schedule: return "The schedule hasn’t loaded yet."
-        case .mixtapes: return "The mixtape catalog hasn’t loaded yet."
         }
     }
 }
@@ -447,14 +451,18 @@ private struct MixtapeDetailPane: View {
 
 // MARK: - Small parts
 
-/// What sits behind a tile or hero when there is no artwork.
-private struct ArtworkPlaceholder: View {
+/// What sits behind a tile, hero or timeline sleeve when there is no artwork.
+struct ArtworkPlaceholder: View {
+    /// The tile's mark is drawn for a 152pt-wide cover; the timeline's sleeve is
+    /// 40pt, where the same 26pt mark fills the square.
+    var size: CGFloat = 26
+
     var body: some View {
         Image(nsImage: MenuBarIcon.logoImage)
             .resizable()
             .renderingMode(.template)
             .scaledToFit()
-            .frame(width: 26, height: 26)
+            .frame(width: size, height: size)
             .foregroundStyle(Theme.ink.opacity(0.10))
     }
 }

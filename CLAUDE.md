@@ -29,7 +29,7 @@ Requires macOS 15+ and Xcode 16+ / Swift 6 to build.
 The whole app lives in the `mac/` Swift package (root `Makefile`/`admin.toml` just delegate into it):
 
 - `mac/Sources/NTSRadio/Model/` — `Catalog.swift` (mixtape catalog fetch/cache), `PlayerEngine.swift` (AVPlayer), `NTSAPI.swift` / `NTSAuth.swift` (NTS REST API + sign-in), `AppModel.swift` (app state), `NowPlayingCenter.swift` (system media keys + the Control Center tile), `TracklistAdapter.swift`, `Cache.swift`, `ShowIndex.swift` (local searchable show index), `Saved.swift` (local bookmarks), `CatalogRow.swift` (one tile type for the catalog grid), `Scripting.swift` (the AppleScript control surface)
-- `mac/Sources/NTSRadio/Views/` — `DialView.swift` (radial mixtape dial), `ChannelRail.swift`, `NowPlayingBar.swift`, `TracklistOverlay.swift`, `CatalogOverlay.swift` (schedule / saved / mixtapes / search + detail), `TopBar.swift`, `SettingsView.swift`, `LoginView.swift`, `MenuBarIcon.swift`, `PopoverView.swift`
+- `mac/Sources/NTSRadio/Views/` — `DialView.swift` (radial mixtape dial), `ChannelRail.swift`, `NowPlayingBar.swift`, `TracklistOverlay.swift`, `CatalogOverlay.swift` (saved / search + detail), `ScheduleTimeline.swift` (the schedule tab: a fortnight of one channel's grid, day by day), `TopBar.swift`, `SettingsView.swift`, `LoginView.swift`, `MenuBarIcon.swift`, `PopoverView.swift`
 
 ### NTS API limits worth knowing before extending the catalog
 

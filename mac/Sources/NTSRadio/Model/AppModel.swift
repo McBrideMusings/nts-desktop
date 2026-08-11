@@ -18,7 +18,7 @@ enum Sheet: Equatable {
 /// outranks the tab — it searches everything at once — so this only decides the
 /// resting view.
 enum CatalogTab: String, CaseIterable, Identifiable {
-    case schedule, saved, mixtapes
+    case schedule, saved
     var id: String { rawValue }
     var label: String { rawValue.uppercased() }
 }
@@ -418,12 +418,94 @@ final class AppModel: ObservableObject {
         switch catalogTab {
         case .schedule:
             return schedule.map(row(for:))
-        case .mixtapes:
-            return catalog.mixtapes.enumerated().map { CatalogRow($0.element, detent: $0.offset + 1) }
         case .saved:
             return saved.items.map(CatalogRow.init)
         }
     }
+
+    // MARK: Timeline
+
+    /// Which channel's grid the schedule tab is showing. One at a time: at the
+    /// window's 340pt floor, two columns of programme titles leave about fifteen
+    /// characters each.
+    @Published var scheduleChannel: Int = 1
+
+    /// One day of one channel's grid — the unit the timeline scrolls through.
+    struct ScheduleDay: Identifiable {
+        let id: String
+        /// "TUE 11 AUG", the sticky header's text.
+        let label: String
+        /// "TODAY"/"TOMORROW" where it applies, so the top of the list doesn't
+        /// have to be read as a date to be understood.
+        let relative: String?
+        let slots: [NTSAPI.Broadcast]
+    }
+
+    /// The selected channel's grid, grouped into days in air order.
+    var scheduleDays: [ScheduleDay] {
+        let slots = catalog.channels.first { $0.number == scheduleChannel }?.upcoming ?? []
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+
+        var days: [(Date, [NTSAPI.Broadcast])] = []
+        for slot in slots {
+            guard let start = slot.start else { continue }
+            let day = cal.startOfDay(for: start)
+            if days.last?.0 == day { days[days.count - 1].1.append(slot) }
+            else { days.append((day, [slot])) }
+        }
+
+        return days.map { day, slots in
+            let offset = cal.dateComponents([.day], from: today, to: day).day ?? 0
+            let relative: String? = switch offset {
+            case 0: "TODAY"
+            case 1: "TOMORROW"
+            case -1: "YESTERDAY"
+            default: nil
+            }
+            return ScheduleDay(id: Self.dayKey.string(from: day),
+                               label: Self.dayLabel.string(from: day).uppercased(),
+                               relative: relative,
+                               slots: slots)
+        }
+    }
+
+    /// The slot the clock is inside on the selected channel, if any — the row the
+    /// timeline scrolls to and marks ON AIR.
+    var onAirSlot: NTSAPI.Broadcast? {
+        let now = Date()
+        return catalog.channels.first { $0.number == scheduleChannel }?.upcoming.first {
+            ($0.start ?? .distantFuture) <= now && now < ($0.end ?? .distantPast)
+        }
+    }
+
+    /// The first slot that has not started on the selected channel. The grid has
+    /// real gaps — roughly thirty a fortnight per channel — so when the clock is
+    /// in one of them this is what the NOW rule sits above.
+    var nextSlot: NTSAPI.Broadcast? {
+        let now = Date()
+        return catalog.channels.first { $0.number == scheduleChannel }?.upcoming.first {
+            ($0.start ?? .distantPast) > now
+        }
+    }
+
+    /// What the timeline scrolls to when it opens: the programme on air, or the
+    /// next one to start when the clock is in a gap, or the top of the grid.
+    var timelineAnchor: String? {
+        onAirSlot?.id ?? nextSlot?.id ?? scheduleDays.first?.slots.first?.id
+    }
+
+    /// Open a schedule slot's show, the same as clicking its tile in the grid.
+    func openSlot(_ slot: NTSAPI.Broadcast) {
+        open(row(for: slot))
+    }
+
+    private static let dayKey: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; return f
+    }()
+    private static let dayLabel: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "EEE d MMM"; return f
+    }()
 
     private func searchRows(_ q: String) -> [CatalogRow] {
         var rows: [CatalogRow] = []
@@ -570,6 +652,10 @@ final class AppModel: ObservableObject {
     /// `/api/v2/live` with `cache-control: max-age=900`, so for up to 15 minutes
     /// after the hour every poll returns the same pre-changeover JSON.
     func advanceSlots(now: Date = Date()) {
+        withAnimation(.easeInOut(duration: 0.4)) { advance(now: now) }
+    }
+
+    private func advance(now: Date) {
         for idx in catalog.channels.indices {
             let live = catalog.channels[idx].upcoming.drop { ($0.end ?? .distantFuture) <= now }
             guard let current = live.first,

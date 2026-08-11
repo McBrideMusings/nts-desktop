@@ -122,8 +122,12 @@
                  description="Cover the faceplate with the catalog, the same as clicking the grid button, and optionally choose which list it shows.">
             <cocoa class="NTSOpenCatalogCommand"/>
             <parameter name="showing" code="pTAB" type="text" optional="yes"
-                       description="schedule, saved or mixtapes. Defaults to whichever list was last open.">
+                       description="schedule or saved. Defaults to whichever list was last open.">
                 <cocoa key="showing"/>
+            </parameter>
+            <parameter name="channel" code="pSCH" type="integer" optional="yes"
+                       description="Which channel's grid the schedule timeline shows, 1 or 2.">
+                <cocoa key="channel"/>
             </parameter>
             <parameter name="searching for" code="pQRY" type="text" optional="yes"
                        description="A search term. A non-empty term searches shows and mixtapes together instead of showing the list.">

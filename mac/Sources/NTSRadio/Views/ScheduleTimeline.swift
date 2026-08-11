@@ -1,0 +1,252 @@
+import SwiftUI
+
+/// The schedule as a timeline: one channel at a time, a fortnight of programmes
+/// in air order, with the day headers pinned as they pass under the top edge.
+///
+/// It is a list rather than the catalog's tile grid because a schedule is read
+/// down a time column — the question is "what is on at four", not "which of
+/// these covers looks good". The clock is drawn into the list twice over: the
+/// programme on air is filled and badged, and a rule marks where the current
+/// minute falls, which is what makes the gaps in NTS's grid legible instead of
+/// looking like missing data.
+struct ScheduleTimeline: View {
+    @EnvironmentObject var model: AppModel
+
+    /// Scrolling to `now` on open, and again whenever the channel changes, so
+    /// the list never opens on a fortnight-old Tuesday.
+    @State private var scrollTarget: String?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            controls
+            Rectangle().fill(Theme.hairline(0.06)).frame(height: 1)
+            timeline
+        }
+    }
+
+    // MARK: Controls
+
+    private var controls: some View {
+        HStack(spacing: 8) {
+            ForEach(model.catalog.channels, id: \.number) { channel in
+                let on = model.scheduleChannel == channel.number
+                Button { model.scheduleChannel = channel.number } label: {
+                    Text("NTS \(channel.number)")
+                        .font(Theme.mono(9, .bold))
+                        .tracking(1.2)
+                        .foregroundStyle(on ? channelInk(channel.number) : Theme.inkMuted)
+                        .padding(.horizontal, 9).padding(.vertical, 5)
+                        .background(on ? channelFill(channel.number) : .clear)
+                        .overlay(Rectangle().stroke(Theme.hairline(on ? 0 : 0.10), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+            }
+
+            Spacer(minLength: 8)
+
+            Button { scrollTarget = model.timelineAnchor } label: {
+                Text("NOW")
+                    .font(Theme.mono(9, .bold))
+                    .tracking(1.2)
+                    .foregroundStyle(Theme.ink)
+                    .padding(.horizontal, 9).padding(.vertical, 5)
+                    .overlay(Rectangle().stroke(Theme.hairline(0.16), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .help("Scroll back to what's on now")
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 9)
+    }
+
+    private func channelFill(_ n: Int) -> Color { n == 1 ? Theme.ch1 : Theme.ch2 }
+    private func channelInk(_ n: Int) -> Color { n == 1 ? Theme.ch1Text : Theme.ch2Text }
+
+    // MARK: Timeline
+
+    @ViewBuilder private var timeline: some View {
+        if model.scheduleDays.isEmpty {
+            Text("The schedule hasn’t loaded yet.")
+                .font(Theme.ui(13))
+                .foregroundStyle(Theme.inkMuted)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            days
+        }
+    }
+
+    private var days: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+                    ForEach(model.scheduleDays) { day in
+                        Section {
+                            ForEach(day.slots) { slot in
+                                SlotRow(slot: slot)
+                                    .id(slot.id)
+                            }
+                        } header: {
+                            DayHeader(day: day)
+                        }
+                    }
+                }
+            }
+            .onAppear { scrollTarget = model.timelineAnchor }
+            .onChange(of: model.scheduleChannel) { scrollTarget = model.timelineAnchor }
+            .onChange(of: scrollTarget) {
+                guard let target = scrollTarget else { return }
+                // Not `.top`: the day header is pinned, so a row scrolled to the
+                // very top lands underneath it. A fifth of the way down clears it.
+                proxy.scrollTo(target, anchor: UnitPoint(x: 0, y: 0.2))
+                scrollTarget = nil
+            }
+        }
+    }
+
+    static let hhmm: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "HH:mm"; return f
+    }()
+}
+
+// MARK: - Day header
+
+private struct DayHeader: View {
+    let day: AppModel.ScheduleDay
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(day.label)
+                .font(Theme.mono(9, .bold))
+                .tracking(1.5)
+                .foregroundStyle(Theme.ink)
+            if let relative = day.relative {
+                Text(relative)
+                    .font(Theme.mono(9))
+                    .tracking(1.2)
+                    .foregroundStyle(Theme.inkMuted)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 9).padding(.bottom, 7)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // Opaque, not translucent: it is pinned over live rows, and at 0.94 the
+        // programme title underneath read straight through the date.
+        .background(Theme.popover)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Theme.hairline(0.08)).frame(height: 1)
+        }
+    }
+}
+
+// MARK: - Slot
+
+private struct SlotRow: View {
+    @EnvironmentObject var model: AppModel
+    let slot: NTSAPI.Broadcast
+    @State private var hovering = false
+
+    private var indexed: NTSAPI.ShowRef? { model.showIndex.ref(slot.showAlias) }
+    private var onAir: Bool { model.onAirSlot?.id == slot.id }
+    private var past: Bool { (slot.end ?? .distantFuture) <= Date() }
+
+    private var meta: String {
+        let location = slot.location.isEmpty ? (indexed?.location ?? "") : slot.location
+        let genres = (slot.genres.isEmpty ? (indexed?.genres ?? []) : slot.genres).prefix(2)
+        return ([location] + genres).filter { !$0.isEmpty }.joined(separator: " · ").uppercased()
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(slot.start.map(ScheduleTimeline.hhmm.string(from:)) ?? "--:--")
+                    .font(Theme.mono(10, .medium))
+                    .foregroundStyle(onAir ? Theme.liveDot : Theme.inkMuted)
+                if let length = slot.lengthLabel {
+                    Text(length)
+                        .font(Theme.mono(8))
+                        .foregroundStyle(Theme.inkMuted.opacity(0.7))
+                }
+            }
+            .frame(width: 42, alignment: .leading)
+
+            artwork
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(slot.title)
+                        .font(Theme.ui(12))
+                        .foregroundStyle(Theme.ink)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    if onAir { onAirBadge }
+                }
+                if !meta.isEmpty {
+                    Text(meta)
+                        .font(Theme.mono(8, .medium))
+                        .tracking(1.1)
+                        .foregroundStyle(Theme.inkMuted)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 8)
+        .background(onAir ? Theme.liveDot.opacity(0.07) : (hovering ? Theme.hairline(0.03) : .clear))
+        // The clock is drawn once, as the fill on the programme that is on. At a
+        // changeover the finished slot leaves the list and the fill moves down to
+        // its successor; `advanceSlots` animates that so the hand-over is
+        // something you see happen rather than a jump you have to notice.
+        .animation(.easeInOut(duration: 0.4), value: onAir)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Theme.hairline(0.05)).frame(height: 1)
+        }
+        // Finished programmes stay in the list — the grid opens a day in the past
+        // and the day you are in is half over — but recede so the eye lands on
+        // what is still to come.
+        .opacity(past ? 0.4 : 1)
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .onTapGesture { model.openSlot(slot) }
+    }
+
+    private var artwork: some View {
+        Rectangle()
+            .fill(Theme.hairline(0.05))
+            .frame(width: 40, height: 40)
+            .overlay { ArtworkPlaceholder(size: 16) }
+            .overlay {
+                if let url = indexed?.thumbURL {
+                    AsyncImage(url: url) { $0.resizable().scaledToFill() } placeholder: { Color.clear }
+                }
+            }
+            .clipped()
+    }
+
+    /// Tapping the badge tunes the channel, which is the only thing a listener
+    /// can actually do with the programme that is on: the rest of the grid is
+    /// either finished or hasn't been broadcast yet.
+    private var onAirBadge: some View {
+        Button { model.select(.channel(slot.channel)) } label: {
+            Text("ON AIR")
+                .font(Theme.mono(8, .bold))
+                .tracking(1.1)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 4).padding(.vertical, 2)
+                .background(Theme.liveDot)
+        }
+        .buttonStyle(.plain)
+        .help("Tune to NTS \(slot.channel)")
+    }
+}
+
+extension NTSAPI.Broadcast {
+    /// "1h", "90m" — how long the programme runs, for the line under its start.
+    var lengthLabel: String? {
+        guard let start, let end, end > start else { return nil }
+        let minutes = Int(end.timeIntervalSince(start) / 60)
+        if minutes >= 60, minutes % 60 == 0 { return "\(minutes / 60)h" }
+        return "\(minutes)m"
+    }
+}

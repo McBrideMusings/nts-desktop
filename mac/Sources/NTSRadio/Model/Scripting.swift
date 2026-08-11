@@ -64,6 +64,13 @@ enum ScriptState {
             "catalogQuery": m.query,
             "catalogRows": m.catalogRows.count,
             "catalogFirstRows": m.catalogRows.prefix(3).map { "\($0.title) · \($0.meta)" },
+            // The timeline draws itself from these three, and none of them are
+            // readable off a tile grid: which channel it is showing, how many
+            // days it grouped the grid into, and what it calls on air.
+            "scheduleChannel": m.scheduleChannel,
+            "scheduleDays": m.scheduleDays.map { "\($0.label) · \($0.slots.count)" },
+            "onAir": m.onAirSlot.map { "\($0.startEnd) \($0.title)" } ?? "",
+            "nextUp": m.nextSlot.map { "\($0.startEnd) \($0.title)" } ?? "",
             "mixtapeCount": m.catalog.mixtapes.count,
             "channelCount": m.catalog.channels.count,
             // What each channel is airing, readable whatever the app is playing —
@@ -289,6 +296,14 @@ final class NTSOpenCatalogCommand: NTSCommand {
                     return false
                 }
                 m.catalogTab = tab
+            }
+            if let channel = self.evaluatedArguments?["channel"] as? Int {
+                guard m.catalog.channels.contains(where: { $0.number == channel }) else {
+                    self.scriptErrorNumber = -1703   // errAETypeError
+                    self.scriptErrorString = "NTS \(channel) is not a channel. Use 1 or 2."
+                    return false
+                }
+                m.scheduleChannel = channel
             }
             m.query = (self.evaluatedArguments?["searchingFor"] as? String) ?? ""
             m.detail = nil
