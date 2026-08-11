@@ -52,6 +52,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nothing.
 - Removed the "Hide Dial Dot When Small" setting along with the dial dot it
   controlled.
+- Picking a mixtape or a channel now starts playing it. Before, clicking a dial
+  wedge, a channel card, or a catalog row while nothing was playing only tuned
+  the source and left the app silent until Play was pressed. The media keys are
+  unchanged: skipping to the next source while paused stays paused.
 
 ### Fixed
 
