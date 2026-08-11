@@ -41,6 +41,18 @@ final class PlayerEngine: ObservableObject {
     private var currentURL: URL?
     private var ticker: Any?
 
+    /// Which seek is the one that matters. AVPlayer's periodic time observer
+    /// keeps firing with the pre-seek time while a seek is still landing — with
+    /// `toleranceBefore/After: .zero` that can take a couple of ticks — and each
+    /// one was overwriting `position` back to where the scrub started before the
+    /// real seek arrived, which is the flicker: the thumb visibly snaps back and
+    /// then forward again. Ticks are ignored between calling `seek` and that
+    /// exact seek's completion handler firing; the epoch guards against an older
+    /// seek's completion clearing the flag after a newer one has already
+    /// started.
+    private var seekEpoch = 0
+    private var isSeeking = false
+
     /// What is actually loaded, for a script to read back. An episode's audio is
     /// resolved at play time, so this is the only place the resulting stream is
     /// observable — the selection just names the episode.
@@ -69,6 +81,9 @@ final class PlayerEngine: ObservableObject {
     }
 
     private func tick(_ time: CMTime) {
+        // A tick landing mid-seek is reporting where the audio was, not where
+        // it's headed — `seek(to:)` already set `position` to the target.
+        guard !isSeeking else { return }
         let seconds = CMTimeGetSeconds(time)
         position = seconds.isFinite ? max(0, seconds) : 0
 
@@ -84,6 +99,11 @@ final class PlayerEngine: ObservableObject {
             // one's audio for the second before the first tick lands.
             position = 0
             duration = 0
+            // A pending seek's completion belongs to the item it was asked of;
+            // an interrupted one may never call back, which would otherwise
+            // leave ticks off for the new item too.
+            isSeeking = false
+            seekEpoch += 1
             player.replaceCurrentItem(with: AVPlayerItem(url: url))
         }
         if autoplay { play() }
@@ -96,8 +116,19 @@ final class PlayerEngine: ObservableObject {
         let target = max(0, min(duration, seconds))
         position = target
         seeks += 1
+        isSeeking = true
+        seekEpoch += 1
+        let epoch = seekEpoch
+        // AVPlayer doesn't document which queue this fires on, unlike the time
+        // observer above (which asked for `.main` explicitly), so this hops
+        // over rather than assuming.
         player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
-                    toleranceBefore: .zero, toleranceAfter: .zero)
+                    toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.seekEpoch == epoch else { return }
+                self.isSeeking = false
+            }
+        }
     }
 
     func play() {
