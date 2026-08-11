@@ -166,8 +166,13 @@ final class AppModel: ObservableObject {
             .sink { [weak self] _ in
                 self?.updateTracklist()
                 self?.updateMixtapeTitle()
+                Task { await self?.saved.sync() }
             }
             .store(in: &bag)
+        // Saved is built before auth exists, so it is handed the token source
+        // rather than the auth object.
+        saved.token = { [auth] in try await auth.validToken() }
+        Task { await saved.sync() }
         updateTracklist()
         updateMixtapeTitle()
         nowPlaying = NowPlayingCenter(model: self)

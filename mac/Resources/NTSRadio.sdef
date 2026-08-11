@@ -171,6 +171,13 @@
             <result type="text" description="The state after asking, as JSON. The page arrives asynchronously — read state again to see it."/>
         </command>
 
+        <command name="star" code="NTSrSTAR"
+                 description="Star or unstar a show, the same as clicking the star on its tile. Signed in, this also writes to (or deletes from) your NTS account's favourites.">
+            <cocoa class="NTSStarCommand"/>
+            <direct-parameter type="text" description="A show alias, e.g. lung-dart."/>
+            <result type="text" description="The state after starring, as JSON."/>
+        </command>
+
         <command name="close catalog" code="NTSrCLSC"
                  description="Uncover the faceplate, dropping any search term and open detail.">
             <cocoa class="NTSCloseCatalogCommand"/>

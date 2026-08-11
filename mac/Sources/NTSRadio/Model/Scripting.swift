@@ -56,6 +56,13 @@ enum ScriptState {
             "volume": Int(m.volume.rounded()),
             "muted": m.muted,
             "signedIn": m.auth.isAuthenticated,
+            // Whether the account's own follows have actually been read, and how
+            // many of its favourites are episodes this list can't hold yet.
+            // Without these, "no follows on the account" and "never asked" are
+            // the same empty list.
+            "savedCount": m.saved.items.count,
+            "syncedWithAccount": m.saved.syncedWithAccount,
+            "accountEpisodeFavourites": m.saved.accountEpisodeCount,
             // An episode takes two requests before any audio exists, either of
             // which can fail. Without these, a stuck resolve and a playing
             // episode both read as "not playing".
@@ -365,6 +372,28 @@ final class NTSExploreMoreCommand: NTSCommand {
     override func performDefaultImplementation() -> Any? {
         run {
             AppModel.scriptTarget?.loadMoreExplore()
+            return true
+        }
+    }
+}
+
+@objc(NTSStarCommand)
+final class NTSStarCommand: NTSCommand {
+    override func performDefaultImplementation() -> Any? {
+        run {
+            guard let m = AppModel.scriptTarget else { return false }
+            let alias = ((self.directParameter as? String) ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !alias.isEmpty else {
+                self.scriptErrorNumber = -1703   // errAETypeError
+                self.scriptErrorString = "Give a show alias, e.g. star \"lung-dart\"."
+                return false
+            }
+            let indexed = m.showIndex.ref(alias)
+            m.saved.toggle(Saved.Item(kind: .show, alias: alias,
+                                      title: indexed?.name ?? ShowIndex.title(from: alias),
+                                      subtitle: indexed?.location ?? "",
+                                      image: indexed?.picture))
             return true
         }
     }

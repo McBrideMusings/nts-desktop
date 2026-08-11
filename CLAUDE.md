@@ -59,10 +59,16 @@ The whole app lives in the `mac/` Swift package (root `Makefile`/`admin.toml` ju
   `ETag` mean anything.
 - There is no favourites REST endpoint — `/api/v2/users/me`, `/api/v2/favourites`
   and `/api/v2/users/me/favourites` return the site's HTML shell, not JSON.
-  nts.live keeps follows and saved episodes in Firestore under the signed-in
-  user (`writeToFavourites`, `favouriteShows`, `favouriteEpisodes`, keyed by
-  show + episode alias), reachable with the same Firebase credentials the
-  tracklist listener already uses. Bookmarks are local-only until that's wired.
+  Favourites live in two top-level Firestore collections, and **a favourite
+  belongs to a device, not a user**: `favourites` holds
+  `{show_alias, episode_alias, device_id, created_at}`, and `user_devices` (doc
+  id = installation id) holds `{device_id, firebase_user_uid, …}`. Reading an
+  account's stars means looking up its devices, then querying `favourites` for
+  `device_id IN [those]`. `NTSFavourites` does this over Firestore's REST API
+  with the Firebase ID token; the gRPC client in `NTSFirestore` is Listen-only.
+  **No `orderBy` in those queries** — filtering one field and ordering by
+  another needs a composite index that does not exist in NTS's project, and
+  asking answers `FAILED_PRECONDITION: The query requires an index`.
 - Episode audio is a SoundCloud/Mixcloud page URL in `audio_sources`, which
   AVPlayer cannot open. `/api/v2/resolve-stream?url=<encoded>` returns
   `{"hls": "…m3u8?Policy=…&Signature=…"}` — signed and expiring, so resolve per
