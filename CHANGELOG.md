@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dial's index mark points, in degrees clockwise from the top, counting turns
   rather than wrapping at 360. Two readings therefore say which way the dial
   turned and how far, which is what makes the rotation checkable from a script.
+- `channels`, `bufferSeconds`, `pendingTrack` and `pendingSeconds` in the `state`
+  blob. `state` could only ever describe the source you were listening to, so
+  with a mixtape playing the channel rail's contents were invisible from a
+  script; `channels` reports each channel's programme and how many slots it still
+  holds regardless. `bufferSeconds` is the audio AVPlayer has fetched but not yet
+  played — 4.9s median on the Icecast channel streams, 29.1s on the mixtape HLS —
+  and `pendingTrack` / `pendingSeconds` name the track being held back and how
+  long it has left to wait.
 - Archivo's `OFL.txt` alongside the bundled font, so the app ships the SIL Open
   Font License the way that license requires. It lands in the app's resource
   bundle next to `Archivo.ttf`.
@@ -70,8 +78,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the source and left the app silent until Play was pressed. The media keys are
   unchanged: skipping to the next source while paused stays paused.
 
+- Each tracklist row leads with the artist and carries the track underneath, the
+  order nts.live lists them in. A track still being identified arrives with no
+  artist, and keeps its title on the lead line rather than showing a blank one.
+
 ### Fixed
 
+- The channel rail hands over to the next programme on its own clock instead of
+  waiting to be told. NTS serves `/api/v2/live` with `cache-control: max-age=900`,
+  so for up to fifteen minutes after the hour every 60-second poll returned the
+  same pre-changeover JSON: at 15:11 London the rail read "Vanilla Glint w/ DJ
+  Cinco De Mayo & Gustavio, 14:00 – 15:00" while nts.live had moved on to "Skinny
+  Girl Diet" an hour later. Every poll already carries `now` plus `next` … `next17`
+  with the minute each slot ends, so a changeover needs no request at all — the
+  finished slot is dropped on a timer set to its own end time, and the poll only
+  re-anchors the schedule.
+- A track no longer appears in the tracklist before you can hear it. NTS pushes
+  each track over Firestore the moment it airs, but AVPlayer is behind the live
+  edge by whatever it has buffered — measured at 4.9s on the channel streams and
+  29.1s on the mixtape HLS — so the top row lit up while the previous track was
+  still coming out of the speakers. A newly started track now waits for the
+  player's current buffer to drain before it reaches the list. The backfill on
+  opening the app or switching source is not delayed, and neither is a paused
+  player.
 - The dial waits for a real size before drawing. Its whole geometry is a
   fraction of the smaller window dimension, so on a layout pass that reported
   zero it collapsed to a point in the top-left corner — and a click landing in

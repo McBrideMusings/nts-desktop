@@ -48,6 +48,24 @@ final class PlayerEngine: ObservableObject {
 
     func toggle() { isPlaying ? pause() : play() }
 
+    /// Seconds of audio already fetched but not yet heard.
+    ///
+    /// The channel streams are a live Icecast tail carrying no timestamps —
+    /// `StreamTitle` comes through empty — so there is no clock inside the audio
+    /// to compare a track against. What can be measured is this: everything
+    /// AVPlayer has pulled off the socket and is sitting on. The connection always
+    /// reads the live edge, so that hold is how far the speakers are behind the
+    /// stream, while the tracklist arrives at the live edge out of band over
+    /// Firestore. It is the app-side half of why a row lights up early.
+    var bufferedAhead: Double {
+        guard let item = player.currentItem,
+              let range = item.loadedTimeRanges.last?.timeRangeValue else { return 0 }
+        let edge = CMTimeGetSeconds(range.start + range.duration)
+        let playhead = CMTimeGetSeconds(item.currentTime())
+        guard edge.isFinite, playhead.isFinite else { return 0 }
+        return max(0, edge - playhead)
+    }
+
     /// `volume` is 0–100 to match the prototype's meter.
     func apply(volume: Double, muted: Bool) {
         player.volume = Float(max(0, min(100, volume)) / 100)

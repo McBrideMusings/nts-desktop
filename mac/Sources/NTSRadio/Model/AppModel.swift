@@ -116,6 +116,15 @@ final class AppModel: ObservableObject {
     /// headset buttons. Built last in `init` because it reads this model.
     private var nowPlaying: NowPlayingCenter?
 
+    /// Sleeps until the current programme's end time, then hands the rail over to
+    /// the next slot. See `scheduleSlotAdvance()`.
+    private var slotTimer: Task<Void, Never>?
+
+    /// A pushed tracklist waiting for the audio it describes to be heard, and the
+    /// moment it may be shown. See `receive(_:)`.
+    private var heldTracks: (tracks: [Track], deadline: Date)?
+    private var trackRelease: Task<Void, Never>?
+
     private var bag = Set<AnyCancellable>()
 
     init() {
@@ -231,7 +240,7 @@ final class AppModel: ObservableObject {
         if listener != nil, wanted == activeStream { return }
         listener?.stop()
         listener = nil
-        tracks = []
+        publish([])
         activeStream = wanted
         guard let wanted else { return }
         let hue = wanted.hue
@@ -239,11 +248,68 @@ final class AppModel: ObservableObject {
             filter: wanted.filter,
             tokenProvider: { [auth] in try await auth.validToken() },
             onUpdate: { [weak self] live in
-                self?.tracks = TracklistAdapter.tracks(from: live, hue: hue)
+                self?.receive(TracklistAdapter.tracks(from: live, hue: hue))
             }
         )
         self.listener = listener
         listener.start()
+    }
+
+    /// Take a Firestore push, holding a newly started track back until the audio
+    /// it names has actually reached the speakers.
+    ///
+    /// NTS pushes the track the moment it airs, but AVPlayer is behind the live
+    /// edge by whatever it has buffered — measured at ~5s on the channel streams
+    /// and ~29s on the mixtape HLS. Showing the push immediately lit the top row
+    /// while the previous track was still coming out of the speakers.
+    private func receive(_ incoming: [Track]) {
+        // Nothing to stay behind: the backfill on opening or switching source (an
+        // empty list held back half a minute is worse than one that starts
+        // correct), a push that only revises rows further down, or a paused
+        // player with no audio in flight.
+        guard incoming.first?.key != tracks.first?.key, !tracks.isEmpty, engine.isPlaying else {
+            publish(incoming); return
+        }
+        if let held = heldTracks, held.tracks.first?.key == incoming.first?.key {
+            // Same track, pushed again with revised details — take the new
+            // contents but keep the original deadline, so a run of revisions
+            // can't keep pushing the reveal further out.
+            heldTracks = (incoming, held.deadline)
+        } else {
+            // 60s ceiling: the buffer has never measured anywhere near it, and a
+            // wild reading shouldn't be able to freeze the list.
+            let wait = min(engine.bufferedAhead, 60)
+            heldTracks = (incoming, Date().addingTimeInterval(wait))
+        }
+        scheduleTrackRelease()
+    }
+
+    /// The track that has started but isn't being shown yet, and how long it has
+    /// left to wait. Without this the delay can't be observed from outside at all —
+    /// its whole effect is that nothing happens for a few seconds.
+    var pendingTrack: (name: String, seconds: Double)? {
+        guard let held = heldTracks, let first = held.tracks.first else { return nil }
+        return ("\(first.artist) — \(first.title)",
+                (max(0, held.deadline.timeIntervalSinceNow) * 10).rounded() / 10)
+    }
+
+    /// Show a tracklist now, dropping anything held.
+    private func publish(_ incoming: [Track]) {
+        trackRelease?.cancel()
+        trackRelease = nil
+        heldTracks = nil
+        tracks = incoming
+    }
+
+    private func scheduleTrackRelease() {
+        trackRelease?.cancel()
+        guard let held = heldTracks else { return }
+        let delay = max(0, held.deadline.timeIntervalSinceNow)
+        trackRelease = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard !Task.isCancelled, let self, let held = self.heldTracks else { return }
+            self.publish(held.tracks)
+        }
     }
 
     /// Open (or tear down) the current-episode stream for the playing mixtape.
@@ -469,13 +535,62 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Move each channel on to the programme the clock is actually in, dropping
+    /// the slots that have finished.
+    ///
+    /// The live feed already names every upcoming slot and the minute it ends, so
+    /// a changeover is something the app can do on its own — it doesn't have to be
+    /// told. Waiting to be told left the rail showing the previous show: NTS serves
+    /// `/api/v2/live` with `cache-control: max-age=900`, so for up to 15 minutes
+    /// after the hour every poll returns the same pre-changeover JSON.
+    func advanceSlots(now: Date = Date()) {
+        for idx in catalog.channels.indices {
+            let live = catalog.channels[idx].upcoming.drop { ($0.end ?? .distantFuture) <= now }
+            guard let current = live.first,
+                  current.id != catalog.channels[idx].upcoming.first?.id else { continue }
+            catalog.channels[idx].upcoming = Array(live)
+            catalog.channels[idx].show = current.title
+            catalog.channels[idx].startEnd = current.startEnd
+            catalog.channels[idx].genre = current.genres.first ?? ""
+            catalog.channels[idx].background = current.image
+            // A new broadcast means the old episode link is wrong, so these are
+            // replaced even when the slot carried none — NTS embeds `details` for
+            // only the first two slots, and the next poll fills them back in.
+            catalog.channels[idx].showAlias = current.showAlias
+            catalog.channels[idx].episodeAlias = current.episodeAlias
+        }
+    }
+
+    /// Wake once, at the moment the earliest current programme ends, to hand over
+    /// to the next one. Re-armed after every advance and every poll.
+    private func scheduleSlotAdvance() {
+        slotTimer?.cancel()
+        let now = Date()
+        guard let end = catalog.channels.compactMap({ $0.upcoming.first?.end }).filter({ $0 > now }).min()
+        else { return }
+        // A second past the boundary, so the slot being handed over has genuinely ended.
+        let delay = end.timeIntervalSince(now) + 1
+        slotTimer = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard !Task.isCancelled, let self else { return }
+            self.advanceSlots()
+            self.scheduleSlotAdvance()
+        }
+    }
+
     /// Refresh now-playing immediately, then every 60s so the channel backdrop
     /// and show info track program changes while the app stays open.
+    ///
+    /// The poll re-anchors the schedule; the changeover itself is `advanceSlots`,
+    /// which runs here too so a stale (or failed) response can't leave the rail on
+    /// a programme that has already finished, and so a machine that slept through
+    /// a boundary catches up on the next cycle.
     private func pollLive() async {
-        await refreshLive()
         while !Task.isCancelled {
-            try? await Task.sleep(nanoseconds: 60 * 1_000_000_000)
             await refreshLive()
+            advanceSlots()
+            scheduleSlotAdvance()
+            try? await Task.sleep(nanoseconds: 60 * 1_000_000_000)
         }
     }
 

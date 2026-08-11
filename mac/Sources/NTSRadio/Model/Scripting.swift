@@ -46,6 +46,13 @@ enum ScriptState {
             "subtitle": m.subtitle,
             "currentTrack": track.map { "\($0.artist) — \($0.title)" } ?? "",
             "trackCount": m.tracks.count,
+            // Audio held but not yet played — how far the speakers trail the
+            // stream, and so how far ahead of them the tracklist runs.
+            "bufferSeconds": (m.engine.bufferedAhead * 10).rounded() / 10,
+            // A track that has started upstream but is being held back until the
+            // audio carrying it is actually audible.
+            "pendingTrack": m.pendingTrack?.name ?? "",
+            "pendingSeconds": m.pendingTrack?.seconds ?? 0,
             "volume": Int(m.volume.rounded()),
             "muted": m.muted,
             "signedIn": m.auth.isAuthenticated,
@@ -53,6 +60,13 @@ enum ScriptState {
             "catalogOpen": m.catalogOpen,
             "mixtapeCount": m.catalog.mixtapes.count,
             "channelCount": m.catalog.channels.count,
+            // What each channel is airing, readable whatever the app is playing —
+            // `sourceName` only ever describes the current source, so with a
+            // mixtape on, the rail's contents were unobservable from outside.
+            "channels": m.catalog.channels.map { ch -> [String: Any] in
+                ["number": ch.number, "show": ch.show, "startEnd": ch.startEnd,
+                 "slots": ch.upcoming.count]
+            },
             // Unwrapped, so consecutive readings show which way the dial turned
             // and by how much — a step of -22.5 and one of +337.5 land the index
             // mark in the same place but are not the same movement.

@@ -79,15 +79,20 @@ private struct TrackRow: View {
                 .foregroundStyle(playing ? Theme.ch1 : Theme.inkMuted)
                 .frame(width: 50, alignment: .leading)
 
+            // Artist leads, track underneath — the order nts.live lists them in.
+            // A track still being identified can arrive with no artist; it takes
+            // the lead line rather than leaving a blank one.
             VStack(alignment: .leading, spacing: 1) {
-                Text(track.title)
+                Text(track.artist.isEmpty ? track.title : track.artist)
                     .font(Theme.display(15, .bold)).tracking(-0.06)
                     .foregroundStyle(Theme.ink)
                     .lineLimit(1)
-                Text(track.artist)
-                    .font(Theme.ui(12.5))
-                    .foregroundStyle(Theme.inkMuted)
-                    .lineLimit(1)
+                if !track.artist.isEmpty {
+                    Text(track.title)
+                        .font(Theme.ui(12.5))
+                        .foregroundStyle(Theme.inkMuted)
+                        .lineLimit(1)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 

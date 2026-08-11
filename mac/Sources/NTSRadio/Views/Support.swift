@@ -10,6 +10,12 @@ struct Track: Identifiable, Hashable {
     let title: String
     let artist: String
     let hue: Double
+
+    /// What the track is, rather than which instance it is. Every Firestore push
+    /// rebuilds the whole list, so `id` — and `==` along with it — is fresh each
+    /// time; telling "same track, pushed again" from "a new track started" has to
+    /// go on the contents.
+    var key: String { "\(time)|\(title)|\(artist)" }
 }
 
 // MARK: - Pie sector shape (a dial wedge)
