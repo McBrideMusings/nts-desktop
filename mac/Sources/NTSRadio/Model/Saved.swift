@@ -96,42 +96,67 @@ final class Saved: ObservableObject {
         try? await NTSFavourites.registerDevice(token: token)
         guard let favourites = try? await NTSFavourites.fetch(token: token) else { return }
 
-        remote = Dictionary(favourites.map { ($0.showAlias + ":" + $0.episodeAlias, $0) },
-                            uniquingKeysWith: { first, _ in first })
+        remote = Dictionary(favourites.map { f in
+            let (show, episode) = Self.normalized(f)
+            return (show + ":" + episode, f)
+        }, uniquingKeysWith: { first, _ in first })
         syncedWithAccount = true
 
         var merged = items
-        for favourite in favourites where !favourite.isEpisode {
-            guard !merged.contains(where: { $0.kind == .show && $0.alias == favourite.showAlias })
-            else { continue }
-            let indexed = ShowIndex.shared.ref(favourite.showAlias)
-            merged.append(Item(kind: .show,
-                               alias: favourite.showAlias,
-                               title: indexed?.name ?? ShowIndex.title(from: favourite.showAlias),
-                               subtitle: indexed?.location ?? "",
-                               image: indexed?.picture))
-        }
-        // Episodes carry no local index the way shows do, so each one missing
-        // locally is fetched for its real title and artwork — sixteen requests
-        // at most, and only on a sync, not on every launch.
-        for favourite in favourites where favourite.isEpisode {
-            let id = "episode:\(favourite.showAlias)/\(favourite.episodeAlias)"
-            guard !merged.contains(where: { $0.id == id }) else { continue }
-            if let detail = try? await NTSAPI.episode(show: favourite.showAlias, episode: favourite.episodeAlias) {
-                merged.append(Item(kind: .episode, alias: favourite.showAlias,
-                                   episodeAlias: favourite.episodeAlias,
-                                   title: detail.name, subtitle: detail.date,
-                                   image: detail.image?.absoluteString))
+        for favourite in favourites {
+            let (showAlias, episodeAlias) = Self.normalized(favourite)
+            if episodeAlias.isEmpty {
+                guard !merged.contains(where: { $0.kind == .show && $0.alias == showAlias }) else { continue }
+                let indexed = ShowIndex.shared.ref(showAlias)
+                // The sitemap that seeds the show index carries no artwork — a
+                // show only gets a picture once it turns up in a schedule, live,
+                // or recently-added feed. A followed show that never has is
+                // fetched here instead of staying blank forever.
+                if let picture = indexed?.picture {
+                    merged.append(Item(kind: .show, alias: showAlias,
+                                       title: indexed?.name ?? ShowIndex.title(from: showAlias),
+                                       subtitle: indexed?.location ?? "", image: picture))
+                } else if let d = try? await NTSAPI.show(alias: showAlias) {
+                    merged.append(Item(kind: .show, alias: showAlias, title: d.name,
+                                       subtitle: d.location, image: d.image?.absoluteString))
+                } else {
+                    merged.append(Item(kind: .show, alias: showAlias,
+                                       title: ShowIndex.title(from: showAlias), subtitle: "", image: nil))
+                }
             } else {
-                merged.append(Item(kind: .episode, alias: favourite.showAlias,
-                                   episodeAlias: favourite.episodeAlias,
-                                   title: ShowIndex.title(from: favourite.episodeAlias),
-                                   subtitle: "", image: nil))
+                // Episodes carry no local index the way shows do, so each one
+                // missing locally is fetched for its real title and artwork.
+                let id = "episode:\(showAlias)/\(episodeAlias)"
+                guard !merged.contains(where: { $0.id == id }) else { continue }
+                if let detail = try? await NTSAPI.episode(show: showAlias, episode: episodeAlias) {
+                    merged.append(Item(kind: .episode, alias: showAlias, episodeAlias: episodeAlias,
+                                       title: detail.name, subtitle: detail.date,
+                                       image: detail.image?.absoluteString))
+                } else {
+                    merged.append(Item(kind: .episode, alias: showAlias, episodeAlias: episodeAlias,
+                                       title: ShowIndex.title(from: episodeAlias),
+                                       subtitle: "", image: nil))
+                }
             }
         }
         guard merged.count != items.count else { return }
         items = merged
         persist()
+    }
+
+    /// A favourite's aliases, correcting one thing nts.live's own client gets
+    /// wrong: some episode favourites land with the full `<show>/episodes/<ep>`
+    /// path jammed into `show_alias` and `episode_alias` left empty, rather than
+    /// the two fields split the way every other row has them. Reading that
+    /// literally makes an unopenable, unpicturable "show" with a slash in its
+    /// alias; splitting it here reads it as the episode favourite it actually is.
+    private static func normalized(_ f: NTSFavourites.Favourite) -> (show: String, episode: String) {
+        if f.episodeAlias.isEmpty, let range = f.showAlias.range(of: "/episodes/") {
+            let show = String(f.showAlias[..<range.lowerBound])
+            let episode = String(f.showAlias[range.upperBound...])
+            if !show.isEmpty, !episode.isEmpty { return (show, episode) }
+        }
+        return (f.showAlias, f.episodeAlias)
     }
 
     private func starOnAccount(_ item: Item) {
