@@ -17,6 +17,7 @@ struct CatalogRow: Identifiable, Hashable {
     enum Playable: Hashable {
         case channel(Int)
         case mixtape(String)
+        case episode(show: String, episode: String)
     }
 
     let id: String
@@ -53,6 +54,24 @@ struct CatalogRow: Identifiable, Hashable {
             kind: .show, alias: alias, title: b.title,
             subtitle: "NTS \(b.channel) · \(b.startEnd)",
             image: (b.image ?? resolved?.pictureURL)?.absoluteString)
+    }
+
+    /// An Explore result. It plays where a schedule slot only tunes a channel:
+    /// this is a finished recording, and its two aliases are everything the
+    /// player needs to resolve the audio.
+    init(_ e: NTSAPI.EpisodeCard) {
+        id = "e:\(e.id)"
+        title = e.title
+        meta = ([e.date, e.location] + e.genres.prefix(1))
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
+            .uppercased()
+        image = e.image
+        live = false
+        target = .show(alias: e.showAlias, title: e.title)
+        playable = .episode(show: e.showAlias, episode: e.episodeAlias)
+        savedItem = Saved.Item(kind: .show, alias: e.showAlias, title: e.title,
+                               subtitle: e.date, image: e.image?.absoluteString)
     }
 
     init(_ m: Mixtape, detent: Int) {

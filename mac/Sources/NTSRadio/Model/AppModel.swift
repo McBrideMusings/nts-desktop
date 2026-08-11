@@ -22,7 +22,7 @@ enum Sheet: Equatable {
 /// outranks the tab — it searches everything at once — so this only decides the
 /// resting view.
 enum CatalogTab: String, CaseIterable, Identifiable {
-    case schedule, saved
+    case explore, schedule, saved
     var id: String { rawValue }
     var label: String { rawValue.uppercased() }
 }
@@ -48,7 +48,10 @@ final class AppModel: ObservableObject {
     /// Whether the catalog covers the faceplate. One toggle owns this — the ▤ in
     /// the title bar — so there is never a second way in that can disagree with it.
     @Published var catalogOpen = false
-    @Published var catalogTab: CatalogTab = .schedule
+    /// Explore, not the schedule: the schedule answers "what is on", which the
+    /// channel cards already say, while Explore is the only route to the other
+    /// 89,000 episodes.
+    @Published var catalogTab: CatalogTab = .explore
     /// The search field's contents. Non-empty means the query is showing instead
     /// of `catalogTab`, across shows and mixtapes at once.
     @Published var query = ""
@@ -171,6 +174,10 @@ final class AppModel: ObservableObject {
         Task { await refreshMixtapes() }
         Task { await pollLive() }
         Task { await showIndex.buildIfStale() }
+        Task {
+            await loadExploreVocabulary()
+            reloadExplore()
+        }
     }
 
     // MARK: Derived view-model
@@ -485,11 +492,89 @@ final class AppModel: ObservableObject {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
         guard q.isEmpty else { return searchRows(q) }
         switch catalogTab {
+        case .explore:
+            return exploreEpisodes.map(CatalogRow.init)
         case .schedule:
             return schedule.map(row(for:))
         case .saved:
             return saved.items.map(CatalogRow.init)
         }
+    }
+
+    // MARK: Explore
+
+    /// What Explore is filtered to. Every change re-runs the search from the
+    /// first page — a filter that left the old results underneath it would be
+    /// showing episodes that no longer match.
+    @Published var exploreFilters = NTSAPI.ExploreFilters() {
+        didSet { guard exploreFilters != oldValue else { return }; reloadExplore() }
+    }
+    @Published private(set) var exploreEpisodes: [NTSAPI.EpisodeCard] = []
+    /// How many episodes match, which is usually far more than are loaded — the
+    /// grid pages twelve at a time through thousands.
+    @Published private(set) var exploreTotal = 0
+    @Published private(set) var exploreLoading = false
+    @Published private(set) var moods: [NTSAPI.Mood] = []
+    @Published private(set) var genres: [NTSAPI.Genre] = []
+    /// Which primary genre the drawer has open. One at a time: twenty primaries
+    /// carry 438 subgenres, and all of them at once is a wall.
+    @Published var openGenre: String?
+    @Published var genreDrawerOpen = false
+
+    private var exploreLoad: Task<Void, Never>?
+
+    /// Start Explore over from its first page.
+    func reloadExplore() {
+        exploreLoad?.cancel()
+        exploreEpisodes = []
+        exploreTotal = 0
+        loadExplorePage(offset: 0)
+    }
+
+    /// Fetch the next twelve, if there are more and nothing is already in flight.
+    /// The grid calls this as its last row appears.
+    func loadMoreExplore() {
+        guard !exploreLoading, exploreEpisodes.count < exploreTotal else { return }
+        loadExplorePage(offset: exploreEpisodes.count)
+    }
+
+    private func loadExplorePage(offset: Int) {
+        let filters = exploreFilters
+        exploreLoading = true
+        exploreLoad = Task { [weak self] in
+            defer { Task { @MainActor in self?.exploreLoading = false } }
+            guard let page = try? await NTSAPI.explore(filters, offset: offset) else { return }
+            guard !Task.isCancelled, let self, self.exploreFilters == filters else { return }
+            // Paging can race a filter change; the guard above is why a late page
+            // can't land under filters that no longer asked for it.
+            self.exploreEpisodes += page.episodes
+            self.exploreTotal = page.total
+        }
+    }
+
+    /// Load the mood and genre vocabularies once. Both are small, static lists.
+    private func loadExploreVocabulary() async {
+        if let moods = try? await NTSAPI.moods() { self.moods = moods }
+        if let genres = try? await NTSAPI.genres() { self.genres = genres }
+    }
+
+    func toggleGenre(_ id: String) {
+        if let i = exploreFilters.genres.firstIndex(of: id) { exploreFilters.genres.remove(at: i) }
+        else { exploreFilters.genres.append(id) }
+    }
+
+    func toggleMood(_ id: String) {
+        exploreFilters.mood = exploreFilters.mood == id ? nil : id
+    }
+
+    /// The name to show for a selected genre id. Subgenre ids are prefixed with
+    /// their primary (`ambientnewage-ambient`), so this walks both levels.
+    func genreName(_ id: String) -> String {
+        for genre in genres {
+            if genre.id == id { return genre.name }
+            if let sub = genre.subgenres.first(where: { $0.id == id }) { return sub.name }
+        }
+        return id
     }
 
     // MARK: Timeline
@@ -654,6 +739,7 @@ final class AppModel: ObservableObject {
         switch row.playable {
         case .channel(let n): select(.channel(n))
         case .mixtape(let alias): select(.mixtape(alias))
+        case .episode(let show, let episode): select(.episode(show: show, episode: episode))
         case .none: break
         }
     }

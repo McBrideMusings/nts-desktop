@@ -465,6 +465,152 @@ enum NTSAPI {
         )
     }
 
+    // MARK: - Explore
+
+    /// A mood, as NTS files them: ten of them, each with its own artwork.
+    struct Mood: Identifiable, Hashable {
+        let id: String
+        let name: String
+        let image: URL?
+    }
+
+    /// A primary genre and the subgenres filed under it. Twenty primaries carry
+    /// 438 subgenres between them, which is why the picker is a drawer that
+    /// opens one primary at a time rather than a wall of chips.
+    struct Genre: Identifiable, Hashable {
+        let id: String
+        let name: String
+        let subgenres: [Genre]
+    }
+
+    /// One episode as Explore returns it — everything a tile needs, plus the two
+    /// aliases that make it playable.
+    struct EpisodeCard: Identifiable, Hashable {
+        let showAlias: String
+        let episodeAlias: String
+        let title: String
+        let date: String
+        let location: String
+        let genres: [String]
+        let image: URL?
+        var id: String { "\(showAlias)/\(episodeAlias)" }
+    }
+
+    /// What Explore is asking for. Empty means "everything, newest first".
+    struct ExploreFilters: Equatable {
+        var mood: String?
+        /// Ordered, because the chips read in the order they were picked.
+        var genres: [String] = []
+        /// nts.live's "Music Only". Not a flag of its own — a mood tag whose name
+        /// they keep out of the mood list.
+        var musicOnly = false
+        /// nts.live's "Focused": episodes tagged with exactly as many genres as
+        /// are selected, so a two-genre search returns shows that are only those
+        /// two things rather than eclectic sets that happen to include them.
+        var focused = false
+
+        var isEmpty: Bool { mood == nil && genres.isEmpty && !musicOnly && !focused }
+
+        /// The query as nts.live itself builds it.
+        var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if focused {
+                items.append(URLQueryItem(name: "genre_count", value: String(max(1, genres.count))))
+            }
+            if musicOnly { items.append(URLQueryItem(name: "moods[]", value: "no-talkin")) }
+            for genre in genres { items.append(URLQueryItem(name: "genres[]", value: genre)) }
+            if let mood { items.append(URLQueryItem(name: "moods[]", value: mood)) }
+            return items
+        }
+    }
+
+    private struct MoodResponse: Decodable {
+        let results: [Entry]
+        struct Entry: Decodable { let id: String?; let name: String?; let image: Image? }
+        struct Image: Decodable { let medium: String?; let small: String?; let thumb: String? }
+    }
+
+    private struct GenreResponse: Decodable {
+        let results: [Entry]
+        struct Entry: Decodable { let id: String?; let name: String?; let subgenres: [Entry]? }
+    }
+
+    private struct ExploreResponse: Decodable {
+        let metadata: Meta?
+        let results: [Entry]
+        struct Meta: Decodable { let resultset: Set?; struct Set: Decodable { let count: Int? } }
+        struct Entry: Decodable {
+            let title: String?
+            let article: Article?
+            let image: Image?
+            let genres: [Tag]?
+            let location: String?
+            let local_date: String?
+        }
+        struct Article: Decodable { let path: String? }
+        struct Tag: Decodable { let name: String? }
+        struct Image: Decodable { let medium: String?; let small: String? }
+    }
+
+    static func moods() async throws -> [Mood] {
+        let url = URL(string: "https://www.nts.live/api/v2/moods")!
+        let decoded = try await fetch(MoodResponse.self, from: url, endpoint: "moods")
+        return decoded.results.compactMap { m in
+            guard let id = m.id else { return nil }
+            return Mood(id: id,
+                        name: decodeEntities(m.name ?? id),
+                        image: (m.image?.medium ?? m.image?.small).flatMap { URL(string: $0) })
+        }
+    }
+
+    static func genres() async throws -> [Genre] {
+        let url = URL(string: "https://www.nts.live/api/v2/genres")!
+        let decoded = try await fetch(GenreResponse.self, from: url, endpoint: "genres")
+        return decoded.results.compactMap(genre)
+    }
+
+    private static func genre(_ e: GenreResponse.Entry) -> Genre? {
+        guard let id = e.id else { return nil }
+        return Genre(id: id,
+                     name: decodeEntities(e.name ?? id),
+                     subgenres: (e.subgenres ?? []).compactMap(genre))
+    }
+
+    /// One page of Explore. Twelve at a time, which is what the endpoint serves
+    /// and what nts.live asks for.
+    static let explorePageSize = 12
+
+    static func explore(_ filters: ExploreFilters, offset: Int = 0) async throws -> (episodes: [EpisodeCard], total: Int) {
+        var components = URLComponents(string: "https://www.nts.live/api/v2/search/episodes")!
+        components.queryItems = [URLQueryItem(name: "offset", value: String(offset)),
+                                 URLQueryItem(name: "limit", value: String(explorePageSize))]
+            + filters.queryItems
+
+        let decoded = try await fetch(ExploreResponse.self, from: components.url!, endpoint: "explore")
+        let episodes = decoded.results.compactMap { e -> EpisodeCard? in
+            let (show, episode) = episodeAliases(e.article?.path)
+            guard !show.isEmpty, !episode.isEmpty else { return nil }
+            return EpisodeCard(
+                showAlias: show,
+                episodeAlias: episode,
+                title: decodeEntities(e.title ?? show).trimmingCharacters(in: .whitespaces),
+                date: e.local_date ?? "",
+                location: e.location ?? "",
+                genres: (e.genres ?? []).compactMap { $0.name }.map(decodeEntities),
+                image: (e.image?.medium ?? e.image?.small).flatMap { URL(string: $0) }
+            )
+        }
+        return (episodes, decoded.metadata?.resultset?.count ?? episodes.count)
+    }
+
+    /// `/shows/<show>/episodes/<episode>` → both aliases.
+    private static func episodeAliases(_ path: String?) -> (show: String, episode: String) {
+        let parts = (path ?? "").split(separator: "/").map(String.init)
+        guard let i = parts.firstIndex(of: "shows"), parts.count > i + 3, parts[i + 2] == "episodes"
+        else { return ("", "") }
+        return (parts[i + 1], parts[i + 3])
+    }
+
     // MARK: - Playable streams
 
     /// Turn an episode's SoundCloud/Mixcloud page into a playable HLS URL.

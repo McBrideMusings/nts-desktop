@@ -81,6 +81,18 @@ enum ScriptState {
             // What the catalog is actually listing. Without these, a list that
             // came back empty and one that was never asked for read the same.
             "catalogTab": m.catalogTab.rawValue,
+            // Explore's filters and how much they matched. A grid of twelve
+            // episodes says nothing about why those twelve, so the filters are
+            // reported alongside the count they produced.
+            "exploreMood": m.exploreFilters.mood ?? "",
+            "exploreGenres": m.exploreFilters.genres,
+            "exploreMusicOnly": m.exploreFilters.musicOnly,
+            "exploreFocused": m.exploreFilters.focused,
+            "exploreLoaded": m.exploreEpisodes.count,
+            "exploreTotal": m.exploreTotal,
+            "exploreLoading": m.exploreLoading,
+            "moodCount": m.moods.count,
+            "genreCount": m.genres.count,
             "catalogQuery": m.query,
             "catalogRows": m.catalogRows.count,
             "catalogFirstRows": m.catalogRows.prefix(3).map { "\($0.title) · \($0.meta)" },
@@ -304,6 +316,55 @@ final class NTSCloseWindowCommand: NTSCommand {
     override func performDefaultImplementation() -> Any? {
         run {
             RadioWindowController.scriptTarget?.hide()
+            return true
+        }
+    }
+}
+
+@objc(NTSFilterExploreCommand)
+final class NTSFilterExploreCommand: NTSCommand {
+    override func performDefaultImplementation() -> Any? {
+        run {
+            guard let m = AppModel.scriptTarget else { return false }
+            let args = self.evaluatedArguments ?? [:]
+
+            // The whole filter is replaced rather than merged: a caller that
+            // sends only a mood means "just this mood", and a merge would leave
+            // yesterday's genres silently ANDed in.
+            var filters = NTSAPI.ExploreFilters()
+            filters.mood = (args["mood"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            filters.genres = (args["genres"] as? [String]) ?? []
+            filters.musicOnly = (args["musicOnly"] as? Bool) ?? false
+            filters.focused = (args["focused"] as? Bool) ?? false
+
+            if let mood = filters.mood, !m.moods.isEmpty,
+               !m.moods.contains(where: { $0.id == mood }) {
+                self.scriptErrorNumber = -1703   // errAETypeError
+                self.scriptErrorString = """
+                    \"\(mood)\" is not a mood. Use one of: \
+                    \(m.moods.map(\.id).joined(separator: ", ")).
+                    """
+                return false
+            }
+
+            // Filtering implies looking: the chips this stands in for only exist
+            // while the catalog is up, so a filter set against a closed catalog
+            // would report results nobody can see.
+            m.catalogTab = .explore
+            m.query = ""
+            m.detail = nil
+            m.catalogOpen = true
+            m.exploreFilters = filters
+            return true
+        }
+    }
+}
+
+@objc(NTSExploreMoreCommand)
+final class NTSExploreMoreCommand: NTSCommand {
+    override func performDefaultImplementation() -> Any? {
+        run {
+            AppModel.scriptTarget?.loadMoreExplore()
             return true
         }
     }

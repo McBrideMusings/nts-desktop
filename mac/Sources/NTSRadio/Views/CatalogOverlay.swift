@@ -20,6 +20,10 @@ struct CatalogOverlay: View {
 
             if let detail = model.detail {
                 ScrollView { DetailPane(detail: detail) }
+            } else if model.catalogTab == .explore, model.query.isEmpty {
+                // Explore brings its own filter controls and its own paging, so
+                // it owns the whole pane rather than feeding the shared grid.
+                ExploreView()
             } else if model.catalogTab == .schedule, model.query.isEmpty {
                 // The schedule is read down a time column, so it gets a timeline
                 // rather than the tile grid. A query still answers in tiles: it
@@ -169,13 +173,17 @@ struct CatalogOverlay: View {
         switch model.catalogTab {
         case .saved:    return "Nothing saved yet."
         case .schedule: return "The schedule hasn’t loaded yet."
+        case .explore:  return "Nothing matches these filters."
         }
     }
 }
 
 // MARK: - Tile
 
-private struct Tile: View {
+/// One catalog result. Shared by the search grid, Saved, and Explore — they
+/// return different things, but `CatalogRow` has already flattened all of them
+/// into the same shape by the time they get here.
+struct Tile: View {
     @EnvironmentObject var model: AppModel
     let row: CatalogRow
     @State private var hovering = false
@@ -228,7 +236,13 @@ private struct Tile: View {
         }
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
-        .onTapGesture { model.open(row) }
+        // An Explore result is a finished recording, so clicking it starts it —
+        // same as clicking a mixtape on the dial. A schedule slot opens its show
+        // instead: the audio either hasn't been broadcast yet or is already the
+        // live channel you can hear from the rail.
+        .onTapGesture {
+            if case .episode = row.playable { model.play(row) } else { model.open(row) }
+        }
     }
 
     /// Play and star, revealed on hover so the resting grid stays a wall of

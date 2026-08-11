@@ -29,7 +29,7 @@ Requires macOS 15+ and Xcode 16+ / Swift 6 to build.
 The whole app lives in the `mac/` Swift package (root `Makefile`/`admin.toml` just delegate into it):
 
 - `mac/Sources/NTSRadio/Model/` — `Catalog.swift` (mixtape catalog fetch/cache), `PlayerEngine.swift` (AVPlayer), `NTSAPI.swift` / `NTSAuth.swift` (NTS REST API + sign-in), `AppModel.swift` (app state), `NowPlayingCenter.swift` (system media keys + the Control Center tile), `TracklistAdapter.swift`, `Cache.swift`, `ShowIndex.swift` (local searchable show index), `Saved.swift` (local bookmarks), `CatalogRow.swift` (one tile type for the catalog grid), `Scripting.swift` (the AppleScript control surface)
-- `mac/Sources/NTSRadio/Views/` — `DialView.swift` (radial mixtape dial), `ChannelRail.swift`, `NowPlayingBar.swift`, `TracklistOverlay.swift`, `CatalogOverlay.swift` (saved / search + detail), `ScheduleTimeline.swift` (the schedule tab: a fortnight of one channel's grid, day by day), `TopBar.swift`, `SettingsView.swift`, `LoginView.swift`, `MenuBarIcon.swift`, `PopoverView.swift`
+- `mac/Sources/NTSRadio/Views/` — `DialView.swift` (radial mixtape dial), `ChannelRail.swift`, `NowPlayingBar.swift`, `TracklistOverlay.swift`, `CatalogOverlay.swift` (saved / search + detail), `ExploreView.swift` (the default tab: browse the archive by mood and genre), `ScheduleTimeline.swift` (the schedule tab: a fortnight of one channel's grid, day by day), `TopBar.swift`, `SettingsView.swift`, `LoginView.swift`, `MenuBarIcon.swift`, `PopoverView.swift`
 
 ### NTS API limits worth knowing before extending the catalog
 
@@ -97,6 +97,9 @@ The whole app lives in the `mac/` Swift package (root `Makefile`/`admin.toml` ju
   osascript -e 'tell application "NTS Radio" to tune to "episode:lung-dart/lung-dart-10th-august-2026"'
   osascript -e 'tell application "NTS Radio" to skip by 1'
   osascript -e 'tell application "NTS Radio" to open catalog showing "schedule"'
+  osascript -e 'tell application "NTS Radio" to filter explore mood "sedative" genres {"ambientnewage"}'
+  osascript -e 'tell application "NTS Radio" to explore more'
+  osascript -e 'tell application "NTS Radio" to seek to 1800'
   osascript -e 'tell application "NTS Radio" to open catalog searching for "veronica"'
   osascript -e 'tell application "NTS Radio" to close catalog'
   ```

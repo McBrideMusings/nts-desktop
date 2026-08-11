@@ -143,6 +143,34 @@
             <result type="text" description="The state after opening, as JSON."/>
         </command>
 
+        <command name="filter explore" code="NTSrFLTR"
+                 description="Set Explore's filters, the same as clicking the mood chips, genre drawer and toggles. Anything left out is cleared, so one call states the whole filter.">
+            <cocoa class="NTSFilterExploreCommand"/>
+            <parameter name="mood" code="pMOD" type="text" optional="yes"
+                       description="A mood id, e.g. sedative or nosebleed. Omit for no mood.">
+                <cocoa key="mood"/>
+            </parameter>
+            <parameter name="genres" code="pGNR" type="list of text" optional="yes"
+                       description="Genre ids, e.g. {&quot;ambientnewage&quot;, &quot;avantgarde-experimental&quot;}. They stack.">
+                <cocoa key="genres"/>
+            </parameter>
+            <parameter name="music only" code="pMUS" type="boolean" optional="yes"
+                       description="nts.live's Music Only — episodes tagged no-talkin.">
+                <cocoa key="musicOnly"/>
+            </parameter>
+            <parameter name="focused" code="pFOC" type="boolean" optional="yes"
+                       description="nts.live's Focused — episodes tagged with exactly as many genres as are selected.">
+                <cocoa key="focused"/>
+            </parameter>
+            <result type="text" description="The state after filtering, as JSON. The results arrive asynchronously — read state again to see them."/>
+        </command>
+
+        <command name="explore more" code="NTSrMORE"
+                 description="Load Explore's next page of results, the same as scrolling to the bottom of the grid.">
+            <cocoa class="NTSExploreMoreCommand"/>
+            <result type="text" description="The state after asking, as JSON. The page arrives asynchronously — read state again to see it."/>
+        </command>
+
         <command name="close catalog" code="NTSrCLSC"
                  description="Uncover the faceplate, dropping any search term and open detail.">
             <cocoa class="NTSCloseCatalogCommand"/>
