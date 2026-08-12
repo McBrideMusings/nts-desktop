@@ -44,16 +44,23 @@ struct PopoverView: View {
             // to work around it — which is what made resizing snap.
             GeometryReader { proxy in
                 let w = proxy.size.width, h = proxy.size.height
+                // The rail is sized so its two cards come out square: stacked
+                // down one edge, each card is half the rail's height, so the
+                // rail wants to be exactly that wide; laid out across the top,
+                // each is half the width, so it wants to be that tall. Capped at
+                // a share of the window either way, so the dial always keeps the
+                // majority of the pane — when the cap bites, `ChannelRail` still
+                // centres a square card in the slot it was given.
                 if h > 0 && w / h <= 1.02 {
                     VStack(spacing: 0) {
                         ChannelRail(edge: .bottom)
-                            .frame(height: min(min(max(150, h * 0.24), 250), h * 0.45))
+                            .frame(height: min((w - 1) / 2, h * 0.45))
                         DialView()
                     }
                 } else {
                     HStack(spacing: 0) {
                         ChannelRail(edge: .trailing)
-                            .frame(width: min(280, w * 0.55))
+                            .frame(width: min((h - 1) / 2, w * 0.55))
                         DialView()
                     }
                 }

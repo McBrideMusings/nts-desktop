@@ -12,6 +12,17 @@ enum MenuBarIcon {
         return img
     }()
 
+    /// The same mark at 1024px, for the places that draw it large — the dial's
+    /// idle hub reaches ~240px on a Retina display, and `logoImage` is a 54px
+    /// bitmap pinned to 16pt, so blowing that one up is what made the wordmark
+    /// mushy. Rendered from Resources/NTSLogo.svg by `cairosvg`.
+    static let logoLarge: NSImage = {
+        let img = Bundle.module.url(forResource: "NTSLogoLarge", withExtension: "png")
+            .flatMap { NSImage(contentsOf: $0) } ?? logoImage
+        img.isTemplate = true
+        return img
+    }()
+
     // MARK: Status-item frames
 
     /// Layout of the status-item image: the wordmark, a gap, then three bars.

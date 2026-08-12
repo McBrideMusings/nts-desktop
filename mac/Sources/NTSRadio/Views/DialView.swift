@@ -24,9 +24,17 @@ struct DialView: View {
         var cy: CGFloat { h / 2 }
         /// The dial's overall diameter, leaving room for the icon ring's labels.
         var d: CGFloat { min(w, h) * 0.92 }
-        var iconRing: CGFloat { d * 0.435 }
+        /// Where the mixtape icons are printed. Pulled in from 0.435 once the
+        /// knob shrank: the icons had been placed to clear a knob that filled
+        /// 0.70 of the dial, and against the smaller one they read as a distant
+        /// outer ring with a field of empty plate between.
+        var iconRing: CGFloat { d * 0.33 }
         var iconSize: CGFloat { max(20, d * 0.078) }
-        var knob: CGFloat { d * 0.70 }
+        /// The knurled disc in the middle. It used to be 0.70 of the dial, which
+        /// left a black plate filling almost everything inside the icon ring and
+        /// read as one enormous circle rather than a knob with a faceplate around
+        /// it. The icons keep their radius; the knob pulls back off them.
+        var knob: CGFloat { d * 0.46 }
         var face: CGFloat { knob * 0.84 }
         /// Dead zone: a click inside the knob isn't aimed at a wedge.
         var hubRadius: CGFloat { knob / 2 }
@@ -252,8 +260,14 @@ struct DialView: View {
                     }
                 } else {
                     // Idle: the mark alone.
-                    Image(nsImage: MenuBarIcon.logoImage)
+                    Image(nsImage: MenuBarIcon.logoLarge)
                         .resizable()
+                        // The mark lands around 30pt in a normal window, and the
+                        // asset is 512px, so this is a heavy downscale — without
+                        // asking for it explicitly the edges of the wordmark
+                        // stair-step.
+                        .interpolation(.high)
+                        .antialiased(true)
                         .renderingMode(.template)
                         .scaledToFit()
                         .frame(width: g.face * 0.20, height: g.face * 0.20)
