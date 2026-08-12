@@ -83,11 +83,8 @@ private struct ChannelCard: View {
     @State private var hovering = false
 
     /// Below this slot height the card drops the genre chips and shrinks the
-    /// title, so two cards still fit when the window is short. It went up from
-    /// 170 when the chips became a fixed two lines tall — they now cost the same
-    /// vertical room whatever the genre is called, so they have to give up
-    /// sooner.
-    private static let compactThreshold: CGFloat = 190
+    /// title, so two cards still fit when the window is short.
+    private static let compactThreshold: CGFloat = 170
     private var compact: Bool { slotH < Self.compactThreshold || narrow }
     /// Side by side, two cards split the rail's width, and the metadata line is
     /// the first thing that stops fitting: "LONDON · 17:00 — 19:00 · ◉ PLAYING"
@@ -189,10 +186,11 @@ private struct ChannelCard: View {
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if !compact && !genres.isEmpty && chipWidth >= Self.chipFloor {
+            if !compact && !genres.isEmpty && chipsFit {
                 HStack(spacing: 5) {
                     ForEach(genres, id: \.self) { g in chip(g) }
                 }
+                .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(EdgeInsets(top: 0, leading: 14, bottom: 13, trailing: 14))
@@ -201,41 +199,38 @@ private struct ChannelCard: View {
     // MARK: Genre chips
 
     private static let chipFont = Theme.mono(8, .semibold)
-    /// Room each chip gets, once the row's padding and the gaps between chips
-    /// come out of the card's width.
-    private var chipWidth: CGFloat {
-        let gaps = CGFloat(max(0, genres.count - 1)) * 5
-        return (slotW - 28 - gaps) / CGFloat(max(1, genres.count))
-    }
-    /// Below this, a chip is too narrow to say anything — "COSMIC…" over "…" is
-    /// worse than no chip. The whole row goes rather than some of it, so the two
-    /// cards never disagree about whether they have chips.
-    private static let chipFloor: CGFloat = 52
+    /// How far the chip text may shrink before the row is not worth showing.
+    private static let chipMinScale: CGFloat = 0.62
 
-    /// One genre chip, always exactly two lines tall.
-    ///
-    /// Left to themselves the chips wrap independently: "COSMIC DISCO" fits on
-    /// one line, "LEFTFIELD DISCO" needs two, and the row ends up a ragged
-    /// skyline of different-height boxes. The hidden two-line sizer behind the
-    /// text fixes the height for all of them; the real text supplies the width
-    /// and truncates with an ellipsis when the name outruns its share.
+    /// Chips are one line, always — the row is a single band of boxes the same
+    /// height, and a long genre shrinks its own text to stay on that line rather
+    /// than wrapping and making its box twice as tall as its neighbours.
     private func chip(_ g: String) -> some View {
-        ZStack {
-            Text("A\nA")
-                .font(Self.chipFont)
-                .tracking(1)
-                .hidden()
-            Text(g.uppercased())
-                .font(Self.chipFont)
-                .tracking(1)
-                .lineLimit(2)
-                .truncationMode(.tail)
-                .multilineTextAlignment(.leading)
-                .frame(maxWidth: chipWidth)
-                .foregroundStyle(Theme.popover)
-        }
-        .padding(.horizontal, 5).padding(.vertical, 3)
-        .background(Theme.ink.opacity(0.85))
+        Text(g.uppercased())
+            .font(Self.chipFont)
+            .tracking(1)
+            .lineLimit(1)
+            .minimumScaleFactor(Self.chipMinScale)
+            .foregroundStyle(Theme.popover)
+            .padding(.horizontal, 5).padding(.vertical, 3)
+            .background(Theme.ink.opacity(0.85))
+    }
+
+    /// Roughly how wide the chips want to be at full size. The mono face is
+    /// fixed-pitch, so a character is worth about 0.62 of the point size, plus
+    /// the 1pt of tracking after it; each chip adds its 10pt of side padding and
+    /// each gap 5pt.
+    private var chipsNaturalWidth: CGFloat {
+        let perChar = 8 * 0.62 + 1
+        let text = genres.reduce(CGFloat(0)) { $0 + CGFloat($1.count) * perChar + 10 }
+        return text + CGFloat(max(0, genres.count - 1)) * 5
+    }
+
+    /// Show the chips only while they'd still be legible: the row has to fit the
+    /// card at no less than `chipMinScale`. Past that the whole row goes, never
+    /// part of it — one card with chips beside one without looks like a bug.
+    private var chipsFit: Bool {
+        chipsNaturalWidth * Self.chipMinScale <= slotW - 28
     }
 
     /// The current programme's artwork, shown for both channels. The inactive one
