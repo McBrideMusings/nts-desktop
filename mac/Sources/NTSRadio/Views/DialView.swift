@@ -260,18 +260,8 @@ struct DialView: View {
                     }
                 } else {
                     // Idle: the mark alone.
-                    Image(nsImage: MenuBarIcon.logoLarge)
-                        .resizable()
-                        // The mark lands around 30pt in a normal window, and the
-                        // asset is 512px, so this is a heavy downscale — without
-                        // asking for it explicitly the edges of the wordmark
-                        // stair-step.
-                        .interpolation(.high)
-                        .antialiased(true)
-                        .renderingMode(.template)
-                        .scaledToFit()
+                    NTSMark.filled(Theme.ink.opacity(0.85))
                         .frame(width: g.face * 0.20, height: g.face * 0.20)
-                        .foregroundStyle(Theme.ink.opacity(0.85))
                 }
             }
             // The text sits in the largest square that fits inside the face, so a

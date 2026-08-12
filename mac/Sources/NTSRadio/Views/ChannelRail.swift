@@ -87,11 +87,11 @@ private struct ChannelCard: View {
     private static let compactThreshold: CGFloat = 170
     private var compact: Bool { slotH < Self.compactThreshold || narrow }
     /// Side by side, two cards split the rail's width, and the metadata line is
-    /// the first thing that stops fitting: "LONDON · 17:00 — 19:00" truncates to
-    /// "LO… · 17:0…", which says nothing. Under this width the line drops to the
-    /// times alone. The threshold used to be 200pt, when the line also carried
-    /// "◉ PLAYING"; without that the city survives a lot further down.
-    private var narrow: Bool { slotW < 150 }
+    /// the first thing that stops fitting: "LONDON · 17:00 — 19:00 · ◉ PLAYING"
+    /// truncates to "LO… · 17:0… · ◉…", which says nothing. Under this width the
+    /// line drops to the times alone — the LED and the accent border already
+    /// carry live and playing.
+    private var narrow: Bool { slotW < 200 }
     /// Narrower still — two cards inside a 340pt window get about 76pt each,
     /// where even the time truncates. The card keeps the photograph, the numeral
     /// and the LED, which is what identifies it; the words go.
@@ -160,20 +160,19 @@ private struct ChannelCard: View {
 
     private var meta: some View {
         VStack(alignment: .leading, spacing: 7) {
-            // The city and the times, and nothing else. "LIVE" / "◉ PLAYING"
-            // used to end this line and was the widest thing on it, which is
-            // what pushed "NEW YORK · 10:00 – 11:00" into "NEW YORK · 10:00 –
-            // 11…" — spending the row on a fact the LED, the accent border and
-            // the now-playing bar all already carry.
             HStack(spacing: 8) {
                 if narrow {
                     Text(channel.startEnd).monospacedDigit()
+                        .foregroundStyle(active ? channel.accent : Color(hex: 0xcfcec8))
                 } else {
                     Text(location)
                     if !channel.startEnd.isEmpty {
                         Text("·").opacity(0.5)
                         Text(channel.startEnd).monospacedDigit()
                     }
+                    Text("·").opacity(0.5)
+                    Text(active ? "◉ PLAYING" : "LIVE")
+                        .foregroundStyle(active ? channel.accent : Color(hex: 0xcfcec8))
                 }
             }
             .font(Theme.mono(9, .bold))
