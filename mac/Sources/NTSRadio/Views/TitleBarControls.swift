@@ -39,7 +39,12 @@ struct TitleBarControls: View {
             Spacer(minLength: 0)
             settingsButton
         }
-        .padding(.trailing, 14)
+        // None — and that is the correct amount, because AppKit already insets a
+        // `.top` accessory's trailing edge by about 14pt. Measured off a window
+        // capture: the close button's outer edge sits 13.5pt from the window's
+        // left edge, so the gear's own 14pt of AppKit inset lands it on the same
+        // margin. The 14pt of padding this used to add was doubling it, holding
+        // the gear 28pt in while the traffic lights sat at 13.5.
         .frame(maxWidth: .infinity)
         .frame(height: Theme.titleBarHeight)
         // No background and no hairline: both would stop 78pt short of the left
