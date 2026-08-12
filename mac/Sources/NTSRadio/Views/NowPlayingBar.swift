@@ -44,7 +44,7 @@ struct NowPlayingBar: View {
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(Theme.ink))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hit)
             .disabled(model.isIdle)
             .opacity(model.isIdle ? 0.4 : 1)
 
@@ -98,7 +98,7 @@ struct NowPlayingBar: View {
                     .foregroundStyle(Theme.ink)
                     .frame(width: 22, height: 22)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hit)
 
             if !compact {
                 VolumeMeter(volume: $model.volume, muted: model.muted)
@@ -148,7 +148,7 @@ private struct PaneSwitch: View {
                 .background(RoundedRectangle(cornerRadius: 6)
                     .fill(on ? Theme.ink : .clear))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hit)
         .help(help)
     }
 }
@@ -167,7 +167,7 @@ private struct TracksButton: View {
                 .background(RoundedRectangle(cornerRadius: 6)
                     .fill(model.tracksOpen ? Theme.ink : Theme.hairline(0.08)))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hit)
         .disabled(model.isIdle)
         .opacity(model.isIdle ? 0.4 : 1)
         .help(model.tracksOpen ? "Hide the tracklist" : "Tracklist for what is playing")

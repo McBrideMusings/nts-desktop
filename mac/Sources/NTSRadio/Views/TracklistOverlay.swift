@@ -36,7 +36,7 @@ struct TracklistOverlay: View {
                         .frame(width: 30, height: 30)
                         .background(RoundedRectangle(cornerRadius: 6).fill(Theme.hairline(0.08)))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hit)
             }
             .padding(EdgeInsets(top: 18, leading: 22, bottom: 14, trailing: 22))
 
@@ -110,7 +110,7 @@ private struct TrackRow: View {
                     .frame(width: 27, height: 27)
                     .background(RoundedRectangle(cornerRadius: 6).fill(Theme.hairline(0.06)))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hit)
             .frame(width: 34, alignment: .trailing)
         }
         .padding(.vertical, 11)

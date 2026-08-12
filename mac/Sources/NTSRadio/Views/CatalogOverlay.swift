@@ -52,7 +52,7 @@ struct CatalogOverlay: View {
                         .padding(.horizontal, 12).padding(.vertical, 9)
                         .background(Theme.ink)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hit)
                 .layoutPriority(1)
             } else {
                 // Protected from the squeeze below: with a fixed-width search
@@ -71,7 +71,7 @@ struct CatalogOverlay: View {
                     .frame(width: 28, height: 28)
                     .background(Theme.hairline(0.08))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hit)
             .layoutPriority(1)
             .help("Close the catalog")
         }
@@ -93,7 +93,7 @@ struct CatalogOverlay: View {
                         .padding(.horizontal, 12).padding(.vertical, 9)
                         .background(on ? Theme.ink : .clear)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hit)
             }
         }
         .opacity(model.query.isEmpty ? 1 : 0.4)
@@ -115,7 +115,7 @@ struct CatalogOverlay: View {
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.inkMuted)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hit)
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 9)
@@ -308,7 +308,7 @@ struct Tile: View {
                 .frame(width: 26, height: 26)
                 .background(Theme.ink)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hit)
     }
 }
 
@@ -619,7 +619,7 @@ private struct ActionButton: View {
                 .background(filled ? Theme.ink : .clear)
                 .overlay(filled ? nil : Rectangle().stroke(Theme.hairline(0.14), lineWidth: 1))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hit)
     }
 }
 
@@ -666,7 +666,7 @@ private struct EpisodeRow: View {
                         .foregroundStyle(Theme.inkMuted)
                         .frame(width: 22, height: 22)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hit)
                 .help("Open on nts.live")
             }
         }

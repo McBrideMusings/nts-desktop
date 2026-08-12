@@ -78,7 +78,7 @@ struct TitleBarControls: View {
                 }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hit)
         .help(auth.isAuthenticated ? "Account — \(auth.email ?? "signed in")" : "Sign in")
     }
 
@@ -93,7 +93,7 @@ struct TitleBarControls: View {
                 .frame(width: 26, height: 26)
                 .background(RoundedRectangle(cornerRadius: 7).fill(Theme.hairline(0.10)))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hit)
         .help("Settings")
     }
 }

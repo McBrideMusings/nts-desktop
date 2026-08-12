@@ -2,6 +2,34 @@ import SwiftUI
 import AppKit
 import AVFoundation
 
+// MARK: - Button style
+
+/// `.plain`, but the button's whole frame takes the click.
+///
+/// Every icon button in this app is a glyph with a `.frame` around it and its
+/// chip drawn behind with `.background`. A background is not part of what
+/// SwiftUI hit-tests, and neither is the empty space a `.frame` adds, so a
+/// `.plain` button like that only answers on the ink of the glyph itself — a
+/// 13pt target inside a 32pt chip that looks like a button all the way to its
+/// corners. Clicks landing in the gap did nothing at all, which reads as a dead
+/// button rather than a missed one.
+///
+/// Setting `contentShape` here rather than at each call site is the point: the
+/// style cannot be applied without also making the frame clickable, so a new
+/// icon button cannot be added with the same gap. Use this instead of `.plain`
+/// for anything whose tappable area is meant to be its chip.
+struct HitButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .contentShape(Rectangle())
+            .opacity(configuration.isPressed ? 0.65 : 1)
+    }
+}
+
+extension ButtonStyle where Self == HitButtonStyle {
+    static var hit: HitButtonStyle { HitButtonStyle() }
+}
+
 // MARK: - Track row model
 
 struct Track: Identifiable, Hashable {
