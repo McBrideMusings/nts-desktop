@@ -11,6 +11,13 @@ enum Theme {
     static let nowBar      = Color.black
     static let chipBlack   = Color(hex: 0x0b0b0c)
 
+    /// The title-bar band's height, and therefore the window's title-bar
+    /// accessory's. 32pt keeps the traffic lights vertically centred in it. It
+    /// lives here because three places need the same number and none of them
+    /// owns it: the window controller sizes the accessory, `PopoverView` paints
+    /// the band across the full window width, and `TitleBarControls` fills it.
+    static let titleBarHeight: CGFloat = 32
+
     // Ink
     static let ink         = Color(hex: 0xf5f4f1)
     static let hubInk      = Color(hex: 0xf0efe9)

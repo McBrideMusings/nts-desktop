@@ -1,26 +1,30 @@
 import SwiftUI
 
-/// The settings + account controls that sit at the right end of the title-bar
-/// strip. The strip itself, and the NTS mark centred in it, are drawn by
-/// `PopoverView`.
+/// The catalog / settings / account buttons at the right end of the title bar,
+/// and nothing else. The band they sit in — its black, its hairline, and the NTS
+/// mark centred in it — belongs to `PopoverView`.
 ///
-/// This is *not* part of the content view. `RadioWindowController` mounts it as
-/// a full-width `.top` title-bar accessory, which makes AppKit own the strip:
-/// it routes clicks to the buttons (a view drawn into the content view under
-/// the title bar renders but never gets a click — the title-bar view swallows
-/// them for window dragging), and it reports the strip's height as the content
-/// view's top safe-area inset, so the rail and dial start exactly below it.
-/// The old arrangement drew this strip in the content stack and pulled the
-/// stack up under the title bar by a hardcoded 32pt; whenever AppKit's real
-/// band was taller, the whole interface slid up and the channel cards ran into
-/// the traffic lights.
-struct TopBar: View {
+/// **This view cannot centre anything, and the name says so on purpose.**
+/// `RadioWindowController` mounts it as a `.top` title-bar accessory, and AppKit
+/// insets that accessory past the traffic lights: its box starts about 78pt in
+/// from the window's left edge and stops ~10pt short on the right, so the middle
+/// of this view is roughly 33pt right of the middle of the window. Laying the
+/// NTS mark out here is what put it visibly off-centre, and no amount of
+/// balancing spacers inside this box could fix it — the box is the wrong box.
+/// Anything that must sit on the window's centre line goes in `PopoverView`'s
+/// band, which is drawn in the content view and spans the true window width.
+///
+/// What this view is *for* is clicks: the title bar swallows mouse events in the
+/// content view's top band (it reserves them for window dragging), so a button
+/// drawn down there renders but never responds. Mounting the controls as an
+/// accessory is the only way they work. It also reports the band's height as the
+/// content view's top safe-area inset, so the rail and dial start exactly below
+/// it — the arrangement before this one drew the strip in the content stack and
+/// pulled the stack up by a hardcoded 32pt, and whenever AppKit's real band was
+/// taller the whole interface slid up into the traffic lights.
+struct TitleBarControls: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var auth: NTSAuth
-
-    /// The strip's height, and therefore the title-bar band's. 32pt keeps the
-    /// traffic lights vertically centred in it.
-    static let height: CGFloat = 32
 
     var body: some View {
         HStack(spacing: 8) {
@@ -31,17 +35,11 @@ struct TopBar: View {
         }
         .padding(.trailing, 14)
         .frame(maxWidth: .infinity)
-        .frame(height: Self.height)
-        // Deliberately no background: AppKit insets this accessory past the
-        // traffic lights, so anything centred inside it lands right of the
-        // window's real centre. `PopoverView` paints the strip full-width in the
-        // content view and centres the NTS mark there instead; this view is left
-        // transparent so that strip shows through, and carries only the controls
-        // — which have to live up here because the title bar eats clicks in the
-        // content view's top band.
-        // No hairline here: AppKit insets this view past the traffic lights, so
-        // a rule drawn at its bottom would stop 78pt short of the left edge.
-        // PopoverView draws it along the top of the content instead.
+        .frame(height: Theme.titleBarHeight)
+        // No background and no hairline: both would stop 78pt short of the left
+        // edge, for the same reason the mark could not be centred here.
+        // `PopoverView` paints them across the full width and this view is left
+        // transparent so they show through.
     }
 
     /// Login-state indicator: signed-in shows the email's initial with a green

@@ -43,7 +43,7 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
             .environmentObject(model)
             .environmentObject(model.auth)
         // The content view spans the whole window (`.fullSizeContentView`) and
-        // `PopoverView` opens with its own `TopBar.height` strip laid out from
+        // `PopoverView` opens with its own `Theme.titleBarHeight` strip laid out from
         // the top of the window — the same constant that sizes the title-bar
         // accessory below, so the strip and the band AppKit actually draws
         // cannot disagree. They did before: the strip hardcoded 32pt while the
@@ -69,22 +69,24 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
 
-        // The whole top bar is a full-width title-bar accessory rather than a
-        // strip inside the content view. Two things follow from that, and both
-        // are why it lives here: AppKit routes clicks to its buttons (a view
-        // drawn into the content view under the title bar never receives one —
-        // the title-bar view swallows clicks in its band for window dragging),
-        // and AppKit sets the content view's top safe-area inset to this
-        // accessory's height, so PopoverView's rail and dial start exactly
-        // below the bar with no height for the content side to guess at.
-        let topBar = TopBar()
+        // The title-bar buttons are a title-bar accessory rather than a strip
+        // inside the content view. Two things follow from that, and both are why
+        // it lives here: AppKit routes clicks to them (a view drawn into the
+        // content view under the title bar never receives one — the title-bar
+        // view swallows clicks in its band for window dragging), and AppKit sets
+        // the content view's top safe-area inset to this accessory's height, so
+        // PopoverView's rail and dial start exactly below the band with no
+        // height for the content side to guess at. Only the buttons live here:
+        // AppKit insets the accessory past the traffic lights, so its centre is
+        // not the window's centre and nothing centred can go in it.
+        let topBar = TitleBarControls()
             .environmentObject(model)
             .environmentObject(model.auth)
         let topBarVC = NSTitlebarAccessoryViewController()
         topBarVC.layoutAttribute = .top
         let topBarHost = NSHostingView(rootView: topBar)
         // Width is stretched by AppKit; the height here is the band's height.
-        topBarHost.frame = NSRect(x: 0, y: 0, width: 880, height: TopBar.height)
+        topBarHost.frame = NSRect(x: 0, y: 0, width: 880, height: Theme.titleBarHeight)
         topBarHost.autoresizingMask = [.width]
         topBarVC.view = topBarHost
         window.addTitlebarAccessoryViewController(topBarVC)

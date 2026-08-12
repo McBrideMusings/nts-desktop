@@ -24,7 +24,7 @@ struct PopoverView: View {
             // here: the title bar swallows clicks in this band, which is why the
             // controls live in the accessory.
             Theme.nowBar
-                .frame(height: TopBar.height)
+                .frame(height: Theme.titleBarHeight)
                 .overlay(
                     NTSMark.filled(Theme.ink.opacity(0.9))
                         .frame(width: 13, height: 13)
