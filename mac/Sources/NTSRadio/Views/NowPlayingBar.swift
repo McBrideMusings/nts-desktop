@@ -303,31 +303,17 @@ private struct LevelLamps: View {
     }
 }
 
+/// A plain horizontal slider for the volume — a real track and knob you can grab
+/// anywhere along, rather than thirteen bars you have to aim between.
 private struct VolumeMeter: View {
     @Binding var volume: Double
     let muted: Bool
-    private let n = 13
 
     var body: some View {
-        GeometryReader { geo in
-            HStack(alignment: .bottom, spacing: 2.5) {
-                ForEach(0..<n, id: \.self) { i in
-                    let on = !muted && volume >= (Double(i + 1) / Double(n)) * 100 - 0.01
-                    Rectangle()
-                        .fill(on ? Theme.ink : Theme.hairline(0.2))
-                        .frame(width: 3, height: 6 + CGFloat(i) * 1.4)
-                }
-            }
-            .frame(maxHeight: .infinity, alignment: .bottom)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { v in
-                        let p = max(0, min(1, v.location.x / geo.size.width))
-                        volume = (p * 100).rounded()
-                    }
-            )
-        }
-        .frame(width: CGFloat(n) * 5.5 - 2.5, height: 22)
+        Slider(value: $volume, in: 0...100)
+            .controlSize(.small)
+            .tint(Theme.ink)
+            .frame(width: 76)
+            .opacity(muted ? 0.4 : 1)
     }
 }
