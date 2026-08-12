@@ -11,13 +11,12 @@ NTS Radio is a native macOS menu-bar app (SwiftUI, Swift 6) for streaming NTS Ra
 Prefer `admin <task>` (this repo has `admin.toml`); the underlying `make` targets in the root `Makefile` just delegate to `mac/`.
 
 ```
-admin setup      # swift package resolve (one-time, after a fresh clone)
-admin dev        # run from source; press R to rebuild & relaunch, Q to quit — do not run a second instance
 admin build      # compile the release binary (swift build -c release)
-admin app        # assemble "NTS Radio.app" (bundles mixtapes + fonts)
-admin start      # build the .app and launch it
-admin install    # build the .app and install to /Applications
-admin deploy     # build a distributable NTS Radio.dmg
+admin dev        # run from source; press R to rebuild & relaunch, Q to quit — do not run a second instance
+admin deploy     # assemble "NTS Radio.app" and install it to /Applications on this machine
+admin distribute # build a distributable NTS Radio.dmg
+
+admin setup      # swift package resolve (one-time, after a fresh clone)
 admin snapshot   # render each popover state to PNG for visual verification
 admin clean      # remove mac/.build and mac/build
 ```
