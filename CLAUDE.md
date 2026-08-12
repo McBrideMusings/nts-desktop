@@ -96,6 +96,17 @@ The whole app lives in the `mac/` Swift package (root `Makefile`/`admin.toml` ju
   `moods[]=no-talkin`. 10 moods, 20 primary genres, 438 subgenres. None of it
   needs a user account.
 - Every endpoint above is served `cache-control: max-age=900` with an ETag.
+- **There is no audio to meter.** Both the live relay
+  (`stream-relay-geo.ntslive.net/stream{,2}`) and the mixtape endpoints
+  (`stream-mixtape-geo.ntslive.net/mixtape*`) hand AVPlayer an asset that reaches
+  `readyToPlay` carrying **zero audio tracks**, so an `AVMutableAudioMix` has
+  nothing to attach an `MTAudioProcessingTap` to and no sample ever reaches a
+  callback. Measured, not assumed. The only route that does work is a CoreAudio
+  process tap over the app's own output (`AudioHardwareCreateProcessTap`, macOS
+  14.2+, read through a private aggregate device) — that does deliver real
+  samples, but it is audio capture and therefore a permission prompt, which is
+  not worth paying for a decoration. `LevelLamps` in `NowPlayingBar.swift`
+  invents its levels on purpose and is honest only about *when* it moves.
 - `mac/Sources/NTSFirestore/` — a Firestore Listen (gRPC) client for live channel/mixtape tracklists, with generated protobuf/gRPC Swift code under `Generated/` and source `.proto` files in `mac/Proto/` (see `mac/Proto/regenerate.sh`)
 - `mac/Sources/FSProbe/` — standalone probe binary, separate from the main app target
 - `mixtapes/<slug>/` — per-mixtape assets checked into the repo (cover art, icons, animation `.mp4`s); the `animation_*.mp4` files are gitignored (kept locally, not tracked — the dial doesn't use them yet)

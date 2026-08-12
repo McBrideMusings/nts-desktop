@@ -6,8 +6,8 @@ struct NowPlayingBar: View {
 
     /// The window's width. The bar's right-hand cluster costs a fixed ~160pt, so
     /// in a narrow window it eats the title down to "LO…" — below this width the
-    /// level meter and the equaliser go and the title gets their room. Mute stays:
-    /// it is the control, the meter only shows what it did.
+    /// volume meter and the level panel go and the title gets their room. Mute
+    /// stays: it is the control, the meter only shows what it did.
     let width: CGFloat
     private var compact: Bool { width < 460 }
 
@@ -140,9 +140,10 @@ private struct LinkLabel: View {
 }
 
 /// A dot-matrix level panel — five columns of seven lamps, filling from the
-/// bottom, with a peak lamp held above each column and falling back a lamp at a
-/// time. The quantising to whole lamps is what makes it read as a piece of
-/// hardware on the front of a rack rather than as an animation.
+/// bottom, with a peak lamp held above each column that steps down as the loud
+/// moment holding it up ages out. The quantising to whole lamps is what makes it
+/// read as a piece of hardware on the front of a rack rather than as an
+/// animation.
 ///
 /// Resting — nothing tuned, paused, muted, or buffering — is the bottom row lit
 /// and nothing else: the panel is powered, the signal is zero.
@@ -193,26 +194,59 @@ private struct LevelLamps: View {
 
     // MARK: What the lamps show
 
-    /// Band `band` at time `t`, 0…1. Low bands move slower and sit louder, the
-    /// way music actually meters; the top band is quick and sparse.
-    private func level(_ band: Int, _ t: TimeInterval) -> Double {
-        let rate = 5.0 + Double(band) * 2.5
-        let step = Int(t * rate)
-        let a = noise(band, step), b = noise(band, step + 1)
-        let f = t * rate - Double(step)
-        let eased = f * f * (3 - 2 * f)                    // smooth between targets
-        let tilt = 1.0 - Double(band) * 0.11              // bass louder than treble
-        let swell = 0.62 + 0.38 * sin(t * 2 * .pi / 2.3)  // a slow musical rise and fall
-        return min(1, max(0, 0.18 + 0.82 * (a + (b - a) * eased) * tilt * swell))
+    /// How often band `band` picks a new target. Low bands move slower, the way
+    /// music actually meters; the top band is quick and sparse.
+    private func rate(_ band: Int) -> Double { 5.0 + Double(band) * 2.5 }
+
+    /// Where every column's quiet end sits at time `t` — a slow rise and fall
+    /// shared by all five, the panel breathing with the music.
+    ///
+    /// It moves the column's *floor* and leaves the noise its own range on top.
+    /// Scaling the whole value by it instead — `floor + span × noise × tilt ×
+    /// swell` — collapsed the top band into 0.18…0.29 at the bottom of every
+    /// swell, and since `lamps()` rounds up and 2/7 is 0.286, every one of those
+    /// values drew the same two lamps: the right-hand column stood still for a
+    /// full second out of every 2.3, during real playback. A motionless column
+    /// is the one thing this panel is supposed to mean, so it must never happen
+    /// while audio is coming out.
+    private func floor(_ t: TimeInterval) -> Double {
+        0.16 + 0.22 * (0.5 + 0.5 * sin(t * 2 * .pi / 2.3))
     }
 
-    /// The loudest this band has been in the last while — where the peak lamp
-    /// sits. Sampled backwards rather than remembered, so it stays a function of
-    /// the clock like everything else here.
-    private func peak(_ band: Int, _ t: TimeInterval, window: Double = 0.9) -> Double {
-        stride(from: 0.0, through: window, by: window / 8)
-            .map { level(band, t - $0) }
-            .max() ?? 0
+    /// How much of the scale band `band`'s own movement covers. Bass swings
+    /// widest; the top band is quick and sparse.
+    private func swing(_ band: Int) -> Double { 0.55 * (1.0 - Double(band) * 0.11) }
+
+    /// Band `band` at time `t`, 0…1.
+    private func level(_ band: Int, _ t: TimeInterval) -> Double {
+        let r = rate(band)
+        let step = Int(t * r)
+        let f = t * r - Double(step)
+        let eased = f * f * (3 - 2 * f)                       // smooth between targets
+        let a = noise(band, step), b = noise(band, step + 1)
+        return min(1, floor(t) + swing(band) * (a + (b - a) * eased))
+    }
+
+    /// The loudest this band has been in the last little while — where the peak
+    /// lamp sits. Remembered nowhere: it is the largest of the band's own recent
+    /// targets, so it holds flat between them and steps down as a loud one ages
+    /// out. It rides the same floor as the column beneath it, so it can never
+    /// sink below its own column.
+    ///
+    /// A sliding window of evenly spaced samples of `level` looked right and was
+    /// not, in two ways: the grid shifted 1/24s per frame and landed on
+    /// different local maxima, so the held lamp rose thirteen times in two
+    /// seconds; and each sample carried the floor of the past instant it was
+    /// taken at, which on a rising swell put the "peak" underneath the column.
+    private func peak(_ band: Int, _ t: TimeInterval, window: Double = 0.7) -> Double {
+        let r = rate(band)
+        let step = Int(t * r)
+        let back = max(2, Int((window * r).rounded()))
+        // step + 1 is the target the column is currently travelling towards, so
+        // it belongs in the window — otherwise the lit column overtakes its own
+        // peak lamp on the way up.
+        let loudest = (-1...back).map { noise(band, step - $0) }.max() ?? 0
+        return min(1, floor(t) + swing(band) * loudest)
     }
 
     /// Deterministic 0…1 noise. A seeded hash rather than `random()` so the

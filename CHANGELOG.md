@@ -82,8 +82,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   order nts.live lists them in. A track still being identified arrives with no
   artist, and keeps its title on the lead line rather than showing a blank one.
 
+- The five equaliser bars in the now-playing bar are a dot-matrix level panel:
+  five columns of seven lamps filling from the bottom, with a peak lamp held
+  above each column and falling back a lamp at a time. Quantising to whole lamps
+  is what makes it read as a piece of hardware rather than as an animation.
+  Resting — idle, paused, muted, or buffering — is the bottom row lit and
+  nothing else. The levels are invented, deliberately: see **Fixed** for what it
+  now moves on, and `LevelLamps` for why measuring them is not worth a
+  permission prompt.
+
 ### Fixed
 
+- The now-playing indicator moves only while audio is genuinely coming out. It
+  read `isPlaying` — whether Play had been pressed — so through a buffering
+  stall, when AVPlayer is sitting in `waitingToPlayAtSpecifiedRate` and the
+  speakers are silent, the bars kept bouncing. It reads `engine.isRendering`
+  now, and rests.
+- The indicator's bars no longer drift off their baseline. Each bar was drawn at
+  full height and squashed by `scaleEffect` under a `repeatForever` animation
+  with nothing recording where that animation had got to; `PlayerEngine`
+  publishes `position` twice a second, so the bar was rebuilt mid-squash and the
+  repeat restarted from wherever the picture happened to be, leaving the cluster
+  floating clear of the floor. Every lamp in its replacement is a function of the
+  clock alone, so there is no part-finished animation to interrupt.
 - The channel rail hands over to the next programme on its own clock instead of
   waiting to be told. NTS serves `/api/v2/live` with `cache-control: max-age=900`,
   so for up to fifteen minutes after the hour every 60-second poll returned the
