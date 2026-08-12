@@ -111,8 +111,13 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
         self.window = window
     }
 
+    /// The menu-bar click. Hiding is only right when the window is already the
+    /// thing you are looking at: on screen, this app frontmost, this window key.
+    /// A window that is merely visible but buried under Safari gets raised —
+    /// otherwise the first click hides what you were pointing at and the second
+    /// one brings it back, which is two clicks to do what you asked for once.
     func toggle(relativeTo statusButton: NSStatusBarButton?) {
-        if window.isVisible {
+        if window.isVisible, NSApp.isActive, window.isKeyWindow {
             window.orderOut(nil)
         } else {
             show(relativeTo: statusButton)
