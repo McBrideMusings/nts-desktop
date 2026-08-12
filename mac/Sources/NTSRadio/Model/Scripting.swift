@@ -82,6 +82,11 @@ enum ScriptState {
                  "endpoint": $0.endpoint, "failures": $0.failures] as [String: Any]
             } ?? [:],
             "windowVisible": RadioWindowController.scriptTarget?.isWindowVisible ?? false,
+            // Settings is its own window, so "is it up" is not answerable from
+            // anything about the radio window. Without these a script could open
+            // it and have no way to tell that it had.
+            "settingsVisible": SettingsWindowController.shared.isVisible,
+            "settingsPane": SettingsWindowController.shared.visiblePane.rawValue,
             // Where the window is — "live" or "catalog" — and whether the
             // tracklist drawer is over it. Two separate facts because they are
             // two separate things: the drawer covers a pane without changing

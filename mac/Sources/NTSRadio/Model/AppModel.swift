@@ -24,19 +24,19 @@ enum Selection: Equatable {
 /// The tracklist is deliberately *not* a case here — it is a drawer that covers
 /// whichever of these is underneath and gives it straight back
 /// (`AppModel.tracksOpen`), not a third place to be.
-/// A pane and whether the drawer is over it — the pair, as one value to animate
-/// on. See `AppModel.paneState`.
-struct PaneState: Equatable {
-    let pane: Pane
-    let tracksOpen: Bool
-}
-
 enum Pane: Equatable {
     /// The faceplate: what is on air now — the two channel cards and the mixtape
     /// dial.
     case live
     /// The archive: explore, schedule, saved, search.
     case catalog
+}
+
+/// A pane and whether the drawer is over it — the pair, as one value to animate
+/// on. See `AppModel.paneState`.
+struct PaneState: Equatable {
+    let pane: Pane
+    let tracksOpen: Bool
 }
 
 /// Which list the catalog is showing when no search is running. A live query

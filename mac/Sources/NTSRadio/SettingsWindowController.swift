@@ -52,8 +52,11 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSToolbarDeleg
         window?.makeKeyAndOrderFront(nil)
     }
 
-    /// Whether the window is up, for the scripting layer's state blob.
+    /// Whether the window is up, and which pane it is on — read by the scripting
+    /// layer's state blob, so a script can tell "Settings is open on Account"
+    /// from "Settings never opened" without looking at pixels.
     var isVisible: Bool { window?.isVisible ?? false }
+    var visiblePane: SettingsPane { selection.pane }
 
     // MARK: Window
 

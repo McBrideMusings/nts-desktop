@@ -12,14 +12,10 @@ enum Snapshot {
 
         // Default window content size; the top bar's traffic-light gap renders
         // empty here (no real lights offscreen).
-        func shot(_ name: String, size: CGSize = CGSize(width: 880, height: 720),
-                  _ configure: (AppModel) -> Void) {
-            let model = AppModel()
-            configure(model)
-            let view = PopoverView()
-                .environmentObject(model)
-                .environmentObject(model.auth)
-                .frame(width: size.width, height: size.height)
+        /// Render any view to a PNG. The one place pixels are produced, so the
+        /// scale and the failure message cannot drift between the popover shots
+        /// and the settings ones.
+        func shotView<V: View>(_ name: String, _ view: V) {
             let renderer = ImageRenderer(content: view)
             renderer.scale = 2
             guard let img = renderer.nsImage,
@@ -31,18 +27,14 @@ enum Snapshot {
             print("wrote \(name)")
         }
 
-        /// Any view, not just `PopoverView` — the Settings window's contents live
-        /// outside it now, and a surface with no shot is a surface nobody looks at.
-        func shotView<V: View>(_ name: String, _ view: V) {
-            let renderer = ImageRenderer(content: view)
-            renderer.scale = 2
-            guard let img = renderer.nsImage,
-                  let tiff = img.tiffRepresentation,
-                  let rep = NSBitmapImageRep(data: tiff),
-                  let png = rep.representation(using: .png, properties: [:])
-            else { print("snapshot failed: \(name)"); return }
-            try? png.write(to: base.appendingPathComponent(name))
-            print("wrote \(name)")
+        func shot(_ name: String, size: CGSize = CGSize(width: 880, height: 720),
+                  _ configure: (AppModel) -> Void) {
+            let model = AppModel()
+            configure(model)
+            shotView(name, PopoverView()
+                .environmentObject(model)
+                .environmentObject(model.auth)
+                .frame(width: size.width, height: size.height))
         }
 
         // Sample mixtape + tracklist matching the prototype's data, so the
