@@ -1,7 +1,8 @@
 import Foundation
 
-/// Minimal client for NTS's public live endpoint. Best-effort + defensive:
-/// every field is optional, and anything that doesn't parse is just omitted.
+/// Minimal client for nts.live's public API — the schedule grid, shows and
+/// episodes, the mixtape catalog, Explore. Best-effort + defensive: every field
+/// is optional, and anything that doesn't parse is just omitted.
 enum NTSAPI {
 
     // MARK: - Requests

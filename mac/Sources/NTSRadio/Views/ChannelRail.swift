@@ -20,8 +20,13 @@ struct ChannelRail: View {
             // window being under 430pt tall, which is a number about the window
             // and not about the cards.
             let stacked = proxy.size.height > proxy.size.width
-            let slotH = stacked ? (proxy.size.height - 1) / 2 : proxy.size.height
-            let slotW = stacked ? proxy.size.width : (proxy.size.width - 1) / 2
+            // `GeometryReader` reports `.zero` on the first layout pass and again
+            // while siblings are still measuring, and subtracting the divider's
+            // 1pt from 0 gives −0.5 — a negative slot handed to a card, which
+            // every proportion downstream then inherits. `half` never goes below
+            // zero, so a not-yet-measured rail is empty rather than inverted.
+            let slotH = stacked ? Self.half(proxy.size.height) : proxy.size.height
+            let slotW = stacked ? proxy.size.width : Self.half(proxy.size.width)
             let cards = Array(model.catalog.channels.enumerated())
             Group {
                 if stacked {
@@ -50,6 +55,10 @@ struct ChannelRail: View {
             }
         }
     }
+
+    /// One of the two card slots along an axis, once the 1pt divider between
+    /// them comes out. Clamped at zero — see the note at the call site.
+    static func half(_ total: CGFloat) -> CGFloat { max(0, (total - 1) / 2) }
 
     /// Cards fill their slot, always. Square is what the rail *asks* for —
     /// `PopoverView` sizes it so each slot comes out square whenever the window

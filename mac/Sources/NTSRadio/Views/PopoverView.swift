@@ -54,13 +54,13 @@ struct PopoverView: View {
                 if h > 0 && w / h <= 1.02 {
                     VStack(spacing: 0) {
                         ChannelRail(edge: .bottom)
-                            .frame(height: min((w - 1) / 2, h * 0.45))
+                            .frame(height: min(ChannelRail.half(w), h * 0.45))
                         DialView()
                     }
                 } else {
                     HStack(spacing: 0) {
                         ChannelRail(edge: .trailing)
-                            .frame(width: min((h - 1) / 2, w * 0.55))
+                            .frame(width: min(ChannelRail.half(h), w * 0.55))
                         DialView()
                     }
                 }
@@ -75,8 +75,8 @@ struct PopoverView: View {
             .animation(.easeOut(duration: 0.18), value: model.catalogOpen)
 
             // Above the now-playing bar rather than inside the catalog: an
-            // outage stales the faceplate too — the channel cards are what
-            // `/api/v2/live` fills — and the catalog is not always open.
+            // outage stales the faceplate too — the channel cards are what the
+            // schedule grid fills — and the catalog is not always open.
             if !model.catalogOpen { ServiceBanner() }
 
             NowPlayingBar(width: windowWidth)

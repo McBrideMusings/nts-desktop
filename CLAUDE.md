@@ -37,10 +37,20 @@ The whole app lives in the `mac/` Swift package (root `Makefile`/`admin.toml` ju
   channel, ~16 slots a day, each with `start_timestamp`, `end_timestamp` and a
   `links[rel=details]` href naming the show and episode. Every slot carries a
   show alias; about 30% of them (the furthest-out ones) have no episode alias
-  yet. No genres, location or artwork — those come from `ShowIndex` by alias.
-- `/api/v2/live` returns `now` plus `next` … `next17` per channel, but embeds
-  `details` (alias, genres, artwork, location) for only the first two. Only
-  `now` is read — the grid above is the schedule.
+  yet. No genres, location or artwork — those come from `ShowIndex` by alias,
+  and the current programme's own photograph from
+  `/api/v2/shows/<show>/episodes/<episode>` once the grid names it.
+- `/api/v2/live` is **not used, deliberately**. It returns `now` plus `next` …
+  `next17` per channel with `details` embedded for the first two, but it is
+  served `cache-control: max-age=900`, so for up to fifteen minutes after every
+  changeover it hands back the programme that just finished. Writing that over
+  the grid is what made the rail show the previous hour's show. The grid above
+  is the only record of what is on; anything that needs artwork or genres for
+  the current slot fetches the episode by the aliases the grid supplies.
+- `"embeds": {"tracklist": []}` — a bare array where the populated case is an
+  object — is how an episode with no identified tracks is serialised, and that
+  is every episode still on air. Decoding it strictly fails the whole episode
+  request, so `ShowJSON.Embeds` reads the tracklist leniently.
 - `/api/v2/search` answers 200 with an empty `results` array — even called
   exactly as nts.live calls it (`?q=…&types[]=show`) with browser headers, and
   even for terms in its own `metadata.popular_terms`. Search is local; there is
