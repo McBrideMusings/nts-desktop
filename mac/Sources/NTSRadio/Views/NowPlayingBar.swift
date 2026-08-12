@@ -4,12 +4,16 @@ import AppKit
 struct NowPlayingBar: View {
     @EnvironmentObject var model: AppModel
 
-    /// The window's width. The bar's right-hand cluster costs a fixed ~160pt, so
+    /// The window's width. The bar's right-hand cluster costs a fixed ~145pt, so
     /// in a narrow window it eats the title down to "LO…" — below this width the
     /// volume meter and the level panel go and the title gets their room. Mute
     /// stays: it is the control, the meter only shows what it did.
+    ///
+    /// 445, not the 460 this was while the five equaliser bars lived here: the
+    /// dot-matrix panel is 15pt wide where they were 27.5pt, so the title can
+    /// keep its neighbours down to a window 15pt narrower than before.
     let width: CGFloat
-    private var compact: Bool { width < 460 }
+    private var compact: Bool { width < 445 }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -161,34 +165,50 @@ private struct LevelLamps: View {
     let running: Bool
     let accent: Color
 
+    /// With Reduce Motion on, the panel holds one steady picture instead of
+    /// animating. It cannot simply rest: resting means "no audio", and the whole
+    /// point of the panel is that those two states differ. So it shows a calm
+    /// half-lit row — signal present, saying nothing about its moment-to-moment
+    /// level, which is invented anyway.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     private let bands = 5, rows = 7
     private let lamp: CGFloat = 2.2, gap: CGFloat = 1.0
 
+    /// Whether the picture is allowed to change from frame to frame.
+    private var animating: Bool { running && !reduceMotion }
+
     var body: some View {
-        // Paused stops the clock, so a still panel costs nothing. Every value
-        // below is a function of the date alone — there is no animation left
-        // part-finished anywhere, which is what the previous bars got wrong:
-        // they scaled themselves under a `repeatForever` animation, and the
-        // half-second position tick rebuilt the bar mid-flight, restarting the
-        // repeat from wherever the picture had got to.
-        TimelineView(.animation(minimumInterval: 1.0 / 24, paused: !running)) { ctx in
+        // Stopping the clock stops the work: a paused or reduced-motion panel
+        // redraws once and then costs nothing. Every value below is a function
+        // of the date alone — there is no animation left part-finished
+        // anywhere, which is what the previous bars got wrong: they scaled
+        // themselves under a `repeatForever` animation, and the half-second
+        // position tick rebuilt the bar mid-flight, restarting the repeat from
+        // wherever the picture had got to.
+        TimelineView(.animation(minimumInterval: 1.0 / 24, paused: !animating)) { ctx in
             let t = ctx.date.timeIntervalSinceReferenceDate
-            HStack(spacing: gap) {
-                ForEach(0..<bands, id: \.self) { band in
+            // One `Canvas` rather than 35 `Circle` views: at 24 frames a second
+            // for as long as the window is open, the difference is 35 views
+            // through layout every frame against one draw call.
+            Canvas(opaque: false) { g, size in
+                let grid = CGFloat(rows) * lamp + CGFloat(rows - 1) * gap
+                let top = (size.height - grid) / 2
+                for band in 0..<bands {
                     let lit = lamps(level(band, t))
                     let held = lamps(peak(band, t))
-                    VStack(spacing: gap) {
-                        ForEach(0..<rows, id: \.self) { row in
-                            // Row 0 is the top lamp, so a column of height `lit`
-                            // lights from the bottom up.
-                            Circle()
-                                .fill(colour(height: rows - row, lit: lit, held: held))
-                                .frame(width: lamp, height: lamp)
-                        }
+                    let x = CGFloat(band) * (lamp + gap)
+                    for row in 0..<rows {
+                        // Row 0 is the top lamp, so a column of height `lit`
+                        // lights from the bottom up.
+                        let dot = CGRect(x: x, y: top + CGFloat(row) * (lamp + gap),
+                                         width: lamp, height: lamp)
+                        g.fill(Path(ellipseIn: dot),
+                               with: .color(colour(height: rows - row, lit: lit, held: held)))
                     }
                 }
             }
-            .frame(height: 22)
+            .frame(width: CGFloat(bands) * lamp + CGFloat(bands - 1) * gap, height: 22)
         }
     }
 
@@ -262,8 +282,14 @@ private struct LevelLamps: View {
 
     /// How many lamps a 0…1 level lights. Always at least one while the app is
     /// open, so the panel never blinks out entirely.
+    ///
+    /// The two still states are decided here rather than in the drawing, so the
+    /// lit column and the peak lamp can never disagree about them: nothing
+    /// playing is one lamp, and Reduce Motion while playing is a steady four —
+    /// far enough from one lamp to read as a different state at a glance.
     private func lamps(_ level: Double) -> Int {
         guard running else { return 1 }
+        guard !reduceMotion else { return 4 }
         return max(1, min(rows, Int((level * Double(rows)).rounded(.up))))
     }
 
