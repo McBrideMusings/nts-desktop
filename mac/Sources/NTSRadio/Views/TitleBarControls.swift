@@ -1,8 +1,15 @@
 import SwiftUI
+import AppKit
 
-/// The catalog / settings / account buttons at the right end of the title bar,
-/// and nothing else. The band they sit in — its black, its hairline, and the NTS
+/// The settings and account buttons at the right end of the title bar, and
+/// nothing else. The band they sit in — its black, its hairline, and the NTS
 /// mark centred in it — belongs to `PopoverView`.
+///
+/// The catalog button used to live here too. It is a segment of the pane switch
+/// in the now-playing bar now (`PaneSwitch` in `NowPlayingBar.swift`), beside the
+/// tracklist and the faceplate, because a control that picks between three panes
+/// has to sit with the other two — split across two ends of the window, the pair
+/// of them could show two panes lit at once.
 ///
 /// **This view cannot centre anything, and the name says so on purpose.**
 /// `RadioWindowController` mounts it as a `.top` title-bar accessory, and AppKit
@@ -29,7 +36,6 @@ struct TitleBarControls: View {
     var body: some View {
         HStack(spacing: 8) {
             Spacer(minLength: 0)
-            catalogButton
             settingsButton
             profileButton
         }
@@ -76,24 +82,11 @@ struct TitleBarControls: View {
         .help(auth.isAuthenticated ? "Account — \(auth.email ?? "signed in")" : "Sign in")
     }
 
-    /// The one control that opens and closes the catalog. It stays in the same
-    /// place either way and lights up while the catalog is up, so there is never a
-    /// second, differently-placed way back out.
-    private var catalogButton: some View {
-        Button { model.toggleCatalog() } label: {
-            Image(systemName: "square.grid.2x2.fill")
-                .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(model.catalogOpen ? Theme.popover : Theme.ink)
-                .frame(width: 26, height: 26)
-                .background(RoundedRectangle(cornerRadius: 7)
-                    .fill(model.catalogOpen ? Theme.ink : Theme.hairline(0.10)))
-        }
-        .buttonStyle(.plain)
-        .help(model.catalogOpen ? "Hide the catalog" : "Schedule, saved and mixtapes")
-    }
-
+    /// Settings is a separate window, so this button never lights up — it has no
+    /// open/closed state to report about this window, and a lit gear beside a
+    /// window that may be behind another app would be claiming one.
     private var settingsButton: some View {
-        Button { model.settingsOpen = true } label: {
+        Button { SettingsWindowController.shared.show() } label: {
             Image(systemName: "gearshape")
                 .font(.system(size: 15, weight: .regular))
                 .foregroundStyle(Theme.ink)

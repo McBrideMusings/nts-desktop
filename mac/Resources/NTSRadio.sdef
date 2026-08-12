@@ -178,6 +178,19 @@
             <result type="text" description="The state after starring, as JSON."/>
         </command>
 
+        <command name="open settings" code="NTSrSETT"
+                 description="Open the Settings window — the same window ⌘, opens, not a panel inside the radio window.">
+            <cocoa class="NTSOpenSettingsCommand"/>
+            <result type="text" description="The state after opening, as JSON."/>
+        </command>
+
+        <command name="show pane" code="NTSrPANE"
+                 description="Go to a pane, the same as clicking a segment of the switch in the now-playing bar, or raise the tracklist drawer over whichever pane is up.">
+            <cocoa class="NTSShowPaneCommand"/>
+            <direct-parameter type="text" description="live or catalog; tracks raises the tracklist drawer, none drops it."/>
+            <result type="text" description="The state after switching, as JSON."/>
+        </command>
+
         <command name="close catalog" code="NTSrCLSC"
                  description="Uncover the faceplate, dropping any search term and open detail.">
             <cocoa class="NTSCloseCatalogCommand"/>

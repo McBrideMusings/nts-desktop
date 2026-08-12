@@ -7,10 +7,11 @@ struct NTSRadioApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     var body: some Scene {
-        // The real UI is a hand-managed window toggled by the status item (see
-        // AppDelegate). SwiftUI requires an App to declare at least one Scene, so
-        // this empty Settings scene is just a placeholder — it never opens on its
-        // own. (In Dock mode it adds a no-op "Settings…" item to the app menu.)
+        // Both real windows are hand-managed: the radio (`RadioWindowController`,
+        // toggled by the status item) and Settings (`SettingsWindowController`).
+        // SwiftUI requires an App to declare at least one Scene, so this stays an
+        // empty placeholder — putting `SettingsView` in it produced no window at
+        // all, for the reason written up in `SettingsWindowController`.
         Settings { EmptyView() }
     }
 }
@@ -43,7 +44,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         quitWhenParentExitsInDev()
 
-        let model = AppModel()
+        // The same instance the `Settings` scene reads, which is why it is named
+        // on the type rather than made here (see `AppModel.shared`).
+        let model = AppModel.shared
         self.model = model
 
         // Menu-bar presence is always on; the Dock icon is user-controlled
@@ -167,6 +170,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         dock.target = self
         dock.state = model.showInDock ? .on : .off
         menu.addItem(dock)
+        let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        settings.target = self
+        menu.addItem(settings)
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quit NTS Radio", action: #selector(quitApp), keyEquivalent: "")
         quit.target = self
@@ -175,6 +181,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func toggleDock() { model.showInDock.toggle() }
+
+    /// The status item's route into the Settings window — the same one the gear
+    /// in the title bar and `osascript … open settings` take.
+    @objc private func openSettings() { SettingsWindowController.shared.show() }
     @objc private func quitApp() { NSApp.terminate(nil) }
 
     /// Clicking the Dock icon (when shown) reveals the window — a Dock app with

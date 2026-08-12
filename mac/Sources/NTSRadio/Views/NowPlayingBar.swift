@@ -9,11 +9,13 @@ struct NowPlayingBar: View {
     /// volume meter and the level panel go and the title gets their room. Mute
     /// stays: it is the control, the meter only shows what it did.
     ///
-    /// 445, not the 460 this was while the five equaliser bars lived here: the
-    /// dot-matrix panel is 15pt wide where they were 27.5pt, so the title can
-    /// keep its neighbours down to a window 15pt narrower than before.
+    /// 495, not the 445 this was before the pane switch moved down here: the
+    /// two-segment control is a fixed 76pt on top of the tracklist button that
+    /// was already here, so the title runs out of room 50pt sooner. Neither the
+    /// switch nor the tracklist button ever drops out — they are the only ways
+    /// between the panes.
     let width: CGFloat
-    private var compact: Bool { width < 445 }
+    private var compact: Bool { width < 495 }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -81,17 +83,14 @@ struct NowPlayingBar: View {
                 Rectangle().fill(Theme.hairline(0.12)).frame(width: 1, height: 22)
             }
 
-            Button { model.showTracks.toggle() } label: {
-                Image(systemName: "list.bullet")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(model.showTracks ? Theme.popover : Theme.ink)
-                    .frame(width: 32, height: 32)
-                    .background(RoundedRectangle(cornerRadius: 6)
-                        .fill(model.showTracks ? Theme.ink : Theme.hairline(0.08)))
-            }
-            .buttonStyle(.plain)
-            .disabled(model.isIdle)
-            .opacity(model.isIdle ? 0.4 : 1)
+            // The drawer's control sits outside the two-segment switch because it
+            // does something different: the switch says where you are, this lays
+            // the tracklist over it and takes it away again. Being a loose button
+            // next to a joined pair is the whole distinction — no divider is
+            // needed to make it, and one only added a line to look at.
+            TracksButton()
+
+            PaneSwitch()
 
             Button { model.muted.toggle() } label: {
                 Image(systemName: model.muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
@@ -107,6 +106,71 @@ struct NowPlayingBar: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+}
+
+/// Where the window is: LIVE or EXPLORE, as one two-segment control beside the
+/// transport.
+///
+/// **A segmented control rather than a lit button each, and that is the point.**
+/// The catalog and the tracklist used to be a toggle each, in two different
+/// places — one down here, one in the title bar — over two independent booleans.
+/// Opening the catalog on top of an open tracklist left both buttons lit while
+/// only the catalog was visible, because nothing in the arrangement could say
+/// "one at a time". Here each segment writes `AppModel.pane`, a single value, and
+/// reads its lit state back out of it: two segments cannot both be lit because
+/// the model cannot hold two panes.
+///
+/// A signal going out, and the wall of tiles you dig through: broadcast waves for
+/// live, the four-square grid for the archive. The grid is literally what the
+/// catalog pane is, so it names where the segment lands rather than the activity.
+/// Both keep a tooltip — no icon says which of two panes it is until it has been
+/// clicked once.
+private struct PaneSwitch: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        HStack(spacing: 2) {
+            segment(.live, "dot.radiowaves.left.and.right", "What is on air now")
+            segment(.catalog, "square.grid.2x2.fill", "The archive — schedule, saved and search")
+        }
+        .padding(2)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.hairline(0.08)))
+    }
+
+    private func segment(_ p: Pane, _ symbol: String, _ help: String) -> some View {
+        let on = model.pane == p
+        return Button { model.show(p) } label: {
+            Image(systemName: symbol)
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(on ? Theme.popover : Theme.ink)
+                .frame(width: 34, height: 28)
+                .background(RoundedRectangle(cornerRadius: 6)
+                    .fill(on ? Theme.ink : .clear))
+        }
+        .buttonStyle(.plain)
+        .help(help)
+    }
+}
+
+/// Raises and drops the tracklist drawer. Lit while the drawer is up, and dead
+/// while nothing is playing — silence has no tracklist.
+private struct TracksButton: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        Button { model.toggleTracks() } label: {
+            Image(systemName: "list.bullet")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(model.tracksOpen ? Theme.popover : Theme.ink)
+                .frame(width: 32, height: 32)
+                .background(RoundedRectangle(cornerRadius: 6)
+                    .fill(model.tracksOpen ? Theme.ink : Theme.hairline(0.08)))
+        }
+        .buttonStyle(.plain)
+        .disabled(model.isIdle)
+        .opacity(model.isIdle ? 0.4 : 1)
+        .help(model.tracksOpen ? "Hide the tracklist" : "Tracklist for what is playing")
     }
 }
 

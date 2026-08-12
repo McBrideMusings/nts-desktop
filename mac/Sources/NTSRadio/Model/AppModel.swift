@@ -12,10 +12,23 @@ enum Selection: Equatable {
     case episode(show: String, episode: String)
 }
 
-/// The one modal popover that can be open at a time.
-enum Sheet: Equatable {
-    case settings
-    case login
+/// Which of the two places the window is. **One slot, not one flag each.**
+///
+/// These are peers — two views of the station you switch between and stay in —
+/// so they are one value with two cases. As two independent `Bool`s they could
+/// both be true, which is what used to happen: the catalog drew over the
+/// tracklist while the tracklist's button stayed lit, so the interface claimed
+/// two things were open and showed one. A value cannot hold two cases.
+///
+/// The tracklist is deliberately *not* a case here — it is a drawer that covers
+/// whichever of these is underneath and gives it straight back
+/// (`AppModel.tracksOpen`), not a third place to be.
+enum Pane: Equatable {
+    /// The faceplate: what is on air now — the two channel cards and the mixtape
+    /// dial.
+    case live
+    /// The archive: explore, schedule, saved, search.
+    case catalog
 }
 
 /// Which list the catalog is showing when no search is running. A live query
@@ -37,6 +50,14 @@ enum CatalogDetail: Equatable {
 
 @MainActor
 final class AppModel: ObservableObject {
+    /// The app's one model. It existed as a single instance already — the
+    /// `AppDelegate` made it and handed it to the window — but the Settings
+    /// window is a `Settings` scene declared in `NTSRadioApp`, which is built
+    /// before the delegate runs and has no way to be passed anything. Naming the
+    /// instance here is what lets both reach the same object, and matches
+    /// `Catalog.shared` / `Saved.shared` / `ShowIndex.shared` beside it.
+    static let shared = AppModel()
+
     let catalog = Catalog.shared
     let engine = PlayerEngine()
     let auth = NTSAuth()
@@ -45,9 +66,21 @@ final class AppModel: ObservableObject {
 
     // MARK: Catalog surface
 
-    /// Whether the catalog covers the faceplate. One toggle owns this — the ▤ in
-    /// the title bar — so there is never a second way in that can disagree with it.
-    @Published var catalogOpen = false
+    /// Where the window is: live, or the catalog. The two-segment control in the
+    /// now-playing bar writes it and reads it back, so its lit segment and what
+    /// is on screen are the same fact rather than two that have to agree.
+    @Published var pane: Pane = .live
+    /// Whether the tracklist drawer is covering that pane. A flag rather than a
+    /// third `Pane` case because it is a different kind of thing: it does not
+    /// change where you are, it lays what is playing over the top of wherever
+    /// that is and hands it back on close. All four combinations of this and
+    /// `pane` are real, visible states — the drawer over the faceplate and the
+    /// drawer over the catalog are both things you can be looking at, and the
+    /// segment underneath goes on truthfully saying which one you will get back.
+    @Published var tracksOpen = false
+    /// Whether the catalog is the pane on screen. Read-only, for the places that
+    /// only care about that one — the service banner, the scripting state blob.
+    var catalogOpen: Bool { pane == .catalog }
     /// Explore, not the schedule: the schedule answers "what is on", which the
     /// channel cards already say, while Explore is the only route to the other
     /// 89,000 episodes.
@@ -70,25 +103,17 @@ final class AppModel: ObservableObject {
     @Published var selection: Selection = .idle
     @Published var muted = false { didSet { engine.apply(volume: volume, muted: muted) } }
     @Published var volume: Double = 72 { didSet { engine.apply(volume: volume, muted: muted) } }
-    @Published var showTracks = false
     @Published var hoverIndex: Int? = nil
     /// Where the dial's index mark is pointing, in degrees, accumulated across
     /// turns rather than wrapped into 0..<360 — so it is free to wind past a full
     /// turn in either direction and always takes the short way to the next tape.
     /// It lives here rather than in `DialView` so a script can read it back.
     @Published var knobAngle: Double = 0
-    /// Which modal popover is up, if any — one at a time (settings and the account
-    /// sheet are mutually exclusive). `settingsOpen`/`loginOpen` wrap it so callers
-    /// stay simple while only one can ever be open.
-    @Published var activeSheet: Sheet? = nil
-    var settingsOpen: Bool {
-        get { activeSheet == .settings }
-        set { if newValue { activeSheet = .settings } else if activeSheet == .settings { activeSheet = nil } }
-    }
-    var loginOpen: Bool {
-        get { activeSheet == .login }
-        set { if newValue { activeSheet = .login } else if activeSheet == .login { activeSheet = nil } }
-    }
+    /// Whether the account sheet is up over the window. Settings used to share a
+    /// slot with it, back when settings was also drawn inside this window; it is
+    /// a real macOS window now (`SettingsView`, mounted as the `Settings` scene
+    /// in `NTSRadioApp`), so there is nothing left for it to be exclusive with.
+    @Published var loginOpen = false
 
     /// The episode currently tuned, once its details have arrived. Nil for the
     /// live channels and the mixtapes, which carry their own metadata.
@@ -111,9 +136,9 @@ final class AppModel: ObservableObject {
     @Published var mixtapeEpisode: MixtapeTitle?
 
     // Settings placeholder — Check for Updates is intentionally non-functional for
-    // v1 (see GitHub issue #2). Start-on-Login only drives local UI.
+    // v1 (see GitHub issue #2). Start-on-Login only drives local UI. About is the
+    // system's standard About panel now, so it needs no state of its own.
     @Published var startOnLogin = false
-    @Published var aboutOpen = false
 
     /// Whether the app also shows a Dock icon (and app-switcher entry). Off by
     /// default — the app lives primarily in the menu bar. Persisted here; the
@@ -488,13 +513,35 @@ final class AppModel: ObservableObject {
         ((i % count) + count) % count
     }
 
-    // MARK: Catalog
+    // MARK: Panes
 
-    /// Show the catalog, or hide it. Closing drops the query and any open detail
-    /// so reopening lands on a list rather than mid-navigation from last time.
+    /// Go to a pane. The one way `pane` changes, so leaving the catalog always
+    /// drops the query and any open detail — coming back lands on a list rather
+    /// than mid-navigation from last time — no matter which control did it.
+    ///
+    /// Switching also closes the tracklist drawer: it is opened over one pane, and
+    /// leaving that pane is leaving what the drawer was showing on top of.
+    func show(_ p: Pane) {
+        // Unconditional, and before the early return: pressing LIVE while the
+        // drawer is up over live has to give live back. Guarding this the same
+        // way as the pane change left the tracklist covering the very pane whose
+        // segment had just been pressed — the button looked broken.
+        tracksOpen = false
+        guard pane != p else { return }
+        if pane == .catalog { query = ""; detail = nil }
+        pane = p
+    }
+
+    /// Show the catalog, or go back to live if it is already showing.
     func toggleCatalog() {
-        catalogOpen.toggle()
-        if !catalogOpen { query = ""; detail = nil }
+        show(pane == .catalog ? .live : .catalog)
+    }
+
+    /// Raise or drop the tracklist drawer over whatever pane is up. Nothing
+    /// playing means nothing to list, so it will not open.
+    func toggleTracks() {
+        if tracksOpen { tracksOpen = false }
+        else if !isIdle { tracksOpen = true }
     }
 
     /// Every channel's programmes, in air order — the schedule tab's contents.

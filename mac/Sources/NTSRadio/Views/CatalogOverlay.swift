@@ -64,7 +64,7 @@ struct CatalogOverlay: View {
             Spacer(minLength: 8)
             searchField
 
-            Button { model.toggleCatalog() } label: {
+            Button { model.show(.live) } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Theme.ink)

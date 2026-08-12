@@ -82,6 +82,18 @@ enum ScriptState {
                  "endpoint": $0.endpoint, "failures": $0.failures] as [String: Any]
             } ?? [:],
             "windowVisible": RadioWindowController.scriptTarget?.isWindowVisible ?? false,
+            // Where the window is — "live" or "catalog" — and whether the
+            // tracklist drawer is over it. Two separate facts because they are
+            // two separate things: the drawer covers a pane without changing
+            // which pane you are in, so reading only one of them would report a
+            // window covered by the tracklist as though nothing were on screen.
+            "pane": {
+                switch m.pane {
+                case .live: return "live"
+                case .catalog: return "catalog"
+                }
+            }() as String,
+            "tracksOpen": m.tracksOpen,
             "catalogOpen": m.catalogOpen,
             // What the catalog is actually listing. Without these, a list that
             // came back empty and one that was never asked for read the same.
@@ -364,7 +376,7 @@ final class NTSFilterExploreCommand: NTSCommand {
             m.catalogTab = .explore
             m.query = ""
             m.detail = nil
-            m.catalogOpen = true
+            m.show(.catalog)
             m.exploreFilters = filters
             return true
         }
@@ -471,7 +483,56 @@ final class NTSOpenCatalogCommand: NTSCommand {
             }
             m.query = (self.evaluatedArguments?["searchingFor"] as? String) ?? ""
             m.detail = nil
-            m.catalogOpen = true
+            m.show(.catalog)
+            return true
+        }
+    }
+}
+
+/// `open settings` — the same window the gear in the title bar and the status
+/// item's Settings… item open. It exists so the window can be raised and looked
+/// at without a mouse; every other route into it is a click.
+@objc(NTSOpenSettingsCommand)
+final class NTSOpenSettingsCommand: NTSCommand {
+    override func performDefaultImplementation() -> Any? {
+        run {
+            SettingsWindowController.shared.show()
+            return true
+        }
+    }
+}
+
+/// `show pane "tracks"` — the scripted half of the segmented switch in the
+/// now-playing bar. It goes through `AppModel.show(_:)`, the same call the
+/// segments make, so a script cannot reach a combination the buttons cannot.
+@objc(NTSShowPaneCommand)
+final class NTSShowPaneCommand: NTSCommand {
+    override func performDefaultImplementation() -> Any? {
+        run {
+            guard let m = AppModel.scriptTarget else { return false }
+            let name = (self.directParameter as? String)?.lowercased() ?? ""
+            switch name {
+            case "live": m.show(.live)
+            case "catalog": m.show(.catalog)
+            // The drawer is not a pane, but a script asking for it by name means
+            // one thing only, and refusing on a technicality would be unhelpful.
+            // "show" opens — it does not toggle, or a script could not put the
+            // drawer up without first reading whether it was already there.
+            case "tracks", "tracklist":
+                guard !m.isIdle else {
+                    self.scriptErrorNumber = -1728   // errAENoSuchObject
+                    self.scriptErrorString = "Nothing is playing, so there is no tracklist to show."
+                    return false
+                }
+                m.tracksOpen = true
+            case "none":
+                m.tracksOpen = false
+            default:
+                self.scriptErrorNumber = -1703   // errAETypeError
+                self.scriptErrorString =
+                    "\"\(name)\" is not a pane. Use live or catalog; tracks raises the tracklist drawer over either, none drops it."
+                return false
+            }
             return true
         }
     }

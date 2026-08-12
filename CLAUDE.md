@@ -28,7 +28,24 @@ Requires macOS 15+ and Xcode 16+ / Swift 6 to build.
 The whole app lives in the `mac/` Swift package (root `Makefile`/`admin.toml` just delegate into it):
 
 - `mac/Sources/NTSRadio/Model/` — `Catalog.swift` (mixtape catalog fetch/cache), `PlayerEngine.swift` (AVPlayer), `NTSAPI.swift` / `NTSAuth.swift` (NTS REST API + sign-in), `AppModel.swift` (app state), `NowPlayingCenter.swift` (system media keys + the Control Center tile), `TracklistAdapter.swift`, `Cache.swift`, `ShowIndex.swift` (local searchable show index), `Saved.swift` (local bookmarks), `CatalogRow.swift` (one tile type for the catalog grid), `Scripting.swift` (the AppleScript control surface)
-- `mac/Sources/NTSRadio/Views/` — `DialView.swift` (radial mixtape dial), `ChannelRail.swift`, `NowPlayingBar.swift`, `TracklistOverlay.swift`, `CatalogOverlay.swift` (saved / search + detail), `ExploreView.swift` (the default tab: browse the archive by mood and genre), `ScheduleTimeline.swift` (the schedule tab: a fortnight of one channel's grid, day by day), `TitleBarControls.swift` (the title bar's buttons only — the band and the centred NTS mark are `PopoverView`'s, because AppKit insets the accessory past the traffic lights), `SettingsView.swift`, `LoginView.swift`, `MenuBarIcon.swift`, `PopoverView.swift`
+- `mac/Sources/NTSRadio/Views/` — `DialView.swift` (radial mixtape dial), `ChannelRail.swift`, `NowPlayingBar.swift`, `TracklistOverlay.swift`, `CatalogOverlay.swift` (saved / search + detail), `ExploreView.swift` (the default tab: browse the archive by mood and genre), `ScheduleTimeline.swift` (the schedule tab: a fortnight of one channel's grid, day by day), `TitleBarControls.swift` (the title bar's settings + account buttons only — the band and the centred NTS mark are `PopoverView`'s, because AppKit insets the accessory past the traffic lights), `SettingsView.swift` (the contents of the Settings window: a plain system `Form`, deliberately carrying no `Theme` values), `LoginView.swift`, `MenuBarIcon.swift`, `PopoverView.swift`
+
+### Where the window can be
+
+`AppModel.pane` is one value with two cases — `.live` (channel cards + dial) and
+`.catalog` — written only by `show(_:)`, so the two-segment switch in the
+now-playing bar can never light both. The tracklist is **not** a third case: it is
+a drawer (`AppModel.tracksOpen`) that covers whichever pane is up and gives it
+back, with its own button outside the switch. All four combinations of the two are
+real, visible states. This replaced two independent `Bool`s whose fourth
+combination drew the catalog over the tracklist while leaving both buttons lit.
+
+Settings is a real window owned by `SettingsWindowController`, not a view inside
+the radio window. **SwiftUI's `Settings` scene does not work here** — this app runs
+as an agent (`.accessory`) whenever "Show in Dock" is off, so there is no app menu
+for that scene to hang off, and `openSettings()` reports success while creating no
+window. The scene declaration in `NTSRadioApp` stays an `EmptyView` placeholder
+only because an `App` must declare one.
 
 ### NTS API limits worth knowing before extending the catalog
 
@@ -129,6 +146,9 @@ The whole app lives in the `mac/` Swift package (root `Makefile`/`admin.toml` ju
   osascript -e 'tell application "NTS Radio" to tune to "mixtape:slow-focus"'
   osascript -e 'tell application "NTS Radio" to tune to "episode:lung-dart/lung-dart-10th-august-2026"'
   osascript -e 'tell application "NTS Radio" to skip by 1'
+  osascript -e 'tell application "NTS Radio" to show pane "live"'
+  osascript -e 'tell application "NTS Radio" to show pane "tracks"'
+  osascript -e 'tell application "NTS Radio" to open settings'
   osascript -e 'tell application "NTS Radio" to open catalog showing "schedule"'
   osascript -e 'tell application "NTS Radio" to filter explore mood "sedative" genres {"ambientnewage"}'
   osascript -e 'tell application "NTS Radio" to explore more'

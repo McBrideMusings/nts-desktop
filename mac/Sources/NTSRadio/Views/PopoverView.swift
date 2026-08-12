@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PopoverView: View {
     @EnvironmentObject var model: AppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         // The now-playing bar sits outside the body's own reader, so the window
@@ -73,13 +74,31 @@ struct PopoverView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            // The tracklist is a full-width overlay (covers the rail + dial),
-            // matching the prototype — not just the dial pane.
-            .overlay { if model.showTracks { TracklistOverlay() } }
-            // The catalog covers the faceplate entirely, channel cards included,
-            // so the window never has to resize to make room for it.
-            .overlay { if model.catalogOpen { CatalogOverlay() } }
-            .animation(.easeOut(duration: 0.18), value: model.catalogOpen)
+            // Where you are. The catalog covers the faceplate entirely, channel
+            // cards included, so the window never has to resize to make room for
+            // it — but it replaces the faceplate rather than sitting on top of
+            // it, which is why this is a switch on one value and not a stack of
+            // overlays in declaration order.
+            .overlay {
+                switch model.pane {
+                case .live:    EmptyView()
+                case .catalog: CatalogOverlay()
+                }
+            }
+            .animation(.easeOut(duration: 0.18), value: model.pane)
+            // What is playing, over the top of either. The drawer rises from the
+            // now-playing bar it belongs to and drops back into it, so it reads
+            // as the bar opening up rather than a third place the window went.
+            // Reduce Motion gets the same drawer without the travel.
+            .overlay {
+                if model.tracksOpen {
+                    TracklistOverlay()
+                        .transition(reduceMotion
+                                    ? .opacity
+                                    : .move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.easeOut(duration: 0.22), value: model.tracksOpen)
 
             // Above the now-playing bar rather than inside the catalog: an
             // outage stales the faceplate too — the channel cards are what the
@@ -90,7 +109,6 @@ struct PopoverView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.popover)
-        .overlay { if model.settingsOpen { SettingsView() } }
         .overlay { if model.loginOpen { LoginView() } }
     }
 }

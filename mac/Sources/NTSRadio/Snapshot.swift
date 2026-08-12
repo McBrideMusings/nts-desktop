@@ -88,9 +88,11 @@ enum Snapshot {
             $0.catalog.mixtapes = [sampleMix]
             $0.select(.mixtape("rap-house"), autoplay: false)
             $0.tracks = sampleTracks
-            $0.showTracks = true
+            $0.tracksOpen = true
         }
-        shot("04-settings.png") { seedChannels($0); seedMixtapes($0); $0.settingsOpen = true }
+        // No settings shot: settings is its own window now (the `Settings` scene
+        // in `NTSRadioApp`), and these shots render `PopoverView` off screen —
+        // there is nothing of it inside this view to photograph.
         shot("05-login.png") { seedChannels($0); seedMixtapes($0); $0.loginOpen = true }
         // The knob face only carries a title once a mixtape is selected, and the
         // longest names are the ones that reach the circle's edge — this is the

@@ -1,157 +1,52 @@
 import SwiftUI
 import AppKit
 
-/// macOS-style settings popover, grouped GENERAL / DISPLAY sections (matching the
-/// prototype). Sign-in lives in the standalone account popover (`LoginView`), not
-/// here. Check-for-Updates is intentionally non-functional for v1 (GitHub #2);
-/// Start-on-Login flips locally (real SMAppService wiring lands with packaging).
+/// The contents of the app's Settings window — mounted as the `Settings` scene in
+/// `NTSRadioApp`, which is what makes it a real window: system title bar, ⌘,
+/// to open, ⌘W to close, its own position remembered, and it stays put when the
+/// radio window is dismissed.
+///
+/// **Deliberately unstyled.** Every other view in this app paints its own black
+/// faceplate, because the radio is meant to read as an object. Settings is not
+/// part of that object — it is the Mac's, and it should look like every other
+/// app's settings: a grouped `Form`, system controls, system fonts, system
+/// colours, following light and dark mode on its own. No `Theme` values appear
+/// below, and none should. What this replaced was a hand-drawn light-grey sheet
+/// with painted traffic lights inside the radio window — a picture of a settings
+/// window rather than one, which could not be moved, could not be opened without
+/// the radio window, and stayed light when the rest of the system went dark.
 struct SettingsView: View {
-    @EnvironmentObject var model: AppModel
+    @ObservedObject private var model = AppModel.shared
+
+    private var version: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "0.1.0"
+        let build = info?["CFBundleVersion"] as? String
+        return build.map { "\(short) (\($0))" } ?? short
+    }
 
     var body: some View {
-        ZStack(alignment: .top) {
-            Color.black.opacity(0.32)
-                .ignoresSafeArea()
-                .onTapGesture { model.settingsOpen = false }
-            sheet.padding(.top, 14)
-        }
-    }
+        Form {
+            Section {
+                Toggle("Open NTS Radio at login", isOn: $model.startOnLogin)
+                Toggle("Show in Dock", isOn: $model.showInDock)
+            } footer: {
+                Text("With the Dock icon hidden, NTS Radio lives in the menu bar only.")
+            }
 
-    private var sheet: some View {
-        VStack(spacing: 0) {
-            header
-
-            VStack(alignment: .leading, spacing: 16) {
-                section("GENERAL") {
-                    card {
-                        settingRow("Start on Login",
-                                   "Open NTS automatically when you sign in.",
-                                   on: model.startOnLogin) { model.startOnLogin.toggle() }
-                    }
+            Section {
+                LabeledContent("Version", value: version)
+                // Non-functional for v1 on purpose — see GitHub issue #2.
+                Button("Check for Updates…") { }
+                    .disabled(true)
+                Button("About NTS Radio") {
+                    NSApp.activate(ignoringOtherApps: true)
+                    NSApp.orderFrontStandardAboutPanel(nil)
                 }
-
-                card {
-                    linkRow("Check for Updates…") { /* non-functional v1 (GitHub #2) */ }
-                    rowDivider
-                    linkRow("About NTS Radio") { model.aboutOpen.toggle() }
-                }
-
-                if model.aboutOpen { aboutCard }
-
-                Text("© 2026 NTS Radio Ltd.")
-                    .font(Theme.ui(10.5)).foregroundStyle(Theme.sheetInk3)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 2)
             }
-            .padding(EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16))
         }
-        .frame(width: 340)
-        .background(Theme.sheet)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.5), radius: 35, y: 24)
-    }
-
-    // MARK: Header
-
-    private var header: some View {
-        ZStack {
-            Text("Settings")
-                .font(Theme.ui(13, .semibold))
-                .foregroundStyle(Theme.sheetInk)
-            HStack(spacing: 8) {
-                Button { model.settingsOpen = false } label: {
-                    Circle().fill(Theme.trafficRed).frame(width: 12, height: 12)
-                }
-                .buttonStyle(.plain)
-                Circle().fill(.black.opacity(0.12)).frame(width: 12, height: 12)
-                Circle().fill(.black.opacity(0.12)).frame(width: 12, height: 12)
-                Spacer()
-            }
-            .padding(.leading, 14)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 13)
-        .overlay(alignment: .bottom) { Rectangle().fill(.black.opacity(0.1)).frame(height: 0.5) }
-    }
-
-    // MARK: Building blocks
-
-    private func section<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(title)
-                .font(Theme.mono(9.5, .regular)).tracking(1.5)
-                .foregroundStyle(Theme.sheetInk3)
-                .padding(.leading, 4)
-            content()
-        }
-    }
-
-    private func card<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        VStack(spacing: 0) { content() }
-            .background(RoundedRectangle(cornerRadius: 10).fill(.white))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(.black.opacity(0.06), lineWidth: 0.5))
-    }
-
-    private var rowDivider: some View {
-        Rectangle().fill(.black.opacity(0.08)).frame(height: 0.5).padding(.leading, 14)
-    }
-
-    private func settingRow(_ title: String, _ desc: String, on: Bool, _ toggle: @escaping () -> Void) -> some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(Theme.ui(14, .medium)).foregroundStyle(Theme.sheetInk)
-                Text(desc).font(Theme.ui(12)).foregroundStyle(Theme.sheetInk2)
-            }
-            Spacer()
-            TogglePill(on: on, action: toggle)
-        }
-        .padding(EdgeInsets(top: 11, leading: 14, bottom: 11, trailing: 12))
-    }
-
-    private func linkRow(_ title: String, _ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack {
-                Text(title).font(Theme.ui(14, .regular)).foregroundStyle(Theme.sheetInk)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Theme.sheetInk3)
-            }
-            .contentShape(Rectangle())
-            .padding(EdgeInsets(top: 12, leading: 14, bottom: 12, trailing: 14))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var aboutCard: some View {
-        VStack(spacing: 3) {
-            Text("NTS Radio").font(Theme.ui(13, .bold)).tracking(0.3).foregroundStyle(Theme.sheetInk)
-            Text("Version 0.1 · Streaming worldwide since 2011")
-                .font(Theme.ui(11.5)).foregroundStyle(Theme.sheetInk2)
-            Text("Made with love in London & Manchester")
-                .font(Theme.ui(11.5)).foregroundStyle(Theme.sheetInk2)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 10).fill(.black.opacity(0.04)))
-    }
-}
-
-struct TogglePill: View {
-    let on: Bool
-    let action: () -> Void
-    var body: some View {
-        Button(action: action) {
-            ZStack(alignment: on ? .trailing : .leading) {
-                Capsule().fill(on ? Theme.green : .black.opacity(0.16))
-                    .frame(width: 40, height: 24)
-                Circle().fill(.white).frame(width: 20, height: 20)
-                    .shadow(color: .black.opacity(0.3), radius: 1, y: 1)
-                    .padding(2)
-            }
-            .frame(width: 40, height: 24)
-        }
-        .buttonStyle(.plain)
-        .animation(.spring(response: 0.18, dampingFraction: 0.7), value: on)
+        .formStyle(.grouped)
+        .frame(width: 420)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
