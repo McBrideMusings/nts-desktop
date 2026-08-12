@@ -66,7 +66,13 @@ struct NowPlayingBar: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if !compact {
-                EqBars(playing: model.isPlaying && !model.muted, accent: model.accent)
+                // `isRendering`, not `isPlaying`: the first is whether audio is
+                // coming out, the second is only whether play was pressed. A
+                // stalled stream leaves the button showing pause while the
+                // speakers are silent, and a meter that keeps moving through
+                // that is telling the user something untrue.
+                LevelLamps(running: model.engine.isRendering && !model.muted,
+                           accent: model.accent)
 
                 Rectangle().fill(Theme.hairline(0.12)).frame(width: 1, height: 22)
             }
@@ -133,28 +139,108 @@ private struct LinkLabel: View {
     }
 }
 
-private struct EqBars: View {
-    let playing: Bool
+/// A dot-matrix level panel — five columns of seven lamps, filling from the
+/// bottom, with a peak lamp held above each column and falling back a lamp at a
+/// time. The quantising to whole lamps is what makes it read as a piece of
+/// hardware on the front of a rack rather than as an animation.
+///
+/// Resting — nothing tuned, paused, muted, or buffering — is the bottom row lit
+/// and nothing else: the panel is powered, the signal is zero.
+///
+/// **The levels are invented, not measured, and that is a decision.** Measuring
+/// them is possible but not free: `MTAudioProcessingTap` cannot do it, because
+/// NTS's live and mixtape endpoints hand AVPlayer an asset carrying no audio
+/// track for an `audioMix` to attach to. The route that does work is a CoreAudio
+/// process tap over the app's own output, and that is audio capture — a macOS
+/// permission prompt on first play, for a decoration. Not worth asking anyone
+/// for. So the panel is honest about the one thing that matters (it only moves
+/// while audio is actually being rendered) and makes up the rest.
+private struct LevelLamps: View {
+    /// Whether audio is coming out of the speakers this second.
+    let running: Bool
     let accent: Color
-    @State private var up = false
+
+    private let bands = 5, rows = 7
+    private let lamp: CGFloat = 2.2, gap: CGFloat = 1.0
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 2.5) {
-            ForEach(0..<5, id: \.self) { i in
-                Capsule()
-                    .fill(i == 0 || i == 3 ? accent : Theme.ink)
-                    .frame(width: 3, height: 22)
-                    .scaleEffect(y: playing ? (up ? heights1[i] : heights2[i]) : 0.3, anchor: .bottom)
+        // Paused stops the clock, so a still panel costs nothing. Every value
+        // below is a function of the date alone — there is no animation left
+        // part-finished anywhere, which is what the previous bars got wrong:
+        // they scaled themselves under a `repeatForever` animation, and the
+        // half-second position tick rebuilt the bar mid-flight, restarting the
+        // repeat from wherever the picture had got to.
+        TimelineView(.animation(minimumInterval: 1.0 / 24, paused: !running)) { ctx in
+            let t = ctx.date.timeIntervalSinceReferenceDate
+            HStack(spacing: gap) {
+                ForEach(0..<bands, id: \.self) { band in
+                    let lit = lamps(level(band, t))
+                    let held = lamps(peak(band, t))
+                    VStack(spacing: gap) {
+                        ForEach(0..<rows, id: \.self) { row in
+                            // Row 0 is the top lamp, so a column of height `lit`
+                            // lights from the bottom up.
+                            Circle()
+                                .fill(colour(height: rows - row, lit: lit, held: held))
+                                .frame(width: lamp, height: lamp)
+                        }
+                    }
+                }
             }
+            .frame(height: 22)
         }
-        .frame(height: 22)
-        .onAppear { if playing { up = true } }
-        .animation(playing ? .easeInOut(duration: 0.42).repeatForever(autoreverses: true) : .default, value: up)
-        .onChange(of: playing) { _, now in up = now }
     }
 
-    private let heights1: [CGFloat] = [1.0, 0.45, 0.85, 0.3, 0.7]
-    private let heights2: [CGFloat] = [0.3, 0.9, 0.4, 0.85, 0.35]
+    // MARK: What the lamps show
+
+    /// Band `band` at time `t`, 0…1. Low bands move slower and sit louder, the
+    /// way music actually meters; the top band is quick and sparse.
+    private func level(_ band: Int, _ t: TimeInterval) -> Double {
+        let rate = 5.0 + Double(band) * 2.5
+        let step = Int(t * rate)
+        let a = noise(band, step), b = noise(band, step + 1)
+        let f = t * rate - Double(step)
+        let eased = f * f * (3 - 2 * f)                    // smooth between targets
+        let tilt = 1.0 - Double(band) * 0.11              // bass louder than treble
+        let swell = 0.62 + 0.38 * sin(t * 2 * .pi / 2.3)  // a slow musical rise and fall
+        return min(1, max(0, 0.18 + 0.82 * (a + (b - a) * eased) * tilt * swell))
+    }
+
+    /// The loudest this band has been in the last while — where the peak lamp
+    /// sits. Sampled backwards rather than remembered, so it stays a function of
+    /// the clock like everything else here.
+    private func peak(_ band: Int, _ t: TimeInterval, window: Double = 0.9) -> Double {
+        stride(from: 0.0, through: window, by: window / 8)
+            .map { level(band, t - $0) }
+            .max() ?? 0
+    }
+
+    /// Deterministic 0…1 noise. A seeded hash rather than `random()` so the
+    /// panel draws the same thing for the same instant however often the bar is
+    /// rebuilt — the bar is rebuilt twice a second by the position tick.
+    private func noise(_ band: Int, _ step: Int) -> Double {
+        var h = UInt64(bitPattern: Int64(band &* 374_761_393 &+ step &* 668_265_263))
+        h ^= h >> 13; h = h &* 1_274_126_177; h ^= h >> 16
+        return Double(h % 1000) / 1000
+    }
+
+    // MARK: Drawing
+
+    /// How many lamps a 0…1 level lights. Always at least one while the app is
+    /// open, so the panel never blinks out entirely.
+    private func lamps(_ level: Double) -> Int {
+        guard running else { return 1 }
+        return max(1, min(rows, Int((level * Double(rows)).rounded(.up))))
+    }
+
+    private func colour(height: Int, lit: Int, held: Int) -> Color {
+        if height <= lit {
+            // The top two lamps of a column are the loud ones, in the accent.
+            return height >= rows - 1 ? accent : Theme.ink
+        }
+        if height == held { return accent.opacity(0.75) }   // the peak lamp
+        return Theme.hairline(0.10)                          // unlit, but present
+    }
 }
 
 private struct VolumeMeter: View {
