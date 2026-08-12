@@ -39,8 +39,9 @@ struct Channel: Identifiable, Hashable {
     let accent: Color
     let accentText: Color
 
+    /// Shown in place of the programme's location while the grid has not
+    /// arrived — the only value it ever takes.
     var city: String = "—"
-    var host: String = ""
 
     /// This channel's published programme grid, earliest first, with finished
     /// slots dropped.

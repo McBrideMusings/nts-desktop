@@ -235,7 +235,6 @@ final class AppModel: ObservableObject {
         if let c = currentChannel {
             var parts: [String] = []
             if !c.startEnd.isEmpty { parts.append(c.startEnd) }
-            if !c.host.isEmpty { parts.append("WITH \(c.host.uppercased())") }
             if !c.genre.isEmpty { parts.append(c.genre.uppercased()) }
             return parts.joined(separator: " · ")
         }
@@ -816,7 +815,8 @@ final class AppModel: ObservableObject {
 
         guard !slot.showAlias.isEmpty, !slot.episodeAlias.isEmpty else { return }
         detailTasks[number] = Task { [weak self] in
-            guard let ep = try? await NTSAPI.episode(show: slot.showAlias, episode: slot.episodeAlias),
+            guard let ep = try? await NTSAPI.episode(show: slot.showAlias, episode: slot.episodeAlias,
+                                                     reportAs: "on-air-detail"),
                   !Task.isCancelled, let self,
                   let i = self.catalog.channels.firstIndex(where: { $0.number == number }),
                   self.catalog.channels[i].onAir?.id == slot.id

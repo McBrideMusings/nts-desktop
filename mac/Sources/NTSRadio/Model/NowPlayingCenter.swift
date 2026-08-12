@@ -162,7 +162,7 @@ final class NowPlayingCenter {
             guard let channel = model.currentChannel else { return nil }
             return Info(
                 title: track?.title ?? channel.show,
-                artist: nonEmpty(track?.artist) ?? nonEmpty(channel.host) ?? channel.genre,
+                artist: nonEmpty(track?.artist) ?? channel.genre,
                 album: "NTS \(channel.number) Live",
                 isPlaying: model.engine.isPlaying,
                 artwork: channel.background.map(ArtworkKey.remote)

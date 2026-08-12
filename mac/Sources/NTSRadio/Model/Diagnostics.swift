@@ -94,12 +94,16 @@ final class ServiceStatus: ObservableObject {
     /// dead play button would be describing the wrong problem.
     private static func plainName(for endpoint: String) -> String {
         switch endpoint {
-        case "live":            return "what’s on air may be out of date"
         case "schedule":        return "the schedule may be out of date"
         case "mixtapes":        return "the mixtape list may be out of date"
         case "shows":           return "the show index may be incomplete"
         case "show":            return "this show’s details wouldn’t load"
         case "episodes":        return "this show’s episodes wouldn’t load"
+        // The rail fetching the current programme's photograph hits the same
+        // endpoint as pressing play on an episode, but the consequence is a
+        // missing picture, not silence. Reported separately so the banner stops
+        // announcing a playback failure while the radio is playing fine.
+        case "on-air-detail":   return "the current show’s artwork wouldn’t load"
         case "episode",
              "resolve-stream",
              "site-token":      return "this episode wouldn’t start"

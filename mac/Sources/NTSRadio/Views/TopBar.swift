@@ -35,11 +35,8 @@ struct TopBar: View {
             // pushing the mark right of true visual centre before.
             Color.clear.frame(width: Self.trailingWidth)
             Spacer(minLength: 0)
-            Image(nsImage: MenuBarIcon.logoImage)
-                .resizable()
-                .renderingMode(.template)
+            NTSMark.filled(Theme.ink.opacity(0.9))
                 .frame(width: 13, height: 13)
-                .foregroundStyle(Theme.ink.opacity(0.9))
                 .allowsHitTesting(false)
             Spacer(minLength: 0)
             catalogButton

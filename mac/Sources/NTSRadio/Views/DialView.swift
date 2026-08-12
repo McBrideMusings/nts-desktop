@@ -23,7 +23,14 @@ struct DialView: View {
         var cx: CGFloat { w / 2 }
         var cy: CGFloat { h / 2 }
         /// The dial's overall diameter, leaving room for the icon ring's labels.
-        var d: CGFloat { min(w, h) * 0.92 }
+        ///
+        /// Capped, because a knob is a physical object with a size: on a
+        /// full-screen window `min(w, h) * 0.92` reached over 1000pt across, a
+        /// dial wider than most laptops are tall, with sixteen icons flung to
+        /// the edges of the screen. Past the cap the dial stays put and the
+        /// extra room becomes margin around it.
+        static let maxDiameter: CGFloat = 560
+        var d: CGFloat { min(min(w, h) * 0.92, Self.maxDiameter) }
         /// Where the mixtape icons are printed. Pulled in from 0.435 once the
         /// knob shrank: the icons had been placed to clear a knob that filled
         /// 0.70 of the dial, and against the smaller one they read as a distant

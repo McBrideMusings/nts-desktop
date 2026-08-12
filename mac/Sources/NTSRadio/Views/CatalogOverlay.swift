@@ -526,12 +526,8 @@ struct ArtworkPlaceholder: View {
     var size: CGFloat = 26
 
     var body: some View {
-        Image(nsImage: MenuBarIcon.logoImage)
-            .resizable()
-            .renderingMode(.template)
-            .scaledToFit()
+        NTSMark.filled(Theme.ink.opacity(0.10))
             .frame(width: size, height: size)
-            .foregroundStyle(Theme.ink.opacity(0.10))
     }
 }
 

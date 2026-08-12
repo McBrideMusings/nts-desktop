@@ -494,9 +494,15 @@ enum NTSAPI {
         let offsetSeconds: Double
     }
 
-    static func episode(show: String, episode: String) async throws -> EpisodeDetail {
+    /// `reportAs` is the name a failure is filed under, which is what the outage
+    /// banner turns into a sentence. It defaults to the play path — someone
+    /// pressed play and got nothing — but the rail calls this in the background
+    /// just to fetch the on-air programme's photograph, where the consequence is
+    /// a blank tile and saying "this episode wouldn't start" is simply untrue.
+    static func episode(show: String, episode: String,
+                        reportAs endpoint: String = "episode") async throws -> EpisodeDetail {
         let url = URL(string: "https://www.nts.live/api/v2/shows/\(show)/episodes/\(episode)")!
-        let e = try await fetch(ShowJSON.self, from: url, endpoint: "episode")
+        let e = try await fetch(ShowJSON.self, from: url, endpoint: endpoint)
         let tracklist = (e.embeds?.tracklist?.results ?? []).map {
             EpisodeTrack(artist: decodeEntities($0.artist ?? "").trimmingCharacters(in: .whitespaces),
                         title: decodeEntities($0.title ?? "").trimmingCharacters(in: .whitespaces),

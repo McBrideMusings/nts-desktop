@@ -225,13 +225,21 @@ private struct ChannelCard: View {
             .background(Theme.ink.opacity(0.85))
     }
 
-    /// Roughly how wide the chips want to be at full size. The mono face is
-    /// fixed-pitch, so a character is worth about 0.62 of the point size, plus
-    /// the 1pt of tracking after it; each chip adds its 10pt of side padding and
-    /// each gap 5pt.
+    /// The AppKit twin of `chipFont`, purely for measuring — `Theme.mono` is
+    /// `.system(size:weight:design: .monospaced)`, whose NSFont is
+    /// `monospacedSystemFont(ofSize:weight:)`.
+    private static let chipNSFont = NSFont.monospacedSystemFont(ofSize: 8, weight: .semibold)
+
+    /// How wide the chips want to be at full size — measured, not estimated.
+    /// This used to multiply a character count by a guessed per-character width,
+    /// which is a number that has to be re-guessed the moment the font, size or
+    /// tracking changes, and which silently clips a chip or hides the row a turn
+    /// early when it drifts.
     private var chipsNaturalWidth: CGFloat {
-        let perChar = 8 * 0.62 + 1
-        let text = genres.reduce(CGFloat(0)) { $0 + CGFloat($1.count) * perChar + 10 }
+        let attrs: [NSAttributedString.Key: Any] = [.font: Self.chipNSFont, .kern: 1]
+        let text = genres.reduce(CGFloat(0)) { total, g in
+            total + (g.uppercased() as NSString).size(withAttributes: attrs).width.rounded(.up) + 10
+        }
         return text + CGFloat(max(0, genres.count - 1)) * 5
     }
 

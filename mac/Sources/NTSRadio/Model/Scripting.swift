@@ -123,7 +123,13 @@ enum ScriptState {
                  "slots": ch.upcoming.count,
                  "slotsWithShow": ch.upcoming.filter { !$0.showAlias.isEmpty }.count,
                  "slotsWithEpisode": ch.upcoming.filter { !$0.episodeAlias.isEmpty }.count,
-                 "nextSlots": ch.upcoming.prefix(3).map {
+                 // `upcoming` leads with the programme that is on air, so this
+                 // used to be called "nextSlots" and open with what was already
+                 // playing. Reading a channel stuck on the 8 o'clock show while
+                 // its "next" said 9 o'clock made a plain stale-data bug look
+                 // like nonsense. Dropped now, so what is on and what is next
+                 // are two different fields that cannot be confused.
+                 "nextSlots": ch.upcoming.dropFirst().prefix(3).map {
                      "\($0.startEnd) \($0.title) [\($0.showAlias)]"
                  }]
             },
