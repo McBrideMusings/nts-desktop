@@ -51,10 +51,10 @@ enum CatalogDetail: Equatable {
 @MainActor
 final class AppModel: ObservableObject {
     /// The app's one model. It existed as a single instance already — the
-    /// `AppDelegate` made it and handed it to the window — but the Settings
-    /// window is a `Settings` scene declared in `NTSRadioApp`, which is built
-    /// before the delegate runs and has no way to be passed anything. Naming the
-    /// instance here is what lets both reach the same object, and matches
+    /// `AppDelegate` made it and handed it to the radio window — but the Settings
+    /// window is built by `SettingsWindowController`, outside any SwiftUI
+    /// environment and with nothing to hand it the model. Naming the instance
+    /// here is what lets both windows reach the same object, and matches
     /// `Catalog.shared` / `Saved.shared` / `ShowIndex.shared` beside it.
     static let shared = AppModel()
 

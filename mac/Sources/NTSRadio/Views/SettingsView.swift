@@ -1,10 +1,9 @@
 import SwiftUI
 import AppKit
 
-/// The contents of the app's Settings window — mounted as the `Settings` scene in
-/// `NTSRadioApp`, which is what makes it a real window: system title bar, ⌘,
-/// to open, ⌘W to close, its own position remembered, and it stays put when the
-/// radio window is dismissed.
+/// The contents of the app's Settings window. The window itself is
+/// `SettingsWindowController`'s — a real one, with the system title bar, its own
+/// remembered position, and a life independent of the radio window.
 ///
 /// **Deliberately unstyled.** Every other view in this app paints its own black
 /// faceplate, because the radio is meant to read as an object. Settings is not
@@ -28,6 +27,9 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section {
+                // This one only remembers itself — nothing registers a login
+                // item yet, so flipping it does not make the app launch at
+                // login. Tracked; it needs `SMAppService`.
                 Toggle("Open NTS Radio at login", isOn: $model.startOnLogin)
                 Toggle("Show in Dock", isOn: $model.showInDock)
             } footer: {
@@ -36,9 +38,10 @@ struct SettingsView: View {
 
             Section {
                 LabeledContent("Version", value: version)
-                // Non-functional for v1 on purpose — see GitHub issue #2.
-                Button("Check for Updates…") { }
-                    .disabled(true)
+                // No Check for Updates row: auto-update was closed as out of
+                // scope (GitHub #2 — a private repo can serve neither an appcast
+                // nor the .dmg), so a permanently greyed-out button here would be
+                // promising something that is never coming.
                 Button("About NTS Radio") {
                     NSApp.activate(ignoringOtherApps: true)
                     NSApp.orderFrontStandardAboutPanel(nil)
