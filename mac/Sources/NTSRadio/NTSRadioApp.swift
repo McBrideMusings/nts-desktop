@@ -22,10 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowController: RadioWindowController!
     private var parentWatch: DispatchSourceProcess?
     private var bag = Set<AnyCancellable>()
-    private var barTimer: Timer?
-    /// When the current run of playback started, so the waterline picks up from
-    /// the top of its cycle each time rather than wherever the clock happens to be.
-    private var barStart = CACurrentMediaTime()
+    private var waterlineTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // When run from source under `admin dev` / `swift run`, stdout is a pipe,
@@ -71,12 +68,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         statusItem = item
 
-        // Bars move only while audio is genuinely rendering, not merely while the
-        // play button is down — so a stalled stream visibly stops instead of
-        // bouncing through the silence. Subscribed after `statusItem` is assigned,
-        // because this fires immediately with the current value.
+        // The waterline moves only while audio is genuinely rendering, not merely
+        // while the play button is down — so a stalled stream visibly stops instead
+        // of running on through the silence. Subscribed after `statusItem` is
+        // assigned, because this fires immediately with the current value.
         model.engine.$isRendering
-            .sink { [weak self] in self?.setBarsAnimating($0) }
+            .sink { [weak self] in self?.setStatusItemAnimating($0) }
             .store(in: &bag)
     }
 
@@ -84,26 +81,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// whatever is playing with the waterline crossing it, redrawn 25 times a
     /// second; otherwise it is the plain NTS mark, still. Added in `.common`
     /// run-loop mode so the animation keeps running while a menu is open.
-    private func setBarsAnimating(_ animating: Bool) {
-        barTimer?.invalidate()
-        barTimer = nil
+    private func setStatusItemAnimating(_ animating: Bool) {
+        waterlineTimer?.invalidate()
+        waterlineTimer = nil
         guard animating else {
             statusItem.button?.image = MenuBarIcon.idleFrame
             return
         }
-        barStart = CACurrentMediaTime()
+        // Measured from when this run of playback started, so the waterline picks
+        // up from the top of its cycle each time rather than wherever the clock
+        // happens to be.
+        let start = CACurrentMediaTime()
         let timer = Timer(timeInterval: 1.0 / 25.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                let t = CACurrentMediaTime() - self.barStart
                 self.statusItem.button?.image = MenuBarIcon.image(
                     badge: MenuBarBadge(self.model.selection),
-                    waterline: MenuBarIcon.waterline(at: t)
+                    waterline: MenuBarIcon.waterline(at: CACurrentMediaTime() - start)
                 )
             }
         }
         RunLoop.main.add(timer, forMode: .common)
-        barTimer = timer
+        waterlineTimer = timer
     }
 
     /// When run from source (`swift run` / `admin dev`) the app is a bare binary,
