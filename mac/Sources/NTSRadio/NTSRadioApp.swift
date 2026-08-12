@@ -44,10 +44,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         quitWhenParentExitsInDev()
 
-        // The same instance the `Settings` scene reads, which is why it is named
+        // The same instance the Settings window reads, which is why it is named
         // on the type rather than made here (see `AppModel.shared`).
         let model = AppModel.shared
         self.model = model
+
+        installMainMenu()
 
         // Menu-bar presence is always on; the Dock icon is user-controlled
         // (Settings ▸ Show in Dock) and persisted. The AppDelegate owns the
@@ -185,6 +187,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The status item's route into the Settings window — the same one the gear
     /// in the title bar and `osascript … open settings` take.
     @objc private func openSettings() { SettingsWindowController.shared.show() }
+
+    /// A main menu, so the standard keystrokes have somewhere to live.
+    ///
+    /// In menu-bar-only mode the app is an agent and this menu is never drawn —
+    /// but `NSApplication` still routes key equivalents through it while the app
+    /// is frontmost, and it is the only place a key equivalent can be declared.
+    /// Without it ⌘, opened nothing unless the status item's menu happened to be
+    /// down, ⌘W closed no window, and ⌘Q did not quit. In Dock mode it becomes
+    /// the visible menu bar, which is why the item titles are the standard ones.
+    private func installMainMenu() {
+        let appMenu = NSMenu()
+        let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        settings.target = self
+        appMenu.addItem(settings)
+        appMenu.addItem(.separator())
+        appMenu.addItem(NSMenuItem(title: "Hide NTS Radio",
+                                   action: #selector(NSApplication.hide(_:)), keyEquivalent: "h"))
+        appMenu.addItem(NSMenuItem(title: "Close Window",
+                                   action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"))
+        appMenu.addItem(.separator())
+        appMenu.addItem(NSMenuItem(title: "Quit NTS Radio",
+                                   action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+
+        // Editing shortcuts are not decoration here: the sign-in fields in the
+        // Settings window get no ⌘C/⌘V/⌘A at all without a menu declaring them.
+        let editMenu = NSMenu(title: "Edit")
+        for (title, selector, key) in [
+            ("Cut", #selector(NSText.cut(_:)), "x"),
+            ("Copy", #selector(NSText.copy(_:)), "c"),
+            ("Paste", #selector(NSText.paste(_:)), "v"),
+            ("Select All", #selector(NSText.selectAll(_:)), "a"),
+        ] as [(String, Selector, String)] {
+            editMenu.addItem(NSMenuItem(title: title, action: selector, keyEquivalent: key))
+        }
+
+        let root = NSMenu()
+        let appItem = NSMenuItem()
+        appItem.submenu = appMenu
+        root.addItem(appItem)
+        let editItem = NSMenuItem()
+        editItem.submenu = editMenu
+        root.addItem(editItem)
+        NSApp.mainMenu = root
+    }
     @objc private func quitApp() { NSApp.terminate(nil) }
 
     /// Clicking the Dock icon (when shown) reveals the window — a Dock app with

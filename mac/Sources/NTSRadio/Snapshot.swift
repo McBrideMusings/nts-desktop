@@ -31,6 +31,20 @@ enum Snapshot {
             print("wrote \(name)")
         }
 
+        /// Any view, not just `PopoverView` — the Settings window's contents live
+        /// outside it now, and a surface with no shot is a surface nobody looks at.
+        func shotView<V: View>(_ name: String, _ view: V) {
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = 2
+            guard let img = renderer.nsImage,
+                  let tiff = img.tiffRepresentation,
+                  let rep = NSBitmapImageRep(data: tiff),
+                  let png = rep.representation(using: .png, properties: [:])
+            else { print("snapshot failed: \(name)"); return }
+            try? png.write(to: base.appendingPathComponent(name))
+            print("wrote \(name)")
+        }
+
         // Sample mixtape + tracklist matching the prototype's data, so the
         // tracklist surface renders with content for a faithful diff.
         let sampleMix = Mixtape(
@@ -90,10 +104,14 @@ enum Snapshot {
             $0.tracks = sampleTracks
             $0.tracksOpen = true
         }
-        // No settings shot: settings is its own window now (the `Settings` scene
-        // in `NTSRadioApp`), and these shots render `PopoverView` off screen —
-        // there is nothing of it inside this view to photograph.
-        shot("05-login.png") { seedChannels($0); seedMixtapes($0); $0.loginOpen = true }
+        // Settings and the account are one real window now, so they are rendered
+        // straight rather than through `PopoverView` — its own chrome is the
+        // system's and is not this repo's to check, but the contents are.
+        for pane in SettingsPane.allCases {
+            let selection = SettingsSelection()
+            selection.pane = pane
+            shotView("04-settings-\(pane.rawValue).png", SettingsView(selection: selection))
+        }
         // The knob face only carries a title once a mixtape is selected, and the
         // longest names are the ones that reach the circle's edge — this is the
         // shot that shows whether they fit.

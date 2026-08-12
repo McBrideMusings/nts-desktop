@@ -181,6 +181,7 @@
         <command name="open settings" code="NTSrSETT"
                  description="Open the Settings window — the same window ⌘, opens, not a panel inside the radio window.">
             <cocoa class="NTSOpenSettingsCommand"/>
+            <direct-parameter type="text" optional="yes" description="Which pane to show: general or account. Defaults to whichever is already showing."/>
             <result type="text" description="The state after opening, as JSON."/>
         </command>
 

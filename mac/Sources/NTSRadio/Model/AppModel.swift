@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import ServiceManagement
 import NTSFirestore
 
 enum Selection: Equatable {
@@ -23,6 +24,13 @@ enum Selection: Equatable {
 /// The tracklist is deliberately *not* a case here — it is a drawer that covers
 /// whichever of these is underneath and gives it straight back
 /// (`AppModel.tracksOpen`), not a third place to be.
+/// A pane and whether the drawer is over it — the pair, as one value to animate
+/// on. See `AppModel.paneState`.
+struct PaneState: Equatable {
+    let pane: Pane
+    let tracksOpen: Bool
+}
+
 enum Pane: Equatable {
     /// The faceplate: what is on air now — the two channel cards and the mixtape
     /// dial.
@@ -78,6 +86,10 @@ final class AppModel: ObservableObject {
     /// drawer over the catalog are both things you can be looking at, and the
     /// segment underneath goes on truthfully saying which one you will get back.
     @Published var tracksOpen = false
+    /// The two together, for the one animation that covers both. Changing pane
+    /// while the drawer is up changes both properties in the same tick, and
+    /// animating them separately ran two curves over the same region at once.
+    var paneState: PaneState { PaneState(pane: pane, tracksOpen: tracksOpen) }
     /// Whether the catalog is the pane on screen. Read-only, for the places that
     /// only care about that one — the service banner, the scripting state blob.
     var catalogOpen: Bool { pane == .catalog }
@@ -109,11 +121,10 @@ final class AppModel: ObservableObject {
     /// turn in either direction and always takes the short way to the next tape.
     /// It lives here rather than in `DialView` so a script can read it back.
     @Published var knobAngle: Double = 0
-    /// Whether the account sheet is up over the window. Settings used to share a
-    /// slot with it, back when settings was also drawn inside this window; it is
-    /// a real macOS window now (`SettingsView`, mounted as the `Settings` scene
-    /// in `NTSRadioApp`), so there is nothing left for it to be exclusive with.
-    @Published var loginOpen = false
+    // Nothing is drawn over the radio window any more. Settings and the account
+    // were both sheets in here with painted traffic lights; both are tabs of the
+    // real Settings window now (`SettingsView`), so the flags that tracked
+    // whether they were up are gone with them.
 
     /// The episode currently tuned, once its details have arrived. Nil for the
     /// live channels and the mixtapes, which carry their own metadata.
@@ -135,10 +146,40 @@ final class AppModel: ObservableObject {
     /// when signed out. Drives the now-playing bar's secondary line + its link.
     @Published var mixtapeEpisode: MixtapeTitle?
 
-    // Settings placeholder — Check for Updates is intentionally non-functional for
-    // v1 (see GitHub issue #2). Start-on-Login only drives local UI. About is the
-    // system's standard About panel now, so it needs no state of its own.
-    @Published var startOnLogin = false
+    /// Whether the app is registered to launch when the user logs in.
+    ///
+    /// Read straight from `SMAppService` rather than from a saved preference, and
+    /// written by registering or unregistering the service — the login item is
+    /// the fact, and a stored copy of it can only be a second answer that goes
+    /// stale. It goes stale the moment the switch is thrown in System Settings ▸
+    /// General ▸ Login Items, which is the same list this writes to. Before this,
+    /// the toggle was a `Bool` that remembered itself and registered nothing: it
+    /// moved, it stayed where it was put, and the app never launched at login.
+    ///
+    /// Registering needs a bundle, so under `admin dev` (a bare binary, no
+    /// `Info.plist`) `SMAppService` fails; the failure is logged and the toggle
+    /// snaps back to what the service actually reports.
+    @Published var startOnLogin: Bool = SMAppService.mainApp.status == .enabled {
+        didSet {
+            guard startOnLogin != (SMAppService.mainApp.status == .enabled) else { return }
+            do {
+                if startOnLogin { try SMAppService.mainApp.register() }
+                else { try SMAppService.mainApp.unregister() }
+            } catch {
+                let verb = startOnLogin ? "register" : "unregister"
+                Log.app.error("login item \(verb, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+                // Say what is true, not what was asked for.
+                startOnLogin = SMAppService.mainApp.status == .enabled
+            }
+        }
+    }
+
+    /// Re-read the login item's real state — after the Settings window opens, say,
+    /// since it can be changed in System Settings while the app is running.
+    func refreshStartOnLogin() {
+        let enabled = SMAppService.mainApp.status == .enabled
+        if startOnLogin != enabled { startOnLogin = enabled }
+    }
 
     /// Whether the app also shows a Dock icon (and app-switcher entry). Off by
     /// default — the app lives primarily in the menu bar. Persisted here; the

@@ -22,6 +22,8 @@ enum Log {
     static let auth = Logger(subsystem: subsystem, category: "auth")
     /// Playback: what was loaded, and what refused to load.
     static let player = Logger(subsystem: subsystem, category: "player")
+    /// The app itself: windows, the login item, anything the shell refuses.
+    static let app = Logger(subsystem: subsystem, category: "app")
 }
 
 /// Whether nts.live is answering, in terms the interface can show.

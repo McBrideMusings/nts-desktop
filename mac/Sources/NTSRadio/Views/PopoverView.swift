@@ -85,11 +85,18 @@ struct PopoverView: View {
                 case .catalog: CatalogOverlay()
                 }
             }
-            .animation(.easeOut(duration: 0.18), value: model.pane)
+            .animation(.easeOut(duration: 0.2), value: model.paneState)
             // What is playing, over the top of either. The drawer rises from the
             // now-playing bar it belongs to and drops back into it, so it reads
             // as the bar opening up rather than a third place the window went.
             // Reduce Motion gets the same drawer without the travel.
+            //
+            // Both overlays animate off `paneState` — the pair, not the two
+            // properties separately. Pressing EXPLORE while the drawer is up
+            // changes both at once, and with a curve each (0.18 and 0.22) the two
+            // ran side by side: there was a moment with the catalog, the
+            // tracklist and the faceplate all part-visible. One value means one
+            // transaction and one curve over the same region.
             .overlay {
                 if model.tracksOpen {
                     TracklistOverlay()
@@ -98,7 +105,6 @@ struct PopoverView: View {
                                     : .move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            .animation(.easeOut(duration: 0.22), value: model.tracksOpen)
 
             // Above the now-playing bar rather than inside the catalog: an
             // outage stales the faceplate too — the channel cards are what the
@@ -109,6 +115,5 @@ struct PopoverView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.popover)
-        .overlay { if model.loginOpen { LoginView() } }
     }
 }

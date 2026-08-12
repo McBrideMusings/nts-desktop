@@ -1,15 +1,17 @@
 import SwiftUI
 import AppKit
 
-/// The settings and account buttons at the right end of the title bar, and
-/// nothing else. The band they sit in — its black, its hairline, and the NTS
-/// mark centred in it — belongs to `PopoverView`.
+/// The settings button at the right end of the title bar, and nothing else. The
+/// band it sits in — its black, its hairline, and the NTS mark centred in it —
+/// belongs to `PopoverView`.
 ///
-/// The catalog button used to live here too. It is a segment of the pane switch
-/// in the now-playing bar now (`PaneSwitch` in `NowPlayingBar.swift`), beside the
-/// tracklist and the faceplate, because a control that picks between three panes
-/// has to sit with the other two — split across two ends of the window, the pair
-/// of them could show two panes lit at once.
+/// Two buttons left this strip. The catalog is a segment of the pane switch in
+/// the now-playing bar now (`PaneSwitch` in `NowPlayingBar.swift`), because a
+/// control that picks between panes has to sit with the other one that does —
+/// split across two ends of the window, the pair could show two panes lit at
+/// once. The account button is gone entirely: signing in is a tab of the Settings
+/// window, so the gear is the way to it, and the green dot on the gear is the
+/// signed-in state that button used to carry.
 ///
 /// **This view cannot centre anything, and the name says so on purpose.**
 /// `RadioWindowController` mounts it as a `.top` title-bar accessory, and AppKit
@@ -30,14 +32,12 @@ import AppKit
 /// pulled the stack up by a hardcoded 32pt, and whenever AppKit's real band was
 /// taller the whole interface slid up into the traffic lights.
 struct TitleBarControls: View {
-    @EnvironmentObject var model: AppModel
     @EnvironmentObject var auth: NTSAuth
 
     var body: some View {
         HStack(spacing: 8) {
             Spacer(minLength: 0)
             settingsButton
-            profileButton
         }
         .padding(.trailing, 14)
         .frame(maxWidth: .infinity)
@@ -48,27 +48,19 @@ struct TitleBarControls: View {
         // transparent so they show through.
     }
 
-    /// Login-state indicator: signed-in shows the email's initial with a green
-    /// dot; signed-out shows a generic person glyph. Opens the standalone account
-    /// popover, where sign-in / sign-out lives.
-    private var profileButton: some View {
-        Button { model.loginOpen = true } label: {
+    /// Settings never lights up — it is a separate window, and a lit gear beside
+    /// a window that may be behind another app would be claiming one. The green
+    /// dot is not that: it says the account is signed in, which is what the
+    /// account button used to say and what decides whether live tracklists
+    /// arrive at all.
+    private var settingsButton: some View {
+        Button { SettingsWindowController.shared.show() } label: {
             ZStack(alignment: .bottomTrailing) {
-                ZStack {
-                    Circle()
-                        .fill(auth.isAuthenticated ? Theme.green.opacity(0.22) : Theme.hairline(0.12))
-                        .overlay(Circle().stroke(Theme.hairline(0.16), lineWidth: 1))
-                    if auth.isAuthenticated, let initial = auth.email?.first {
-                        Text(String(initial).uppercased())
-                            .font(Theme.display(12, .heavy))
-                            .foregroundStyle(Theme.ink)
-                    } else {
-                        Image(systemName: "person.crop.circle")
-                            .font(.system(size: 16))
-                            .foregroundStyle(Theme.inkMuted)
-                    }
-                }
-                .frame(width: 26, height: 26)
+                Image(systemName: "gearshape")
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundStyle(Theme.ink)
+                    .frame(width: 26, height: 26)
+                    .background(RoundedRectangle(cornerRadius: 7).fill(Theme.hairline(0.10)))
 
                 if auth.isAuthenticated {
                     Circle()
@@ -79,21 +71,8 @@ struct TitleBarControls: View {
             }
         }
         .buttonStyle(.hit)
-        .help(auth.isAuthenticated ? "Account — \(auth.email ?? "signed in")" : "Sign in")
-    }
-
-    /// Settings is a separate window, so this button never lights up — it has no
-    /// open/closed state to report about this window, and a lit gear beside a
-    /// window that may be behind another app would be claiming one.
-    private var settingsButton: some View {
-        Button { SettingsWindowController.shared.show() } label: {
-            Image(systemName: "gearshape")
-                .font(.system(size: 15, weight: .regular))
-                .foregroundStyle(Theme.ink)
-                .frame(width: 26, height: 26)
-                .background(RoundedRectangle(cornerRadius: 7).fill(Theme.hairline(0.10)))
-        }
-        .buttonStyle(.hit)
-        .help("Settings")
+        .help(auth.isAuthenticated
+              ? "Settings — signed in as \(auth.email ?? "your NTS account")"
+              : "Settings — not signed in")
     }
 }

@@ -496,7 +496,17 @@ final class NTSOpenCatalogCommand: NTSCommand {
 final class NTSOpenSettingsCommand: NTSCommand {
     override func performDefaultImplementation() -> Any? {
         run {
-            SettingsWindowController.shared.show()
+            let name = (self.directParameter as? String)?.lowercased() ?? ""
+            if !name.isEmpty {
+                guard let pane = SettingsPane(rawValue: name) else {
+                    self.scriptErrorNumber = -1703   // errAETypeError
+                    self.scriptErrorString = "\"\(name)\" is not a settings pane. Use general or account."
+                    return false
+                }
+                SettingsWindowController.shared.show(pane)
+            } else {
+                SettingsWindowController.shared.show()
+            }
             return true
         }
     }
