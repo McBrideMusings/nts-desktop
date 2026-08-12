@@ -91,13 +91,8 @@ private struct ChannelCard: View {
     /// and the LED, which is what identifies it; the words go.
     private var tiny: Bool { slotW < 130 }
 
-    private var location: String {
-        let live = channel.upcoming.first?.location ?? ""
-        return live.isEmpty ? channel.city : live
-    }
-    private var genres: [String] {
-        Array((channel.upcoming.first?.genres ?? [channel.genre]).filter { !$0.isEmpty }.prefix(3))
-    }
+    private var location: String { channel.location.uppercased() }
+    private var genres: [String] { Array(channel.genres.prefix(3)) }
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -161,13 +156,13 @@ private struct ChannelCard: View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 8) {
                 if narrow {
-                    Text(channel.upcoming.first?.startEnd ?? channel.startEnd).monospacedDigit()
+                    Text(channel.startEnd).monospacedDigit()
                         .foregroundStyle(active ? channel.accent : Color(hex: 0xcfcec8))
                 } else {
                     Text(location)
-                    if !(channel.upcoming.first?.startEnd ?? channel.startEnd).isEmpty {
+                    if !channel.startEnd.isEmpty {
                         Text("·").opacity(0.5)
-                        Text(channel.upcoming.first?.startEnd ?? channel.startEnd).monospacedDigit()
+                        Text(channel.startEnd).monospacedDigit()
                     }
                     Text("·").opacity(0.5)
                     Text(active ? "◉ PLAYING" : "LIVE")

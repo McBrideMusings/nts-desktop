@@ -65,16 +65,6 @@ enum NTSAPI {
         }
     }
 
-    struct LiveUpdate {
-        let channel: Int
-        let show: String
-        let startEnd: String
-        let genre: String
-        let background: String?   // current program's full-bleed artwork
-        let showAlias: String     // for linking the title to its episode page
-        let episodeAlias: String
-    }
-
     /// One programme slot on a channel, as published in NTS's own schedule.
     ///
     /// Every slot carries a real start and end and the aliases of the show and
@@ -99,39 +89,6 @@ enum NTSAPI {
         var episodeURL: URL? {
             guard !showAlias.isEmpty, !episodeAlias.isEmpty else { return nil }
             return URL(string: "https://www.nts.live/shows/\(showAlias)/episodes/\(episodeAlias)")
-        }
-    }
-
-    /// The now-playing feed. Only `now` is read: the response also carries
-    /// `next` … `next17`, but those slots come from the schedule endpoint, which
-    /// publishes fourteen days of them with the aliases attached.
-    private struct Response: Decodable {
-        let results: [Result]
-
-        struct Result: Decodable {
-            let channel_name: String?
-            let now: Raw?
-        }
-
-        struct Raw: Decodable {
-            let broadcast_title: String?
-            let start_timestamp: String?
-            let end_timestamp: String?
-            let embeds: Embeds?
-        }
-        struct Embeds: Decodable { let details: Details? }
-        struct Details: Decodable {
-            let genres: [Genre]?
-            let media: Media?
-            let show_alias: String?
-            let episode_alias: String?
-            let location_short: String?
-        }
-        struct Genre: Decodable { let value: String? }
-        struct Media: Decodable {
-            let background_large: String?
-            let background_medium_large: String?
-            let background_small: String?
         }
     }
 
@@ -205,25 +162,6 @@ enum NTSAPI {
                         ? String((c.path ?? "").dropFirst("/shows/".count)) : ""
                     return MixtapeCredit(name: decodeEntities(name), alias: alias)
                 }
-            )
-        }
-    }
-
-    static func live() async throws -> [LiveUpdate] {
-        let url = URL(string: "https://www.nts.live/api/v2/live")!
-        let decoded = try await fetch(Response.self, from: url, endpoint: "live")
-
-        return decoded.results.compactMap { r -> LiveUpdate? in
-            guard let chName = r.channel_name, let ch = Int(chName),
-                  let now = r.now else { return nil }
-            let details = now.embeds?.details
-            let show = decodeEntities(now.broadcast_title ?? "")
-            let genre = decodeEntities(details?.genres?.first?.value ?? "")
-            let startEnd = timeRange(now.start_timestamp, now.end_timestamp)
-            let background = details?.media?.background_large
-            return LiveUpdate(
-                channel: ch, show: show, startEnd: startEnd, genre: genre, background: background,
-                showAlias: details?.show_alias ?? "", episodeAlias: details?.episode_alias ?? ""
             )
         }
     }
@@ -354,8 +292,14 @@ enum NTSAPI {
         let name: String?
         let description: String?
         let location_short: String?
-        let genres: [Response.Genre]?
-        let moods: [Response.Genre]?
+        /// "London" against `location_short`'s "LDN". The rail has room for the
+        /// spelt-out city and nts.live shows that form, so it is preferred where
+        /// NTS supplies it.
+        let location_long: String?
+        let genres: [Tag]?
+        let moods: [Tag]?
+        /// NTS writes a genre or mood as `{"id": …, "value": "Ambient"}`.
+        struct Tag: Decodable { let value: String? }
         let media: Media?
         let broadcast: String?
         let external_links: [String]?
@@ -370,6 +314,18 @@ enum NTSAPI {
         struct Embeds: Decodable {
             let tracklist: Tracklist?
             struct Tracklist: Decodable { let results: [TrackJSON]? }
+
+            /// When an episode has no identified tracks NTS writes
+            /// `"tracklist": []` — a bare array where the populated case is an
+            /// object — and that includes every episode still on air. Decoding
+            /// it strictly threw and took the whole episode with it, so the
+            /// tracklist is read leniently: unreadable means no tracklist, not
+            /// a failed request.
+            init(from decoder: Decoder) throws {
+                let c = try decoder.container(keyedBy: CodingKeys.self)
+                tracklist = try? c.decodeIfPresent(Tracklist.self, forKey: .tracklist)
+            }
+            private enum CodingKeys: String, CodingKey { case tracklist }
         }
         struct TrackJSON: Decodable {
             let artist: String?
@@ -511,6 +467,8 @@ enum NTSAPI {
         let description: String
         let genres: [String]
         let location: String
+        /// The city spelt out, when NTS gives it — `location` is the abbreviation.
+        let locationLong: String
         let date: String
         let image: URL?
         let audioSources: [URL]
@@ -550,6 +508,7 @@ enum NTSAPI {
             description: decodeEntities(e.description ?? ""),
             genres: (e.genres ?? []).compactMap { $0.value }.map { decodeEntities($0).trimmingCharacters(in: .whitespaces) },
             location: e.location_short ?? "",
+            locationLong: e.location_long ?? "",
             date: e.broadcast.flatMap(parse).map { dayMonthYear.string(from: $0) } ?? "",
             image: (e.picture).flatMap { URL(string: $0) },
             audioSources: (e.audio_sources ?? []).compactMap { $0.url.flatMap(URL.init(string:)) },

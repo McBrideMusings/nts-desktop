@@ -182,7 +182,7 @@ final class AppModel: ObservableObject {
         updateMixtapeTitle()
         nowPlaying = NowPlayingCenter(model: self)
         Task { await refreshMixtapes() }
-        Task { await pollLive() }
+        Task { await pollSchedule() }
         Task { await showIndex.buildIfStale() }
         Task {
             await loadExploreVocabulary()
@@ -790,22 +790,45 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Pull live now-playing for the two channels. Best-effort: failures leave
-    /// the seeded placeholders in place.
-    func refreshLive() async {
-        guard let info = try? await NTSAPI.live() else { return }
-        for upd in info {
-            if let idx = catalog.channels.firstIndex(where: { $0.number == upd.channel }) {
-                let showChanged = catalog.channels[idx].show != upd.show
-                catalog.channels[idx].show = upd.show
-                catalog.channels[idx].startEnd = upd.startEnd
-                catalog.channels[idx].genre = upd.genre
-                catalog.channels[idx].background = upd.background.flatMap { URL(string: $0) }
-                // A detail-less poll (no embeds.details) returns empty aliases —
-                // don't blank a still-valid episode link mid-broadcast. Only update
-                // the aliases when we got real ones or the broadcast actually changed.
-                if !upd.showAlias.isEmpty || showChanged { catalog.channels[idx].showAlias = upd.showAlias }
-                if !upd.episodeAlias.isEmpty || showChanged { catalog.channels[idx].episodeAlias = upd.episodeAlias }
+    /// In-flight artwork fetches, one per channel, so a changeover cancels the
+    /// previous programme's request instead of racing it.
+    private var detailTasks: [Int: Task<Void, Never>] = [:]
+
+    /// Dress whatever is now at the head of a channel's grid.
+    ///
+    /// Two steps, because the grid publishes no artwork: the show's own picture
+    /// goes on immediately so the tile never goes blank across a handover, then
+    /// the episode's own photograph replaces it once NTS answers. Both writes
+    /// name the slot they belong to, so neither can land on the next programme.
+    private func refreshDetail(channel idx: Int) {
+        let number = catalog.channels[idx].number
+        detailTasks[number]?.cancel()
+        guard let slot = catalog.channels[idx].onAir else {
+            catalog.channels[idx].detail = nil
+            return
+        }
+        let indexed = showIndex.ref(slot.showAlias)
+        catalog.channels[idx].detail = SlotDetail(
+            slotID: slot.id,
+            image: slot.image ?? indexed?.pictureURL,
+            genres: slot.genres.isEmpty ? (indexed?.genres ?? []) : slot.genres,
+            location: slot.location.isEmpty ? (indexed?.location ?? "") : slot.location)
+
+        guard !slot.showAlias.isEmpty, !slot.episodeAlias.isEmpty else { return }
+        detailTasks[number] = Task { [weak self] in
+            guard let ep = try? await NTSAPI.episode(show: slot.showAlias, episode: slot.episodeAlias),
+                  !Task.isCancelled, let self,
+                  let i = self.catalog.channels.firstIndex(where: { $0.number == number }),
+                  self.catalog.channels[i].onAir?.id == slot.id
+            else { return }
+            withAnimation(.easeInOut(duration: 0.3)) {
+                self.catalog.channels[i].detail = SlotDetail(
+                    slotID: slot.id,
+                    image: ep.image ?? self.catalog.channels[i].detail?.image,
+                    genres: ep.genres.isEmpty ? (self.catalog.channels[i].detail?.genres ?? []) : ep.genres,
+                    location: [ep.locationLong, ep.location,
+                               self.catalog.channels[i].detail?.location ?? ""]
+                        .first { !$0.isEmpty } ?? "")
             }
         }
     }
@@ -835,7 +858,9 @@ final class AppModel: ObservableObject {
         let now = Date()
         for idx in catalog.channels.indices {
             guard let slots = grids[catalog.channels[idx].number] else { continue }
+            let head = catalog.channels[idx].onAir?.id
             catalog.channels[idx].upcoming = slots.filter { ($0.end ?? .distantPast) > now }
+            if catalog.channels[idx].onAir?.id != head { refreshDetail(channel: idx) }
             // Every slot names its show; folding those in is how the index covers
             // shows past the 1012 the shows endpoint will hand out.
             for b in slots where !b.showAlias.isEmpty {
@@ -849,9 +874,14 @@ final class AppModel: ObservableObject {
     ///
     /// The grid already names every upcoming slot and the minute it ends, so a
     /// changeover is something the app can do on its own — it doesn't have to be
-    /// told. Waiting to be told left the rail showing the previous show: NTS serves
-    /// `/api/v2/live` with `cache-control: max-age=900`, so for up to 15 minutes
-    /// after the hour every poll returns the same pre-changeover JSON.
+    /// told. It used to be told, by `/api/v2/live`, which NTS serves with
+    /// `cache-control: max-age=900`: for up to fifteen minutes after the hour
+    /// every poll handed back the programme that had just finished and wrote it
+    /// straight over the one that had started.
+    ///
+    /// Dropping the finished slots is now the whole changeover. Nothing here
+    /// copies a title or a time anywhere — the rail reads them off the head of
+    /// the grid — so this is idempotent and can run as often as it likes.
     func advanceSlots(now: Date = Date()) {
         withAnimation(.easeInOut(duration: 0.4)) { advance(now: now) }
     }
@@ -859,21 +889,9 @@ final class AppModel: ObservableObject {
     private func advance(now: Date) {
         for idx in catalog.channels.indices {
             let live = catalog.channels[idx].upcoming.drop { ($0.end ?? .distantFuture) <= now }
-            guard let current = live.first,
-                  current.id != catalog.channels[idx].upcoming.first?.id else { continue }
+            guard live.first?.id != catalog.channels[idx].onAir?.id else { continue }
             catalog.channels[idx].upcoming = Array(live)
-            catalog.channels[idx].show = current.title
-            catalog.channels[idx].startEnd = current.startEnd
-            // The grid carries no genres or artwork, so the handover shows the
-            // show's own — the episode's photograph arrives with the next
-            // `/api/v2/live` poll, which embeds it for whatever is on now.
-            let indexed = showIndex.ref(current.showAlias)
-            catalog.channels[idx].genre = indexed?.genres.first ?? ""
-            catalog.channels[idx].background = indexed?.pictureURL
-            // A new broadcast means the old episode link is wrong, so these are
-            // replaced outright rather than merged.
-            catalog.channels[idx].showAlias = current.showAlias
-            catalog.channels[idx].episodeAlias = current.episodeAlias
+            refreshDetail(channel: idx)
         }
     }
 
@@ -894,19 +912,18 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Refresh now-playing immediately, then every 60s so the channel backdrop
-    /// and show info track program changes while the app stays open.
+    /// Keep the grid fresh and the rail on the right programme.
     ///
-    /// The poll re-anchors the schedule; the changeover itself is `advanceSlots`,
-    /// which runs here too so a stale (or failed) response can't leave the rail on
-    /// a programme that has already finished, and so a machine that slept through
-    /// a boundary catches up on the next cycle.
-    private func pollLive() async {
+    /// The changeover is `scheduleSlotAdvance`'s timer, which fires on the
+    /// boundary itself. This loop is the safety net behind it: a machine that
+    /// slept through a boundary, or a grid that aged past NTS's fifteen-minute
+    /// cache, catches up within a minute. It costs no request in the ordinary
+    /// case — `refreshSchedule` is the only fetch here and it is rate-limited.
+    private func pollSchedule() async {
         while !Task.isCancelled {
             if scheduleFetched.map({ Date().timeIntervalSince($0) > Self.scheduleMaxAge }) ?? true {
                 await refreshSchedule()
             }
-            await refreshLive()
             advanceSlots()
             scheduleSlotAdvance()
             try? await Task.sleep(nanoseconds: 60 * 1_000_000_000)

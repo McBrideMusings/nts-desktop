@@ -49,13 +49,19 @@ enum Snapshot {
         ]
 
         // Seed live-channel show + time so the cards render with content (the
-        // snapshot has no network), matching the prototype's sample data.
+        // snapshot has no network), matching the prototype's sample data. The
+        // rail reads the current programme off the grid, so the sample is a
+        // grid — one slot per channel, ending an hour out so it stays on air.
         func seedChannels(_ m: AppModel) {
+            func slot(_ n: Int, _ title: String, _ startEnd: String, _ city: String) -> NTSAPI.Broadcast {
+                NTSAPI.Broadcast(channel: n, title: title, start: Date(),
+                                 end: Date().addingTimeInterval(3600), startEnd: startEnd,
+                                 genres: [], location: city, image: nil,
+                                 showAlias: "", episodeAlias: "")
+            }
             if m.catalog.channels.count >= 2 {
-                m.catalog.channels[0].show = "Low Slung Transmission"
-                m.catalog.channels[0].startEnd = "17:00 – 19:00"
-                m.catalog.channels[1].show = "Desert Frequency Hour"
-                m.catalog.channels[1].startEnd = "09:00 – 11:00"
+                m.catalog.channels[0].upcoming = [slot(1, "Low Slung Transmission", "17:00 – 19:00", "LONDON")]
+                m.catalog.channels[1].upcoming = [slot(2, "Desert Frequency Hour", "09:00 – 11:00", "LOS ANGELES")]
             }
         }
 

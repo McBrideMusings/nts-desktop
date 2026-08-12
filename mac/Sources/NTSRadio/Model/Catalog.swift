@@ -21,28 +21,62 @@ struct Mixtape: Identifiable, Hashable {
 
 // MARK: - Live channel
 
+/// Artwork, genres and location for one programme — never its identity.
+///
+/// It carries the id of the slot it was fetched for, so a response that arrives
+/// after the changeover it was meant for simply stops matching and is ignored,
+/// rather than dressing the wrong show in the previous one's photograph.
+struct SlotDetail: Hashable {
+    let slotID: String
+    let image: URL?
+    let genres: [String]
+    let location: String
+}
+
 struct Channel: Identifiable, Hashable {
     let number: Int          // 1 or 2
     let artHue: Double
     let accent: Color
     let accentText: Color
 
-    // Live now-playing — populated by NTSAPI; seeded empty.
     var city: String = "—"
-    var show: String = "NTS LIVE"
     var host: String = ""
-    var genre: String = ""
-    var startEnd: String = ""
-    var background: URL? = nil   // current program's full-bleed artwork
-    // Aliases for the current broadcast, used to link the show title to its
-    // nts.live episode page (empty when the live feed didn't supply them).
-    var showAlias: String = ""
-    var episodeAlias: String = ""
-    /// This channel's programme list — `now` first, then every `next…` slot the
-    /// live response carried. Empty until the first poll lands.
+
+    /// This channel's published programme grid, earliest first, with finished
+    /// slots dropped.
+    ///
+    /// The single record of what is on: `refreshSchedule` fills it, `advanceSlots`
+    /// trims it, and everything below reads the current programme off its head.
+    /// Nothing else writes what is on air, so nothing else can disagree with the
+    /// clock — which is what the now-playing poll used to do, handing back the
+    /// finished programme for up to fifteen minutes after every changeover.
     var upcoming: [NTSAPI.Broadcast] = []
 
+    /// Decoration for whatever is on now. Ignored unless it still matches.
+    var detail: SlotDetail? = nil
+
     var id: Int { number }
+
+    /// The programme the clock is in.
+    var onAir: NTSAPI.Broadcast? { upcoming.first }
+
+    private var liveDetail: SlotDetail? {
+        guard let d = detail, d.slotID == onAir?.id else { return nil }
+        return d
+    }
+
+    var show: String { onAir.map(\.title) ?? "NTS LIVE" }
+    var startEnd: String { onAir?.startEnd ?? "" }
+    var genres: [String] { (liveDetail?.genres ?? onAir?.genres ?? []).filter { !$0.isEmpty } }
+    var genre: String { genres.first ?? "" }
+    var location: String {
+        let l = liveDetail?.location ?? onAir?.location ?? ""
+        return l.isEmpty ? city : l
+    }
+    /// Current programme's full-bleed artwork.
+    var background: URL? { liveDetail?.image ?? onAir?.image }
+    var showAlias: String { onAir?.showAlias ?? "" }
+    var episodeAlias: String { onAir?.episodeAlias ?? "" }
 
     /// The nts.live episode page for the current broadcast, when the feed gave us
     /// the aliases — lets the show title act as a link.
