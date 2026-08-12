@@ -30,14 +30,13 @@ enum Theme {
     static let ch2Text     = Color(hex: 0x0b0b0c)
     static let liveDot     = Color(hex: 0xff2b2b)
 
-    // Settings sheet (macOS light)
-    static let sheet       = Color(hex: 0xf3f2f0)
-    static let sheetInk    = Color(hex: 0x1d1d1f)
-    static let sheetInk2   = Color(hex: 0x86868b)
-    static let sheetInk3   = Color(hex: 0xa1a1a6)
-    static let blue        = Color(hex: 0x0071e3)
-    static let red         = Color(hex: 0xff3b30)
-    static let trafficRed  = Color(hex: 0xff5f57)
+    // There is no light-sheet palette here any more. Settings and the account
+    // were drawn as macOS-looking cards inside the radio window, in their own
+    // set of Apple greys with a painted red traffic light; both are panes of a
+    // real window now and wear the system's colours, so the seven that dressed
+    // them (`sheet`, `sheetInk`, `sheetInk2`, `sheetInk3`, `blue`, `red`,
+    // `trafficRed`) are gone. A palette for a kind of window this app no longer
+    // has is an invitation to draw another one.
     static let green       = Color(hex: 0x34c759)
 
     static func hairline(_ a: Double = 0.08) -> Color { .white.opacity(a) }

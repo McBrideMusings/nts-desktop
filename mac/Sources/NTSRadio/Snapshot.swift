@@ -99,10 +99,16 @@ enum Snapshot {
         // Settings and the account are one real window now, so they are rendered
         // straight rather than through `PopoverView` — its own chrome is the
         // system's and is not this repo's to check, but the contents are.
+        // Seeded account, not the real one: the pane reads its state off an
+        // `NTSAuth`, and rendering it against the live one made this the only
+        // shot in the set whose contents depended on who was signed in on the
+        // machine — and the only one that wrote a real address into a PNG.
         for pane in SettingsPane.allCases {
             let selection = SettingsSelection()
             selection.pane = pane
-            shotView("04-settings-\(pane.rawValue).png", SettingsView(selection: selection))
+            shotView("04-settings-\(pane.rawValue).png",
+                     SettingsView(selection: selection,
+                                  auth: NTSAuth.sample(email: "listener@example.com")))
         }
         // The knob face only carries a title once a mixtape is selected, and the
         // longest names are the ones that reach the circle's edge — this is the

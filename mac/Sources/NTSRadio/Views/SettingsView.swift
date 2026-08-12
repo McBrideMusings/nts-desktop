@@ -53,11 +53,14 @@ final class SettingsSelection: ObservableObject {
 /// the system went dark.
 struct SettingsView: View {
     @ObservedObject var selection: SettingsSelection
+    /// The live account, except under `admin snapshot`, which passes a seeded one
+    /// so the shot does not depend on who is signed in on the machine rendering it.
+    var auth: NTSAuth = AppModel.shared.auth
 
     var body: some View {
         switch selection.pane {
         case .general: GeneralSettings()
-        case .account: AccountSettings()
+        case .account: AccountSettings(auth: auth)
         }
     }
 }
@@ -105,7 +108,7 @@ private struct GeneralSettings: View {
 /// manager, tabbing between fields and Return-to-submit all work — none of which
 /// the drawn sheet had.
 private struct AccountSettings: View {
-    @ObservedObject private var auth = AppModel.shared.auth
+    @ObservedObject var auth: NTSAuth
     @State private var email = ""
     @State private var password = ""
 

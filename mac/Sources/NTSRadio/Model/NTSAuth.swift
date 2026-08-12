@@ -33,6 +33,22 @@ final class NTSAuth: ObservableObject {
         }
     }
 
+    /// A signed-in-looking instance that has never touched the Keychain and holds
+    /// no token, for `admin snapshot`. The account pane reads its state off an
+    /// `NTSAuth`, so rendering it against the live one made the shot depend on
+    /// whoever was signed in on that Mac — the only shot in the set that did, and
+    /// the only one that put a real address in a PNG. Every other shot seeds its
+    /// own data; this is that seed. It cannot be used to reach the network:
+    /// `validToken()` throws `notAuthenticated` with no refresh token.
+    static func sample(email: String) -> NTSAuth {
+        let auth = NTSAuth()
+        auth.refreshToken = nil
+        auth.idToken = nil
+        auth.email = email
+        auth.isAuthenticated = true
+        return auth
+    }
+
     // MARK: - Public
 
     func signIn(email: String, password: String) async {

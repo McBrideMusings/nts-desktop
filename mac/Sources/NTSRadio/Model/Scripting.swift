@@ -14,15 +14,21 @@ import Foundation
 // MARK: - Where the scripting layer finds the running app
 
 extension AppModel {
-    /// The live model, published for the scripting commands. Set once by the
-    /// AppDelegate at launch and never reassigned; nil under `NTS_SNAPSHOT`,
-    /// which builds no model and exits.
-    @MainActor static weak var scriptTarget: AppModel?
+    /// Whether launch has finished, so the commands below can say "not yet"
+    /// instead of half-driving an app that is still assembling itself.
+    ///
+    /// This used to be a weak `scriptTarget` pointer that the AppDelegate set,
+    /// and every command read the model through it — so "which model" and "is it
+    /// ready" were the same question asked of one optional. They are not the same
+    /// question: the model is `AppModel.shared` and always exists, while
+    /// readiness is a moment in launch. Under `NTS_SNAPSHOT` this stays false,
+    /// which is correct — that mode renders PNGs and exits.
+    @MainActor static var scriptingReady = false
 }
 
 extension RadioWindowController {
     /// The live window controller, for the window commands. Same lifetime rules
-    /// as `AppModel.scriptTarget`.
+    /// as `RadioWindowController.scriptTarget` below.
     @MainActor static weak var scriptTarget: RadioWindowController?
 }
 
@@ -33,9 +39,10 @@ enum ScriptState {
     /// Everything observable about the app, as a JSON object. Every command
     /// returns this too, so one round trip both acts and reports.
     static func json() -> String {
-        guard let m = AppModel.scriptTarget else {
+        guard AppModel.scriptingReady else {
             return #"{"running":false}"#
         }
+        let m = AppModel.shared
         let track = m.currentTrack
         let dict: [String: Any] = [
             "running": true,
@@ -178,7 +185,7 @@ enum ScriptState {
     /// name a source the catalog actually holds — a typo'd alias must fail
     /// loudly rather than silently tuning nothing.
     static func selection(from text: String) -> Selection? {
-        guard let m = AppModel.scriptTarget else { return nil }
+        let m = AppModel.shared
         let raw = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let parts = raw.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
         guard parts.count == 2 else { return nil }
@@ -214,39 +221,39 @@ extension NSApplication {
     @objc var ntsState: String { MainActor.assumeIsolated { ScriptState.json() } }
 
     @objc var ntsPlaying: Bool {
-        MainActor.assumeIsolated { AppModel.scriptTarget?.isPlaying ?? false }
+        MainActor.assumeIsolated { AppModel.shared.isPlaying }
     }
 
     @objc var ntsRendering: Bool {
-        MainActor.assumeIsolated { AppModel.scriptTarget?.engine.isRendering ?? false }
+        MainActor.assumeIsolated { AppModel.shared.engine.isRendering }
     }
 
     @objc var ntsSource: String {
         MainActor.assumeIsolated {
-            guard let m = AppModel.scriptTarget else { return "idle" }
+            let m = AppModel.shared
             return ScriptState.sourceID(m.selection)
         }
     }
 
     @objc var ntsSourceName: String {
-        MainActor.assumeIsolated { AppModel.scriptTarget?.displayName ?? "" }
+        MainActor.assumeIsolated { AppModel.shared.displayName }
     }
 
     @objc var ntsCurrentTrack: String {
         MainActor.assumeIsolated {
-            guard let t = AppModel.scriptTarget?.tracks.first else { return "" }
+            guard let t = AppModel.shared.tracks.first else { return "" }
             return "\(t.artist) — \(t.title)"
         }
     }
 
     @objc var ntsVolume: Int {
-        get { MainActor.assumeIsolated { Int((AppModel.scriptTarget?.volume ?? 0).rounded()) } }
-        set { MainActor.assumeIsolated { AppModel.scriptTarget?.volume = Double(min(100, max(0, newValue))) } }
+        get { MainActor.assumeIsolated { Int((AppModel.shared.volume).rounded()) } }
+        set { MainActor.assumeIsolated { AppModel.shared.volume = Double(min(100, max(0, newValue))) } }
     }
 
     @objc var ntsMuted: Bool {
-        get { MainActor.assumeIsolated { AppModel.scriptTarget?.muted ?? false } }
-        set { MainActor.assumeIsolated { AppModel.scriptTarget?.muted = newValue } }
+        get { MainActor.assumeIsolated { AppModel.shared.muted } }
+        set { MainActor.assumeIsolated { AppModel.shared.muted = newValue } }
     }
 
     @objc var ntsWindowVisible: Bool {
@@ -254,7 +261,7 @@ extension NSApplication {
     }
 
     @objc var ntsKnobAngle: Double {
-        MainActor.assumeIsolated { AppModel.scriptTarget?.knobAngle ?? 0 }
+        MainActor.assumeIsolated { AppModel.shared.knobAngle }
     }
 }
 
@@ -268,7 +275,7 @@ class NTSCommand: NSScriptCommand {
     /// the error, and the reply is that error rather than a state blob.
     func run(_ body: @MainActor () -> Bool) -> Any? {
         MainActor.assumeIsolated {
-            guard AppModel.scriptTarget != nil else {
+            guard AppModel.scriptingReady else {
                 scriptErrorNumber = -1728   // errAENoSuchObject
                 scriptErrorString = "NTS Radio is not finished launching."
                 return nil
@@ -292,7 +299,7 @@ final class NTSTuneCommand: NTSCommand {
                     """
                 return false
             }
-            AppModel.scriptTarget?.select(selection)
+            AppModel.shared.select(selection)
             return true
         }
     }
@@ -302,7 +309,7 @@ final class NTSTuneCommand: NTSCommand {
 final class NTSPlayCommand: NTSCommand {
     override func performDefaultImplementation() -> Any? {
         run {
-            AppModel.scriptTarget?.play()
+            AppModel.shared.play()
             return true
         }
     }
@@ -312,7 +319,7 @@ final class NTSPlayCommand: NTSCommand {
 final class NTSPauseCommand: NTSCommand {
     override func performDefaultImplementation() -> Any? {
         run {
-            AppModel.scriptTarget?.pause()
+            AppModel.shared.pause()
             return true
         }
     }
@@ -323,7 +330,7 @@ final class NTSSkipCommand: NTSCommand {
     override func performDefaultImplementation() -> Any? {
         run {
             let by = (self.evaluatedArguments?["by"] as? Int) ?? 1
-            AppModel.scriptTarget?.step(by: by)
+            AppModel.shared.step(by: by)
             return true
         }
     }
@@ -353,7 +360,7 @@ final class NTSCloseWindowCommand: NTSCommand {
 final class NTSFilterExploreCommand: NTSCommand {
     override func performDefaultImplementation() -> Any? {
         run {
-            guard let m = AppModel.scriptTarget else { return false }
+            let m = AppModel.shared
             let args = self.evaluatedArguments ?? [:]
 
             // The whole filter is replaced rather than merged: a caller that
@@ -392,7 +399,7 @@ final class NTSFilterExploreCommand: NTSCommand {
 final class NTSExploreMoreCommand: NTSCommand {
     override func performDefaultImplementation() -> Any? {
         run {
-            AppModel.scriptTarget?.loadMoreExplore()
+            AppModel.shared.loadMoreExplore()
             return true
         }
     }
@@ -402,7 +409,7 @@ final class NTSExploreMoreCommand: NTSCommand {
 final class NTSStarCommand: NTSCommand {
     override func performDefaultImplementation() -> Any? {
         run {
-            guard let m = AppModel.scriptTarget else { return false }
+            let m = AppModel.shared
             let raw = ((self.directParameter as? String) ?? "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             guard !raw.isEmpty else {
@@ -445,7 +452,7 @@ final class NTSStarCommand: NTSCommand {
 final class NTSSeekCommand: NTSCommand {
     override func performDefaultImplementation() -> Any? {
         run {
-            guard let m = AppModel.scriptTarget else { return false }
+            let m = AppModel.shared
             guard m.engine.isSeekable else {
                 self.scriptErrorNumber = -1708   // errAEEventNotHandled
                 self.scriptErrorString = """
@@ -465,7 +472,7 @@ final class NTSSeekCommand: NTSCommand {
 final class NTSOpenCatalogCommand: NTSCommand {
     override func performDefaultImplementation() -> Any? {
         run {
-            guard let m = AppModel.scriptTarget else { return false }
+            let m = AppModel.shared
             if let name = self.evaluatedArguments?["showing"] as? String,
                !name.isEmpty {
                 guard let tab = CatalogTab(rawValue: name.lowercased()) else {
@@ -524,7 +531,7 @@ final class NTSOpenSettingsCommand: NTSCommand {
 final class NTSShowPaneCommand: NTSCommand {
     override func performDefaultImplementation() -> Any? {
         run {
-            guard let m = AppModel.scriptTarget else { return false }
+            let m = AppModel.shared
             let name = (self.directParameter as? String)?.lowercased() ?? ""
             switch name {
             case "live": m.show(.live)
@@ -557,7 +564,8 @@ final class NTSShowPaneCommand: NTSCommand {
 final class NTSCloseCatalogCommand: NTSCommand {
     override func performDefaultImplementation() -> Any? {
         run {
-            guard let m = AppModel.scriptTarget, m.catalogOpen else { return true }
+            let m = AppModel.shared
+            guard m.catalogOpen else { return true }
             m.toggleCatalog()
             return true
         }

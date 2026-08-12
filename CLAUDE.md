@@ -18,6 +18,7 @@ admin distribute # build a distributable NTS Radio.dmg
 
 admin setup      # swift package resolve (one-time, after a fresh clone)
 admin snapshot   # render each popover state to PNG for visual verification
+admin snapshot-windows  # photograph the real windows — title bar, toolbar, chrome (drives the installed app)
 admin clean      # remove mac/.build and mac/build
 ```
 
@@ -156,7 +157,7 @@ never draws one: it is the only place a key equivalent can live, and without it
 - Live tracklists require signing in with a paid NTS Supporters account; the Firestore listener path is only exercised when authenticated.
 - `CLAUDE.local.md` documents the dev-loop convention in more detail: after code changes, press **R** in the already-running `admin dev` session rather than starting a second one.
 - `mac/Sources/NTSFirestore/Generated/` is generated protobuf/gRPC code, not hand-written — regenerate via `mac/Proto/regenerate.sh` rather than editing directly.
-- `tmp/` at the repo root is gitignored and used for scratch/design output (e.g. `admin snapshot` writes PNGs to `tmp/claude/design/swift-shots`).
+- `tmp/` at the repo root is gitignored and used for scratch/design output. `admin snapshot` renders views off screen to `tmp/claude/design/swift-shots`; `admin snapshot-windows` (`mac/snapshot-windows.sh`) drives the *installed* app and captures the real windows to `tmp/claude/design/window-shots` — the only way to see AppKit's own chrome, since nothing rendered off screen contains a title bar or a toolbar.
 - **Control surface — drive the app with `osascript`, never the mouse.** The
   scripting dictionary is `mac/Resources/NTSRadio.sdef`; its implementation is
   `mac/Sources/NTSRadio/Model/Scripting.swift`. Every command answers with the
