@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Spotify-style top navigation bar: a solid strip that seats the macOS
-/// traffic-light buttons on the left, the NTS mark in the middle and the
-/// settings + account controls on the right.
+/// The settings + account controls that sit at the right end of the title-bar
+/// strip. The strip itself, and the NTS mark centred in it, are drawn by
+/// `PopoverView`.
 ///
 /// This is *not* part of the content view. `RadioWindowController` mounts it as
 /// a full-width `.top` title-bar accessory, which makes AppKit own the strip:
@@ -22,22 +22,8 @@ struct TopBar: View {
     /// traffic lights vertically centred in it.
     static let height: CGFloat = 32
 
-    /// The button cluster's own width: three 26pt buttons, two 8pt gaps between
-    /// them, and the 14pt trailing padding that follows.
-    private static let trailingWidth: CGFloat = 26 * 3 + 8 * 2 + 14
-
     var body: some View {
         HStack(spacing: 8) {
-            // Mirrors `trailingWidth` on the left so the logo centres between
-            // the two chrome clusters rather than in the raw window width. The
-            // traffic lights only need ~78pt of that; this reserves the wider
-            // 108pt the button cluster takes on the right, which is what was
-            // pushing the mark right of true visual centre before.
-            Color.clear.frame(width: Self.trailingWidth)
-            Spacer(minLength: 0)
-            NTSMark.filled(Theme.ink.opacity(0.9))
-                .frame(width: 13, height: 13)
-                .allowsHitTesting(false)
             Spacer(minLength: 0)
             catalogButton
             settingsButton
@@ -46,7 +32,13 @@ struct TopBar: View {
         .padding(.trailing, 14)
         .frame(maxWidth: .infinity)
         .frame(height: Self.height)
-        .background(Theme.nowBar)
+        // Deliberately no background: AppKit insets this accessory past the
+        // traffic lights, so anything centred inside it lands right of the
+        // window's real centre. `PopoverView` paints the strip full-width in the
+        // content view and centres the NTS mark there instead; this view is left
+        // transparent so that strip shows through, and carries only the controls
+        // — which have to live up here because the title bar eats clicks in the
+        // content view's top band.
         // No hairline here: AppKit insets this view past the traffic lights, so
         // a rule drawn at its bottom would stop 78pt short of the left edge.
         // PopoverView draws it along the top of the content instead.

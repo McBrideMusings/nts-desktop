@@ -14,14 +14,21 @@ struct PopoverView: View {
 
     private func stack(windowWidth: CGFloat) -> some View {
         VStack(spacing: 0) {
-            // The title-bar band. The window's top-bar accessory paints its own
-            // black over everything right of the traffic lights, but AppKit
-            // insets that accessory past them, so this fills the same strip
-            // inside the content view — that's what colours the corner behind
-            // the traffic lights and lets the rule below run the full width.
-            // Nothing interactive goes here: the title bar swallows clicks in
-            // this band, which is why the controls live in the accessory.
-            Theme.nowBar.frame(height: TopBar.height)
+            // The title-bar band, painted here rather than in the accessory
+            // because AppKit insets that accessory past the traffic lights: this
+            // is the only view in the strip that spans the true window width, so
+            // it colours the corner behind the traffic lights, lets the rule
+            // below run edge to edge, and — centring the NTS mark in it — puts
+            // the mark on the window's real centre line instead of the centre of
+            // whatever AppKit left of the accessory. Nothing interactive goes
+            // here: the title bar swallows clicks in this band, which is why the
+            // controls live in the accessory.
+            Theme.nowBar
+                .frame(height: TopBar.height)
+                .overlay(
+                    NTSMark.filled(Theme.ink.opacity(0.9))
+                        .frame(width: 13, height: 13)
+                )
             Rectangle().fill(Theme.hairline(0.08)).frame(height: 1)
 
             // The rail follows the window's long axis. A window taller than it is
