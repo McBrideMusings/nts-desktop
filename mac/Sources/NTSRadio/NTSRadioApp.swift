@@ -23,7 +23,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var parentWatch: DispatchSourceProcess?
     private var bag = Set<AnyCancellable>()
     private var barTimer: Timer?
-    private var barStep = 0
+    /// When the current run of playback started, so the waterline picks up from
+    /// the top of its cycle each time rather than wherever the clock happens to be.
+    private var barStart = CACurrentMediaTime()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // When run from source under `admin dev` / `swift run`, stdout is a pipe,
@@ -78,9 +80,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .store(in: &bag)
     }
 
-    /// Drive the status-item bars. Animating steps through the frame cycle at
-    /// 10fps; otherwise the bars sit flat. Added in `.common` run-loop mode so the
-    /// animation keeps running while a menu is open.
+    /// Drive the status item. While audio is rendering it shows the badge for
+    /// whatever is playing with the waterline crossing it, redrawn 25 times a
+    /// second; otherwise it is the plain NTS mark, still. Added in `.common`
+    /// run-loop mode so the animation keeps running while a menu is open.
     private func setBarsAnimating(_ animating: Bool) {
         barTimer?.invalidate()
         barTimer = nil
@@ -88,11 +91,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusItem.button?.image = MenuBarIcon.idleFrame
             return
         }
-        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
+        barStart = CACurrentMediaTime()
+        let timer = Timer(timeInterval: 1.0 / 25.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                self.barStep = (self.barStep + 1) % MenuBarIcon.playingFrames.count
-                self.statusItem.button?.image = MenuBarIcon.playingFrames[self.barStep]
+                let t = CACurrentMediaTime() - self.barStart
+                self.statusItem.button?.image = MenuBarIcon.image(
+                    badge: MenuBarBadge(self.model.selection),
+                    waterline: MenuBarIcon.waterline(at: t)
+                )
             }
         }
         RunLoop.main.add(timer, forMode: .common)
