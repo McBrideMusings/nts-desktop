@@ -53,6 +53,11 @@ enum MenuBarIcon {
     /// Two sines of periods that do not divide into each other, so the line never
     /// settles into a countable beat — a single sine reads as a metronome, which is
     /// wrong for a stream that has no tempo the app knows about.
+    ///
+    /// The two amplitudes sum to 9.7, so the line stays within 3.3…22.7 and the
+    /// clamp never fires at these numbers. It is here for the amplitudes rather
+    /// than for the current ones: raising either past 11.5 would push the line off
+    /// the square, and clipping it flat at the edge is the intended result.
     static func waterline(at t: TimeInterval) -> CGFloat {
         let y = 13
             + 7.5 * sin(t * 2 * .pi / 1.15)
@@ -62,8 +67,8 @@ enum MenuBarIcon {
 
     // MARK: Frames
 
-    /// The resting image: the wordmark, no waterline. Shown whenever audio is not
-    /// actually rendering.
+    /// The image shown before anything is selected: the wordmark, no waterline.
+    @MainActor
     static let idleFrame: NSImage = image(badge: .mark, waterline: nil)
 
     /// One frame. `waterline` is nil for a still image; otherwise it is a position
@@ -73,6 +78,13 @@ enum MenuBarIcon {
     /// waterline is quantised to a quarter of a unit — a hair under a third of a
     /// screen point at 16 pt — so the cache tops out at a few hundred small images
     /// and every frame after the first second is a dictionary hit.
+    ///
+    /// Main-actor because of that cache: it is a plain `Dictionary`, and two
+    /// threads writing one would corrupt it rather than merely race to a wrong
+    /// picture. Every caller is already on the main actor — the animation timer
+    /// and the status item itself — so the annotation records what is true rather
+    /// than constraining anything.
+    @MainActor
     static func image(badge: MenuBarBadge, waterline: CGFloat?) -> NSImage {
         let quantised = waterline.map { (($0 * 4).rounded() / 4) }
         let key = Key(badge: badge, waterline: quantised)
@@ -86,6 +98,7 @@ enum MenuBarIcon {
         let badge: MenuBarBadge
         let waterline: CGFloat?
     }
+    @MainActor
     private static var cache: [Key: NSImage] = [:]
 
     // MARK: Drawing
@@ -199,14 +212,18 @@ enum MenuBarIcon {
     }()
 
     /// Archivo, the face the rest of the app is set in — registered at launch by
-    /// `Theme.registerFonts()`, which runs before the status item is built. Falls
-    /// back to the system face at the same weight if the bundled file is missing.
+    /// `Theme.registerFonts()`, which runs before the status item is built.
+    ///
+    /// The bundled file is variable, and its named instances come out of AppKit as
+    /// `ArchivoRoman-*` (`ArchivoRoman-Regular`, `ArchivoRoman-Bold`,
+    /// `ArchivoRoman-ExtraBold`, …) — with the single exception of
+    /// `Archivo-SemiBold`. There is no face called `Archivo-Bold`, so ask for the
+    /// name that exists. Falls back to the system face at a matching weight when
+    /// the bundled font is missing entirely.
     private static let badgeFont: NSFont = {
         let size: CGFloat = 22           // in the 26-unit space, so ~13.5 pt drawn
-        if let bold = NSFont(name: "Archivo-Bold", size: size) { return bold }
-        if let archivo = NSFont(name: "Archivo", size: size) {
-            return NSFontManager.shared.convert(archivo, toHaveTrait: .boldFontMask)
-        }
-        return .systemFont(ofSize: size, weight: .heavy)
+        return NSFont(name: "ArchivoRoman-ExtraBold", size: size)
+            ?? NSFont(name: "ArchivoRoman-Bold", size: size)
+            ?? .systemFont(ofSize: size, weight: .heavy)
     }()
 }

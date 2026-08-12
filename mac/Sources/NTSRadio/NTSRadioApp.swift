@@ -75,17 +75,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.engine.$isRendering
             .sink { [weak self] in self?.setStatusItemAnimating($0) }
             .store(in: &bag)
+
+        // The badge names the source, so it has to follow a source change that
+        // happens while stopped — the media keys stepping to the next channel
+        // while paused, say. While the waterline is running its own timer already
+        // reads `selection` every frame, so this would only fight with it.
+        //
+        // The sink takes the incoming value rather than reading `model.selection`:
+        // `@Published` fires from `willSet`, so the property still holds the *old*
+        // selection while this runs, and reading it draws the badge one step behind
+        // (paused on 2, skip to 1, icon still says 2).
+        model.$selection
+            .sink { [weak self] selection in
+                guard let self, self.waterlineTimer == nil else { return }
+                self.showStillStatusItem(for: selection)
+            }
+            .store(in: &bag)
+    }
+
+    /// The status item with no motion: the badge for whatever is selected, held
+    /// still. Paused on Channel 2 that is a still `2`, not the NTS wordmark — the
+    /// mark is what `.idle` maps to, so it appears only when nothing is loaded.
+    /// Stopping the waterline is what says playback stopped; throwing the badge
+    /// away as well would lose which source you are paused on.
+    private func showStillStatusItem(for selection: Selection) {
+        statusItem.button?.image = MenuBarIcon.image(badge: MenuBarBadge(selection), waterline: nil)
     }
 
     /// Drive the status item. While audio is rendering it shows the badge for
     /// whatever is playing with the waterline crossing it, redrawn 25 times a
-    /// second; otherwise it is the plain NTS mark, still. Added in `.common`
-    /// run-loop mode so the animation keeps running while a menu is open.
+    /// second; otherwise the same badge, held still. Added in `.common` run-loop
+    /// mode so the animation keeps running while a menu is open.
     private func setStatusItemAnimating(_ animating: Bool) {
         waterlineTimer?.invalidate()
         waterlineTimer = nil
         guard animating else {
-            statusItem.button?.image = MenuBarIcon.idleFrame
+            showStillStatusItem(for: model.selection)
             return
         }
         // Measured from when this run of playback started, so the waterline picks
@@ -101,6 +126,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 )
             }
         }
+        // A menu-bar radio is left streaming for hours, so this timer is the app's
+        // longest-running repeating work. The tolerance lets the run loop coalesce
+        // its wakeups with whatever else is due; at 25fps a 10ms slip is invisible.
+        timer.tolerance = 0.01
         RunLoop.main.add(timer, forMode: .common)
         waterlineTimer = timer
     }
