@@ -27,7 +27,7 @@ final class ShowIndex: ObservableObject {
     /// True while the seed is running, so the catalog can say so.
     @Published private(set) var building = false
 
-    private static let fileName = "shows-index.json"
+    nonisolated private static let fileName = "shows-index.json"
     /// NTS regenerates the sitemap about daily, so a day-old index is the oldest
     /// that can still be current.
     private static let maxAge: TimeInterval = 24 * 60 * 60
@@ -155,7 +155,11 @@ final class ShowIndex: ObservableObject {
             try? await Task.sleep(nanoseconds: 5_000_000_000)
             guard !Task.isCancelled, let self else { return }
             self.flushTask = nil
-            Cache.save(Array(self.shows.values), to: Self.fileName)
+            // Encoding 1,834 shows and writing 140KB happens off the main actor;
+            // the UI is running while a scroll is what triggers this. `flush()`
+            // stays synchronous because quit cannot wait for a detached task.
+            let all = Array(self.shows.values)
+            Task.detached { Cache.save(all, to: Self.fileName) }
         }
     }
 }

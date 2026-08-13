@@ -23,9 +23,12 @@ struct Mixtape: Identifiable, Hashable {
 
 /// Artwork, genres and location for one programme — never its identity.
 ///
-/// It carries the id of the slot it was fetched for, so a response that arrives
-/// after the changeover it was meant for simply stops matching and is ignored,
-/// rather than dressing the wrong show in the previous one's photograph.
+/// It carries the id of the slot it was fetched for, which is how the rail
+/// ignores a response that arrives after the changeover it was meant for
+/// (`Channel.nowPlaying`) rather than dressing the wrong show in the previous
+/// one's photograph. The timeline has no such race — its rows don't change
+/// programme underneath them — and matches by `AppModel.slotKey` instead, so
+/// there `slotID` is only a record of which airing paid for the fetch.
 /// Codable because the timeline keeps a copy on disk: a fortnight of rows is a
 /// fortnight of episode requests, and a relaunch should not repeat them.
 struct SlotDetail: Hashable, Codable {

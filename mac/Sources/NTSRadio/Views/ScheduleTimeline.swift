@@ -217,6 +217,10 @@ private struct SlotRow: View {
         // builds visible rows, so this is the fortnight fetched a screen at a
         // time instead of 345 requests at open.
         .onAppear { model.loadSlotDetail(slot) }
+        // Scrolled past before its turn came: give up the place in the queue, so
+        // a drag through the fortnight doesn't spend its requests on rows that
+        // are already gone.
+        .onDisappear { model.cancelSlotDetail(slot) }
     }
 
     /// This broadcast's photograph, then the show's standing one from the index,

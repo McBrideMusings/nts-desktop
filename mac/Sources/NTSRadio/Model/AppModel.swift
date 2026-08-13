@@ -788,7 +788,7 @@ final class AppModel: ObservableObject {
     /// this session already paid for.
     @Published private(set) var slotDetails: [String: SlotDetail] = Cache.load([String: SlotDetail].self, from: slotDetailFile) ?? [:]
 
-    private static let slotDetailFile = "schedule-art.json"
+    nonisolated private static let slotDetailFile = "schedule-art.json"
 
     /// Slots asked for, so a row that leaves and re-enters the viewport doesn't
     /// ask twice. A failure drops out again — otherwise a scroll taken while the
@@ -800,9 +800,22 @@ final class AppModel: ObservableObject {
         slotDetails[Self.slotKey(slot)]
     }
 
-    private static func slotKey(_ slot: NTSAPI.Broadcast) -> String {
-        "\(slot.showAlias)/\(slot.episodeAlias)"
+    /// Two airings of the same episode share an answer, which is the point of
+    /// keying by episode rather than by slot. A slot NTS has not named an
+    /// episode for yet has nothing to share, so it keys by its own id instead of
+    /// colliding with every other unnamed slot of the same show.
+    static func slotKey(_ slot: NTSAPI.Broadcast) -> String {
+        slot.episodeAlias.isEmpty ? "\(slot.showAlias)/#\(slot.id)"
+                                  : "\(slot.showAlias)/\(slot.episodeAlias)"
     }
+
+    /// Rows waiting for a fetch, newest first — the ones nearest what is on
+    /// screen. Dragging the scrollbar through a fortnight touches ~345 rows in a
+    /// second, and firing all of them means hundreds of requests for rows that
+    /// are already gone by the time they answer.
+    private var slotDetailQueue: [NTSAPI.Broadcast] = []
+    private var slotDetailRunning = 0
+    private static let slotDetailConcurrency = 4
 
     /// Fetch one schedule row's episode — its photograph, genres and city.
     ///
@@ -813,9 +826,37 @@ final class AppModel: ObservableObject {
     func loadSlotDetail(_ slot: NTSAPI.Broadcast) {
         guard !slot.showAlias.isEmpty else { return }
         let key = Self.slotKey(slot)
-        guard slotDetailAsked.insert(key).inserted else { return }
+        guard slotDetails[key] == nil, slotDetailAsked.insert(key).inserted else { return }
+        slotDetailQueue.append(slot)
+        pumpSlotDetails()
+    }
 
+    /// A row that scrolled away before its turn came gives up its place. One
+    /// already in flight is left alone — it is nearly paid for, and the answer
+    /// is kept either way.
+    func cancelSlotDetail(_ slot: NTSAPI.Broadcast) {
+        let key = Self.slotKey(slot)
+        guard let i = slotDetailQueue.firstIndex(where: { Self.slotKey($0) == key }) else { return }
+        slotDetailQueue.remove(at: i)
+        slotDetailAsked.remove(key)
+    }
+
+    private func pumpSlotDetails() {
+        while slotDetailRunning < Self.slotDetailConcurrency, let slot = slotDetailQueue.popLast() {
+            slotDetailRunning += 1
+            fetchSlotDetail(slot)
+        }
+    }
+
+    private func fetchSlotDetail(_ slot: NTSAPI.Broadcast) {
+        let key = Self.slotKey(slot)
         Task { [weak self] in
+            defer {
+                if let self {
+                    self.slotDetailRunning -= 1
+                    self.pumpSlotDetails()
+                }
+            }
             let show = slot.showAlias, episode = slot.episodeAlias
             var image: URL?
             var genres: [String] = []
@@ -870,16 +911,26 @@ final class AppModel: ObservableObject {
             try? await Task.sleep(nanoseconds: 5_000_000_000)
             guard !Task.isCancelled, let self else { return }
             self.slotDetailSaveTask = nil
-            self.saveSlotDetails()
+            let live = self.trimSlotDetails()
+            // Encoding and writing happen off the main actor: the UI is running
+            // while a scroll is what triggers this.
+            Task.detached { Cache.save(live, to: Self.slotDetailFile) }
         }
     }
 
+    /// Drop the rows that have left the grid, and answer with what is left.
+    @discardableResult private func trimSlotDetails() -> [String: SlotDetail] {
+        let live = Set(catalog.channels.flatMap { $0.upcoming }.map(Self.slotKey))
+        slotDetails = slotDetails.filter { live.contains($0.key) }
+        return slotDetails
+    }
+
+    /// The synchronous write, for quit: a detached task would not outlive the
+    /// process.
     func saveSlotDetails() {
         slotDetailSaveTask?.cancel()
         slotDetailSaveTask = nil
-        let live = Set(catalog.channels.flatMap { $0.upcoming }.map(Self.slotKey))
-        slotDetails = slotDetails.filter { live.contains($0.key) }
-        Cache.save(slotDetails, to: Self.slotDetailFile)
+        Cache.save(trimSlotDetails(), to: Self.slotDetailFile)
     }
 
     private static let dayKey: DateFormatter = {
@@ -1013,6 +1064,9 @@ final class AppModel: ObservableObject {
             location: slot.location.isEmpty ? (indexed?.location ?? "") : slot.location)
 
         guard !slot.showAlias.isEmpty, !slot.episodeAlias.isEmpty else { return }
+        // The timeline's ON AIR row wants exactly this episode, so it takes the
+        // rail's copy rather than asking NTS for the same JSON a second time.
+        slotDetailAsked.insert(Self.slotKey(slot))
         detailTasks[number] = Task { [weak self] in
             guard let ep = try? await NTSAPI.episode(show: slot.showAlias, episode: slot.episodeAlias,
                                                      reportAs: "on-air-detail"),
@@ -1020,6 +1074,12 @@ final class AppModel: ObservableObject {
                   let i = self.catalog.channels.firstIndex(where: { $0.number == number }),
                   self.catalog.channels[i].onAir?.id == slot.id
             else { return }
+            self.slotDetails[Self.slotKey(slot)] = SlotDetail(
+                slotID: slot.id,
+                image: ep.image,
+                genres: ep.genres,
+                location: [ep.locationLong, ep.location].first { !$0.isEmpty } ?? "")
+            self.saveSlotDetailsSoon()
             withAnimation(.easeInOut(duration: 0.3)) {
                 self.catalog.channels[i].detail = SlotDetail(
                     slotID: slot.id,
