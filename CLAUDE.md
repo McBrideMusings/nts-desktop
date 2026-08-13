@@ -75,9 +75,12 @@ never draws one: it is the only place a key equivalent can live, and without it
   channel, ~16 slots a day, each with `start_timestamp`, `end_timestamp` and a
   `links[rel=details]` href naming the show and episode. Every slot carries a
   show alias; about 30% of them (the furthest-out ones) have no episode alias
-  yet. No genres, location or artwork — those come from `ShowIndex` by alias,
-  and the current programme's own photograph from
-  `/api/v2/shows/<show>/episodes/<episode>` once the grid names it.
+  yet. No genres, location or artwork — every slot that wants those fetches
+  `/api/v2/shows/<show>/episodes/<episode>` for itself: the rail for the
+  programme on air, and each schedule row as it scrolls into view
+  (`AppModel.loadSlotDetail`, which falls back to `/api/v2/shows/<show>` for a
+  slot with no episode alias). What comes back is folded into `ShowIndex`, so
+  the alias carries artwork everywhere else it appears and on the next launch.
 - `/api/v2/live` is **not used, deliberately**. It returns `now` plus `next` …
   `next17` per channel with `details` embedded for the first two, but it is
   served `cache-control: max-age=900`, so for up to fifteen minutes after every

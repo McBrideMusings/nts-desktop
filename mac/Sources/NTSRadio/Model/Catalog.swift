@@ -26,7 +26,9 @@ struct Mixtape: Identifiable, Hashable {
 /// It carries the id of the slot it was fetched for, so a response that arrives
 /// after the changeover it was meant for simply stops matching and is ignored,
 /// rather than dressing the wrong show in the previous one's photograph.
-struct SlotDetail: Hashable {
+/// Codable because the timeline keeps a copy on disk: a fortnight of rows is a
+/// fortnight of episode requests, and a relaunch should not repeat them.
+struct SlotDetail: Hashable, Codable {
     let slotID: String
     let image: URL?
     let genres: [String]

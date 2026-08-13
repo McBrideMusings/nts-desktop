@@ -783,11 +783,17 @@ final class AppModel: ObservableObject {
     /// channels, blank.
     ///
     /// Filled per row as it scrolls into view rather than in one sweep at open:
-    /// the fortnight is ~345 slots and nobody scrolls all of it.
-    @Published private(set) var slotDetails: [String: SlotDetail] = [:]
+    /// the fortnight is ~345 slots and nobody scrolls all of it. Kept on disk
+    /// (trimmed to the current grid) so a relaunch doesn't re-ask for the rows
+    /// this session already paid for.
+    @Published private(set) var slotDetails: [String: SlotDetail] = Cache.load([String: SlotDetail].self, from: slotDetailFile) ?? [:]
 
-    /// Aliases already asked for — fetched, failed, or in flight — so a row that
-    /// leaves and re-enters the viewport doesn't ask twice.
+    private static let slotDetailFile = "schedule-art.json"
+
+    /// Slots asked for, so a row that leaves and re-enters the viewport doesn't
+    /// ask twice. A failure drops out again — otherwise a scroll taken while the
+    /// network was down would leave those rows blank until the app was
+    /// relaunched, with nothing to prompt a second attempt.
     private var slotDetailAsked: Set<String> = []
 
     func slotDetail(_ slot: NTSAPI.Broadcast) -> SlotDetail? {
@@ -815,6 +821,7 @@ final class AppModel: ObservableObject {
             var genres: [String] = []
             var location = ""
             var name = slot.title
+            var fromShow = false
 
             if !episode.isEmpty,
                let ep = try? await NTSAPI.episode(show: show, episode: episode,
@@ -828,7 +835,9 @@ final class AppModel: ObservableObject {
                 genres = s.genres
                 location = s.location
                 if !s.name.isEmpty { name = s.name }
+                fromShow = true
             } else {
+                self?.slotDetailAsked.remove(key)
                 return
             }
 
@@ -837,12 +846,40 @@ final class AppModel: ObservableObject {
                 self.slotDetails[key] = SlotDetail(slotID: slot.id, image: image,
                                                    genres: genres, location: location)
             }
-            // Fold it into the index too, so this show has artwork everywhere
-            // else it appears — and on the next launch, from disk, before any of
-            // this runs again.
-            self.showIndex.note(alias: show, name: name, location: location,
-                                genres: genres, picture: image?.absoluteString)
+            self.saveSlotDetailsSoon()
+            // Only the show endpoint's answer is folded into the index. An
+            // episode's title and cover belong to that broadcast, not to the
+            // show — and `note` keeps the first rich entry it is given, so
+            // writing one there would make "Lung Dart 10th August 2026" the
+            // show's name in search for good.
+            if fromShow {
+                self.showIndex.note(alias: show, name: name, location: location,
+                                    genres: genres, picture: image?.absoluteString)
+            }
         }
+    }
+
+    private var slotDetailSaveTask: Task<Void, Never>?
+
+    /// Write the row artwork a few seconds after the fetches stop, trimmed to
+    /// the grid that is actually on screen — otherwise the file would accumulate
+    /// every broadcast the app ever scrolled past.
+    private func saveSlotDetailsSoon() {
+        slotDetailSaveTask?.cancel()
+        slotDetailSaveTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            guard !Task.isCancelled, let self else { return }
+            self.slotDetailSaveTask = nil
+            self.saveSlotDetails()
+        }
+    }
+
+    func saveSlotDetails() {
+        slotDetailSaveTask?.cancel()
+        slotDetailSaveTask = nil
+        let live = Set(catalog.channels.flatMap { $0.upcoming }.map(Self.slotKey))
+        slotDetails = slotDetails.filter { live.contains($0.key) }
+        Cache.save(slotDetails, to: Self.slotDetailFile)
     }
 
     private static let dayKey: DateFormatter = {

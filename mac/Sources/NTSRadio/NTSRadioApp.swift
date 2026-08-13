@@ -245,4 +245,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
     }
+
+    /// Both caches write on a five-second debounce, so quitting inside that
+    /// window would throw away whatever the last screen of schedule rows just
+    /// learned. This is the only moment that is guaranteed to be after the last
+    /// one of them.
+    func applicationWillTerminate(_ notification: Notification) {
+        model?.saveSlotDetails()
+        ShowIndex.shared.flush()
+    }
 }

@@ -91,7 +91,9 @@ final class ShowIndex: ObservableObject {
         building = true
         defer { building = false; built = true }
 
+        var seeded = false
         if let aliases = try? await NTSAPI.sitemapShowAliases() {
+            seeded = true
             for alias in aliases {
                 // `note` leaves richer entries alone, so re-seeding never
                 // downgrades a show the app has actually met.
@@ -109,7 +111,10 @@ final class ShowIndex: ObservableObject {
             }
         }
 
-        lastSeed = Date()
+        // Only a sitemap that actually answered counts as a seed. Stamping it
+        // regardless would mean a launch with no network marked the index fresh
+        // for a day and the re-seed never ran once the network came back.
+        if seeded { lastSeed = Date() }
         flush()
     }
 
@@ -141,6 +146,10 @@ final class ShowIndex: ObservableObject {
     /// show's artwork and genres lived only until quit, and every launch drew
     /// the placeholder again until the row was re-fetched.
     private func flushSoon() {
+        // `build` folds in 1,834 aliases in a loop and writes at the end itself;
+        // arming a timer per alias would allocate and cancel 1,834 tasks for a
+        // write that is already coming.
+        guard !building else { return }
         flushTask?.cancel()
         flushTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 5_000_000_000)
