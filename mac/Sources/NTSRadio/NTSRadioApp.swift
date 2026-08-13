@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import Combine
+import ServiceManagement
 
 @main
 struct NTSRadioApp: App {
@@ -203,6 +204,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         menu.addItem(.separator())
+        let login = NSMenuItem(title: "Open at Login", action: #selector(toggleLoginItem), keyEquivalent: "")
+        login.target = self
+        login.state = LoginItem.isEnabled ? .on : .off
+        // A bare binary under `admin dev` has no bundle for launchd to register,
+        // so the item is shown dimmed there rather than failing on click.
+        login.isEnabled = LoginItem.isAvailable
+        menu.addItem(login)
         let dock = NSMenuItem(title: "Show in Dock", action: #selector(toggleDock), keyEquivalent: "")
         dock.target = self
         dock.state = model.showInDock ? .on : .off
@@ -218,6 +226,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func toggleDock() { model.showInDock.toggle() }
+
+    @objc private func toggleLoginItem() { LoginItem.toggle() }
 
     @objc private func togglePlay() { model.togglePlay() }
 
@@ -297,5 +307,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         model?.saveSlotDetails()
         ShowIndex.shared.flush()
+    }
+}
+
+/// Launch-at-login, as launchd sees it. There is nothing to persist here: the
+/// registration *is* the state, and it can be turned off from System Settings ▸
+/// General ▸ Login Items behind the app's back, so the menu reads it back every
+/// time it opens instead of mirroring it into a `UserDefaults` flag that would
+/// then disagree.
+enum LoginItem {
+    /// Only a real bundle can be registered — `admin dev` runs a bare binary
+    /// launchd has no app to launch.
+    static var isAvailable: Bool { Bundle.main.bundleURL.pathExtension == "app" }
+
+    /// `.requiresApproval` means the registration exists but the user switched it
+    /// off in System Settings, so it is reported as off — the tick promises the
+    /// app will actually start, not merely that it asked to.
+    static var isEnabled: Bool { SMAppService.mainApp.status == .enabled }
+
+    static func toggle() {
+        guard isAvailable else { return }
+        do {
+            if SMAppService.mainApp.status == .enabled {
+                try SMAppService.mainApp.unregister()
+            } else {
+                try SMAppService.mainApp.register()
+            }
+        } catch {
+            print("login item: \(error.localizedDescription)")
+        }
     }
 }
