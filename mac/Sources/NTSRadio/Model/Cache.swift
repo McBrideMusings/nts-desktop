@@ -32,12 +32,6 @@ enum Cache {
         try? data.write(to: file(name))
     }
 
-    /// When `name` was last written, or nil if it doesn't exist.
-    static func modified(_ name: String) -> Date? {
-        let attrs = try? FileManager.default.attributesOfItem(atPath: file(name).path)
-        return attrs?[.modificationDate] as? Date
-    }
-
     private static var feedURL: URL { file("mixtapes.json") }
 
     /// The last-saved mixtape feed, or [] if none / unreadable.

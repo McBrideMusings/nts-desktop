@@ -147,12 +147,16 @@ private struct SlotRow: View {
     @State private var hovering = false
 
     private var indexed: NTSAPI.ShowRef? { model.showIndex.ref(slot.showAlias) }
+    /// This broadcast's own photograph, city and genres, once fetched.
+    private var detail: SlotDetail? { model.slotDetail(slot) }
     private var onAir: Bool { model.onAirSlot?.id == slot.id }
     private var past: Bool { (slot.end ?? .distantFuture) <= Date() }
 
     private var meta: String {
-        let location = slot.location.isEmpty ? (indexed?.location ?? "") : slot.location
-        let genres = (slot.genres.isEmpty ? (indexed?.genres ?? []) : slot.genres).prefix(2)
+        let location = [slot.location, detail?.location ?? "", indexed?.location ?? ""]
+            .first { !$0.isEmpty } ?? ""
+        let genres = [slot.genres, detail?.genres ?? [], indexed?.genres ?? []]
+            .first { !$0.isEmpty }?.prefix(2) ?? []
         return ([location] + genres).filter { !$0.isEmpty }.joined(separator: " · ").uppercased()
     }
 
@@ -209,15 +213,22 @@ private struct SlotRow: View {
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .onTapGesture { model.openSlot(slot) }
+        // The row asks for its own artwork as it scrolls in. `LazyVStack` only
+        // builds visible rows, so this is the fortnight fetched a screen at a
+        // time instead of 345 requests at open.
+        .onAppear { model.loadSlotDetail(slot) }
     }
 
+    /// This broadcast's photograph, then the show's standing one from the index,
+    /// then the mark. The index's copy is on disk, so on the second launch a row
+    /// is dressed before its fetch answers.
     private var artwork: some View {
         Rectangle()
             .fill(Theme.hairline(0.05))
             .frame(width: 40, height: 40)
             .overlay { ArtworkPlaceholder(size: 16) }
             .overlay {
-                if let url = indexed?.thumbURL {
+                if let url = detail?.image ?? indexed?.thumbURL {
                     AsyncImage(url: url) { $0.resizable().scaledToFill() } placeholder: { Color.clear }
                 }
             }

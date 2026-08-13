@@ -771,6 +771,80 @@ final class AppModel: ObservableObject {
         open(row(for: slot))
     }
 
+    // MARK: Timeline artwork
+
+    /// What a schedule row draws, keyed by `<show>/<episode>`.
+    ///
+    /// The grid publishes no artwork, no genres and no city — only a title, a
+    /// time and two aliases — and the show index behind the rows is seeded from
+    /// the sitemap, which is URLs and nothing else. So without this every row
+    /// but the handful of shows the app had met elsewhere drew the placeholder
+    /// mark and no second line: 296 of the fortnight's shows, across both
+    /// channels, blank.
+    ///
+    /// Filled per row as it scrolls into view rather than in one sweep at open:
+    /// the fortnight is ~345 slots and nobody scrolls all of it.
+    @Published private(set) var slotDetails: [String: SlotDetail] = [:]
+
+    /// Aliases already asked for — fetched, failed, or in flight — so a row that
+    /// leaves and re-enters the viewport doesn't ask twice.
+    private var slotDetailAsked: Set<String> = []
+
+    func slotDetail(_ slot: NTSAPI.Broadcast) -> SlotDetail? {
+        slotDetails[Self.slotKey(slot)]
+    }
+
+    private static func slotKey(_ slot: NTSAPI.Broadcast) -> String {
+        "\(slot.showAlias)/\(slot.episodeAlias)"
+    }
+
+    /// Fetch one schedule row's episode — its photograph, genres and city.
+    ///
+    /// The episode rather than the show, so a repeat carries the cover of the
+    /// broadcast being repeated instead of the show's standing one. A slot with
+    /// no episode alias yet (the furthest-out ~30% of the grid) falls back to
+    /// the show, which still has artwork.
+    func loadSlotDetail(_ slot: NTSAPI.Broadcast) {
+        guard !slot.showAlias.isEmpty else { return }
+        let key = Self.slotKey(slot)
+        guard slotDetailAsked.insert(key).inserted else { return }
+
+        Task { [weak self] in
+            let show = slot.showAlias, episode = slot.episodeAlias
+            var image: URL?
+            var genres: [String] = []
+            var location = ""
+            var name = slot.title
+
+            if !episode.isEmpty,
+               let ep = try? await NTSAPI.episode(show: show, episode: episode,
+                                                  reportAs: "schedule-art") {
+                image = ep.image
+                genres = ep.genres
+                location = [ep.locationLong, ep.location].first { !$0.isEmpty } ?? ""
+                if !ep.name.isEmpty { name = ep.name }
+            } else if let s = try? await NTSAPI.show(alias: show) {
+                image = s.image
+                genres = s.genres
+                location = s.location
+                if !s.name.isEmpty { name = s.name }
+            } else {
+                return
+            }
+
+            guard let self else { return }
+            withAnimation(.easeInOut(duration: 0.25)) {
+                self.slotDetails[key] = SlotDetail(slotID: slot.id, image: image,
+                                                   genres: genres, location: location)
+            }
+            // Fold it into the index too, so this show has artwork everywhere
+            // else it appears — and on the next launch, from disk, before any of
+            // this runs again.
+            self.showIndex.note(alias: show, name: name, location: location,
+                                genres: genres, picture: image?.absoluteString)
+        }
+    }
+
     private static let dayKey: DateFormatter = {
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; return f
     }()

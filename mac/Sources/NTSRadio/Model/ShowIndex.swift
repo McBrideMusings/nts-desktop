@@ -58,13 +58,26 @@ final class ShowIndex: ObservableObject {
         }
         shows[alias] = NTSAPI.ShowRef(alias: alias, name: name, location: location,
                                       genres: genres, picture: picture, thumb: thumb)
+        flushSoon()
     }
 
     /// Build the index if it's missing or older than a day. Safe to call on every
     /// launch; a fresh cache makes it a no-op.
+    /// When the sitemap was last walked.
+    ///
+    /// Kept separately from the cache file's own timestamp, which used to stand
+    /// in for it: the timeline now writes that file whenever it learns a show's
+    /// artwork, so the file is always minutes old and a re-seed would never run
+    /// again.
+    private static let seededKey = "showIndexSeeded"
+    private var lastSeed: Date? {
+        get { UserDefaults.standard.object(forKey: Self.seededKey) as? Date }
+        set { UserDefaults.standard.set(newValue, forKey: Self.seededKey) }
+    }
+
     func buildIfStale() async {
         guard !built, !building else { return }
-        let age = Cache.modified(Self.fileName).map { Date().timeIntervalSince($0) }
+        let age = lastSeed.map { Date().timeIntervalSince($0) }
         guard shows.isEmpty || (age ?? .infinity) > Self.maxAge else { built = true; return }
         await build()
     }
@@ -96,7 +109,8 @@ final class ShowIndex: ObservableObject {
             }
         }
 
-        Cache.save(Array(shows.values), to: Self.fileName)
+        lastSeed = Date()
+        flush()
     }
 
     /// A readable name from an alias, for a show the app has only seen in the
@@ -109,10 +123,30 @@ final class ShowIndex: ObservableObject {
             .joined(separator: " ")
     }
 
-    /// Persist whatever `note` has accumulated. Called when the app is about to
-    /// lose the in-memory copy, not on every note — the index is a cache, and a
-    /// write per encountered show would be a write per schedule refresh.
+    /// Persist whatever `note` has accumulated.
     func flush() {
+        flushTask?.cancel()
+        flushTask = nil
         Cache.save(Array(shows.values), to: Self.fileName)
+    }
+
+    private var flushTask: Task<Void, Never>?
+
+    /// Persist a few seconds after the notes stop arriving.
+    ///
+    /// Not a write per note: a schedule refresh folds in 347 slots in a loop and
+    /// the timeline enriches a screen of rows at a time, so an immediate write
+    /// would be hundreds of writes of the same 1,834-entry file. Not the old
+    /// arrangement either, which was a `flush()` nothing ever called — so a
+    /// show's artwork and genres lived only until quit, and every launch drew
+    /// the placeholder again until the row was re-fetched.
+    private func flushSoon() {
+        flushTask?.cancel()
+        flushTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            guard !Task.isCancelled, let self else { return }
+            self.flushTask = nil
+            Cache.save(Array(self.shows.values), to: Self.fileName)
+        }
     }
 }
