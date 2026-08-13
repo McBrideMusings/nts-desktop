@@ -46,12 +46,14 @@ enum NTSFavourites {
         case notAuthenticated
         case badToken
         case refused(Int)
+        case unnamed
 
         var errorDescription: String? {
             switch self {
             case .notAuthenticated: return "Sign in to sync what you’ve saved with NTS."
             case .badToken:         return "Could not read the account id from the sign-in token."
             case .refused(let code): return "NTS’s database refused the request (HTTP \(code))."
+            case .unnamed:          return "NTS’s database accepted the favourite without naming it."
             }
         }
     }
@@ -163,8 +165,15 @@ enum NTSFavourites {
         let data = try await send("POST", path: "\(root)/favourites",
                                   body: ["fields": fields], token: token)
         let created = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-        return Favourite(name: created?["name"] as? String ?? "",
-                         showAlias: showAlias, episodeAlias: episodeAlias)
+        // A row with no name is a row nothing can ever delete. Failing here
+        // sends the caller down its "I don't know the document" path, which
+        // recovers on the next sync, instead of storing an empty name that no
+        // later fetch is allowed to replace.
+        guard let name = created?["name"] as? String, !name.isEmpty else {
+            Log.auth.error("favourites POST answered without a document name")
+            throw FavouritesError.unnamed
+        }
+        return Favourite(name: name, showAlias: showAlias, episodeAlias: episodeAlias)
     }
 
     /// Unstar it. `name` is the document path a fetch handed back.

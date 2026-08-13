@@ -46,17 +46,21 @@ final class Saved: ObservableObject {
         /// to "is there enough here to save at all". `nil` means the grid has
         /// not named the aliases, which is the case for about a third of the
         /// furthest-out slots — a row saved without them can never be reopened.
-        static func show(_ b: NTSAPI.Broadcast, image: URL? = nil) -> Item? {
+        /// `image` is the artwork to file it under, already resolved by the
+        /// caller — not a fallback. The live card's picture is the fetched
+        /// episode detail's *ahead of* the slot's own, and a factory that
+        /// preferred `b.image` would quietly reverse that the day the schedule
+        /// starts carrying artwork.
+        static func show(_ b: NTSAPI.Broadcast, image: URL?) -> Item? {
             guard !b.showAlias.isEmpty else { return nil }
             return Item(kind: .show, alias: b.showAlias, title: b.title,
-                        subtitle: subtitle(b), image: (b.image ?? image)?.absoluteString)
+                        subtitle: subtitle(b), image: image?.absoluteString)
         }
 
-        static func episode(_ b: NTSAPI.Broadcast, image: URL? = nil) -> Item? {
+        static func episode(_ b: NTSAPI.Broadcast, image: URL?) -> Item? {
             guard !b.showAlias.isEmpty, !b.episodeAlias.isEmpty else { return nil }
             return Item(kind: .episode, alias: b.showAlias, episodeAlias: b.episodeAlias,
-                        title: b.title, subtitle: subtitle(b),
-                        image: (b.image ?? image)?.absoluteString)
+                        title: b.title, subtitle: subtitle(b), image: image?.absoluteString)
         }
 
         private static func subtitle(_ b: NTSAPI.Broadcast) -> String {
@@ -132,9 +136,26 @@ final class Saved: ObservableObject {
         remote.merge(fetched) { mine, _ in mine }
         syncedWithAccount = true
 
+        // Anything unstarred here while this fetch was in the air — or before it
+        // started, when nothing knew the document name — is deleted now that the
+        // snapshot has named it. The fetch is older than the unstar, so the rows
+        // below must not be read as "the account still wants this".
+        //
+        // Taken as a copy *before* the deletes run: `deleteFromAccount` clears a
+        // key from `unstarred` on success, and reading the live set in the merge
+        // below then let every successfully-deleted row straight back into the
+        // list — the account forgot it and this file did not, which is worse
+        // than the bug this was written to fix.
+        let pendingUnstars = unstarred
+        for key in pendingUnstars {
+            guard let favourite = fetched[key] else { continue }
+            await deleteFromAccount(favourite, key: key)
+        }
+
         var merged = items
         for favourite in favourites {
             let (showAlias, episodeAlias) = Self.normalized(favourite)
+            guard !pendingUnstars.contains(showAlias + ":" + episodeAlias) else { continue }
             if episodeAlias.isEmpty {
                 guard !merged.contains(where: { $0.kind == .show && $0.alias == showAlias }) else { continue }
                 let indexed = ShowIndex.shared.ref(showAlias)
@@ -193,6 +214,17 @@ final class Saved: ObservableObject {
     /// rather than giving up. Keyed like `remote`.
     private var creating: [String: Task<NTSFavourites.Favourite?, Never>] = [:]
 
+    /// Things unstarred here whose document has not been deleted yet, because
+    /// nothing knew its name at the time.
+    ///
+    /// Two windows produce that, and both used to end with the star coming
+    /// back: unstarring something starred in an **earlier** session before the
+    /// launch sync has answered, and unstarring **during** a sync, whose
+    /// snapshot was read before the delete and would merge the row back in.
+    /// A key stays here until its delete succeeds, and `sync` both refuses to
+    /// re-add it and carries out the delete once the fetch names the document.
+    private var unstarred: Set<String> = []
+
     /// How a favourite is addressed in `remote` and `creating` — the pair of
     /// aliases, since an episode is only identifiable as both.
     private static func key(_ item: Item) -> String {
@@ -204,6 +236,8 @@ final class Saved: ObservableObject {
         // against shows and episodes only, so there is nowhere to put one.
         guard item.kind != .mixtape, let token else { return }
         let key = Self.key(item)
+        // Starring it again withdraws the pending unstar.
+        unstarred.remove(key)
         let create = Task { () -> NTSFavourites.Favourite? in
             guard let token = try? await token() else { return nil }
             return try? await NTSFavourites.add(showAlias: item.alias,
@@ -224,22 +258,40 @@ final class Saved: ObservableObject {
     }
 
     private func unstarOnAccount(_ item: Item) {
-        guard item.kind != .mixtape, let token else { return }
+        guard item.kind != .mixtape, token != nil else { return }
         let key = Self.key(item)
         let known = remote[key]
         let pending = creating[key]
-        remote[key] = nil
         creating[key] = nil
-        guard known != nil || pending != nil else { return }
+        // Recorded before anything is attempted, so a delete that fails — or
+        // one that has no document to aim at yet — is finished by the next
+        // sync instead of being forgotten here.
+        unstarred.insert(key)
         Task {
-            // Unstarring faster than Firestore answers the create is the case
-            // that has no document name yet: wait for the create rather than
-            // dropping the delete.
+            // Unstarring faster than Firestore answers the create is one case
+            // with no document name yet: wait for the create. Unstarring
+            // something from a previous session before the launch sync lands is
+            // the other, and that one has nothing to wait for — `sync` picks it
+            // up off `unstarred`.
             var pick = known
             if pick == nil, let pending { pick = await pending.value }
-            guard let favourite = pick, !favourite.name.isEmpty,
-                  let token = try? await token() else { return }
-            try? await NTSFavourites.remove(name: favourite.name, token: token)
+            guard let favourite = pick else { return }
+            await deleteFromAccount(favourite, key: key)
+        }
+    }
+
+    /// Delete one favourite and forget it locally — but only once the account
+    /// has actually accepted the delete. Clearing `remote` first meant a failed
+    /// request left the row on the account with nothing here remembering how to
+    /// address it, so the next launch merged it straight back in.
+    private func deleteFromAccount(_ favourite: NTSFavourites.Favourite, key: String) async {
+        guard let token = try? await token?() else { return }
+        do {
+            try await NTSFavourites.remove(name: favourite.name, token: token)
+            remote[key] = nil
+            unstarred.remove(key)
+        } catch {
+            remote[key] = favourite
         }
     }
 }

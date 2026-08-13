@@ -52,7 +52,7 @@ struct CatalogRow: Identifiable, Hashable {
         playable = .channel(b.channel)
         // The index can supply an alias the slot itself lacks, so the item is
         // built from a broadcast carrying whichever of the two is present.
-        savedItem = Saved.Item.show(b.withShowAlias(alias), image: resolved?.pictureURL)
+        savedItem = Saved.Item.show(b.withShowAlias(alias), image: b.image ?? resolved?.pictureURL)
     }
 
     /// An Explore result. It plays where a schedule slot only tunes a channel:

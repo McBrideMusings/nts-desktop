@@ -24,6 +24,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `browse genre "<name>"` in the AppleScript dictionary — the genre chip's own
   door, taking the name the card prints, so the name-to-id translation is
   drivable without a mouse.
+- Unstarring reaches the NTS account in every case, not just for stars that
+  predate the launch sync. Removing a favourite needs the Firestore document
+  name, and only rows in the snapshot read at startup had one — so a star and an
+  unstar in the same session deleted the local row, left the account's, and the
+  next launch synced it straight back. The document name is kept when the
+  favourite is created, an unstar issued before that create lands waits for it,
+  and one issued before or during a sync is held until the fetch names the
+  document. A delete that fails no longer forgets what it was aiming at.
+
 - `knob angle` in the AppleScript dictionary and the `state` blob — where the
   dial's index mark points, in degrees clockwise from the top, counting turns
   rather than wrapping at 360. Two readings therefore say which way the dial
