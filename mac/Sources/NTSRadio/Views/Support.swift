@@ -51,6 +51,10 @@ struct LinkLabel: View {
     var linkColor: Color? = nil
     var tracking: CGFloat = 0
     var lineLimit: Int = 1
+    /// What the cursor goes back to when the pointer leaves the label. The
+    /// default is the arrow; a label sitting inside something that is itself
+    /// clickable passes that thing's cursor instead.
+    var exitCursor: NSCursor = .arrow
     @State private var hovering = false
 
     var body: some View {
@@ -66,14 +70,21 @@ struct LinkLabel: View {
                 .lineLimit(lineLimit)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .buttonStyle(.hit)
         .disabled(!isLink)
+        // No `maxWidth: .infinity` on the label: `.hit` lays a `contentShape`
+        // over whatever frame it is given, so a full-width label makes the blank
+        // space beside a short title clickable — on a channel card that is the
+        // card itself, and clicking it would open a browser instead of tuning.
         .onHover { inside in
             hovering = inside
             guard isLink else { return }
-            if inside { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+            // Leaving the label does not leave whatever is underneath it, and
+            // the enclosing view's own `onHover` will not fire again to put its
+            // cursor back — so restore the arrow only when there is nothing
+            // underneath asking for something else.
+            if inside { NSCursor.pointingHand.set() } else { exitCursor.set() }
         }
         .help(url?.absoluteString ?? "")
     }

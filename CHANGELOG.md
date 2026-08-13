@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Follow a show or save its episode straight from a live channel card: two
+  glyphs in the card's top-right corner, left of the live LED. They appear when
+  the pointer is on the card, and a star that is already set stays lit, so a
+  resting rail marks only the programmes you kept. Both write to the same
+  `Saved` list the catalog writes to, and sync to the NTS account.
+- The channel card's title opens that broadcast's page on nts.live, and its
+  genre chips open the archive filtered to that genre — the schedule prints
+  genres as names and Explore filters on ids, so "Kosmische" is looked up as
+  `ambientnewage-kosmiche`. A genre Explore does not file stays plain text.
+  The city stays a label: Explore has no location filter, and 12 of the 1834
+  indexed shows carry a location at all, written "LDN" where the card prints
+  "LONDON".
+- `browse genre "<name>"` in the AppleScript dictionary — the genre chip's own
+  door, taking the name the card prints, so the name-to-id translation is
+  drivable without a mouse.
 - `knob angle` in the AppleScript dictionary and the `state` blob — where the
   dial's index mark points, in degrees clockwise from the top, counting turns
   rather than wrapping at 360. Two readings therefore say which way the dial

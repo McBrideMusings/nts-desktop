@@ -184,7 +184,11 @@ private struct ChannelCard: View {
     @ViewBuilder private var stars: some View {
         let show = channel.savedShow
         let episode = channel.savedEpisode
-        if show != nil || episode != nil {
+        // A `tiny` card is about 76pt wide with the numeral already taking the
+        // first 34 of them; two glyphs and their inset need 77, so they would
+        // land on top of it. That card keeps the photograph, the numeral and the
+        // LED — the same three things `meta` steps aside for.
+        if !tiny, show != nil || episode != nil {
             HStack(spacing: 2) {
                 if let show { star(show, on: "star.fill", off: "star",
                                    help: model.saved.contains(show) ? "Unfollow this show" : "Follow this show") }
@@ -255,7 +259,8 @@ private struct ChannelCard: View {
                       url: channel.episodeURL,
                       font: Theme.display(narrow ? 13 : (compact ? 14 : 16), .black),
                       color: Theme.ink,
-                      lineLimit: 2)
+                      lineLimit: 2,
+                      exitCursor: .pointingHand)
 
             if !compact && !genres.isEmpty && chipsFit {
                 HStack(spacing: 5) {
@@ -294,7 +299,10 @@ private struct ChannelCard: View {
                 .buttonStyle(.hit)
                 .onHover { inside in
                     hoveredGenre = inside ? g : (hoveredGenre == g ? nil : hoveredGenre)
-                    if inside { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+                    // Leaving a chip leaves it for the card, which is clickable
+                    // too — and the card's own `onHover` will not fire again to
+                    // restore its cursor, so the hand stays.
+                    NSCursor.pointingHand.set()
                 }
                 .help("Browse \(g) in the archive")
         } else {

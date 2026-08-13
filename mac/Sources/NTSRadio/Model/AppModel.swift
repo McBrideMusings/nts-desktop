@@ -672,7 +672,10 @@ final class AppModel: ObservableObject {
     /// Load the mood and genre vocabularies once. Both are small, static lists.
     private func loadExploreVocabulary() async {
         if let moods = try? await NTSAPI.moods() { self.moods = moods }
-        if let genres = try? await NTSAPI.genres() { self.genres = genres }
+        if let genres = try? await NTSAPI.genres() {
+            self.genres = genres
+            rebuildGenreIndex()
+        }
     }
 
     func toggleGenre(_ id: String) {
@@ -691,19 +694,28 @@ final class AppModel: ObservableObject {
     /// ids. Nil while the vocabulary is still loading, or for a tag Explore
     /// doesn't file (NTS tags episodes more freely than it filters them), which
     /// is what leaves a chip as plain text rather than a link to nothing.
-    func genreID(named name: String) -> String? {
-        let key = Self.genreKey(name)
+    func genreID(named name: String) -> String? { genreIDsByName[Self.genreKey(name)] }
+
+    /// Built once when the vocabulary lands, not walked per lookup: every genre
+    /// chip on both channel cards asks this from inside `body`, and `body` runs
+    /// on each position tick, so a scan of 20 primaries and 438 subgenres —
+    /// allocating a folded string per comparison — would run several times a
+    /// second for as long as the window is open.
+    private var genreIDsByName: [String: String] = [:]
+
+    private func rebuildGenreIndex() {
+        var index: [String: String] = [:]
         for genre in genres {
-            if Self.genreKey(genre.name) == key { return genre.id }
-            if let sub = genre.subgenres.first(where: { Self.genreKey($0.name) == key }) { return sub.id }
+            index[Self.genreKey(genre.name)] = genre.id
+            for sub in genre.subgenres { index[Self.genreKey(sub.name)] = sub.id }
         }
-        return nil
+        genreIDsByName = index
     }
 
     /// NTS's own list has entries with a trailing space ("Amapiano "), and case
     /// differs between the genre list and a broadcast's tags.
     private static func genreKey(_ s: String) -> String {
-        s.trimmingCharacters(in: .whitespaces).lowercased()
+        s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
     /// Open the catalog on Explore showing one genre. The same door the

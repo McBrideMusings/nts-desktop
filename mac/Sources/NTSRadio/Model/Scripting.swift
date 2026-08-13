@@ -457,7 +457,7 @@ final class NTSBrowseCommand: NTSCommand {
     override func performDefaultImplementation() -> Any? {
         run {
             let m = AppModel.shared
-            let name = (self.directParameter as? String ?? "").trimmingCharacters(in: .whitespaces)
+            let name = (self.directParameter as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             guard !name.isEmpty else {
                 self.scriptErrorNumber = -1703   // errAETypeError
                 self.scriptErrorString = "Give a genre as the card prints it, e.g. browse genre \"Kosmische\"."
