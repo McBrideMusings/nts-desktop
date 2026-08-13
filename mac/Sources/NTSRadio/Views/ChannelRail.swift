@@ -82,6 +82,7 @@ struct ChannelRail: View {
 /// on the Atonemo that circle is a button you press, and a flat one on screen was
 /// spending the card's focal point on a channel number already printed above it.
 private struct ChannelCard: View {
+    @EnvironmentObject var model: AppModel
     let channel: Channel
     let active: Bool
     let slotW: CGFloat
@@ -130,6 +131,7 @@ private struct ChannelCard: View {
         .background(Theme.stage)
         .overlay(alignment: .topLeading) { numeral }
         .overlay(alignment: .topTrailing) { led }
+        .overlay(alignment: .topTrailing) { stars }
         .overlay {
             if active {
                 Rectangle().strokeBorder(channel.accent, lineWidth: 2)
@@ -157,6 +159,61 @@ private struct ChannelCard: View {
             .frame(width: 22, height: 22)
             .background(active ? channel.accent : Theme.ink.opacity(0.55))
             .padding(12)
+    }
+
+    // MARK: Follow and save
+
+    /// Star the show, star this episode — bare glyphs in the corner, to the left
+    /// of the LED and on its centre line.
+    ///
+    /// **Hidden until the pointer is on the card, with one exception: a star that
+    /// is already set stays lit.** Hiding those too would leave the card unable to
+    /// say what you follow, which is the one thing a star is for; and a resting
+    /// rail that shows a mark only on the programmes you kept is quieter than one
+    /// showing four buttons all the time.
+    ///
+    /// No chip behind them, unlike the catalog grid's: that one sits on a tile
+    /// with its own margin, this one sits on a photograph. The shadow is what
+    /// keeps a white outline legible when the artwork behind it is a pale sky.
+    ///
+    /// The glyphs are deliberately different from each other — a star for the
+    /// show, a bookmark for the one broadcast — because the two write different
+    /// rows and undoing the wrong one is invisible until you next open Saved.
+    @ViewBuilder private var stars: some View {
+        let show = channel.savedShow
+        let episode = channel.savedEpisode
+        if show != nil || episode != nil {
+            HStack(spacing: 2) {
+                if let show { star(show, on: "star.fill", off: "star",
+                                   help: model.saved.contains(show) ? "Unfollow this show" : "Follow this show") }
+                if let episode { star(episode, on: "bookmark.fill", off: "bookmark",
+                                      help: model.saved.contains(episode) ? "Remove this episode from saved" : "Save this episode") }
+            }
+            .padding(EdgeInsets(top: 8, leading: 0, bottom: 0, trailing: 31))
+        }
+    }
+
+    /// One glyph. It is visible while the card is hovered, and — separately —
+    /// whenever this particular star is set: following the show must not also
+    /// park an empty bookmark next to it, which is what a single opacity over
+    /// the pair produced. Each keeps its 22pt slot either way, so the one that
+    /// stays lit doesn't slide sideways as the other fades in.
+    private func star(_ item: Saved.Item, on: String, off: String, help: String) -> some View {
+        let set = model.saved.contains(item)
+        let visible = hovering || set
+        return Button { model.saved.toggle(item) } label: {
+            Image(systemName: set ? on : off)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.ink)
+                .shadow(color: .black.opacity(0.85), radius: 2, y: 1)
+                .frame(width: 22, height: 22)
+        }
+        .buttonStyle(.hit)
+        .help(help)
+        .opacity(visible ? 1 : 0)
+        .animation(.easeOut(duration: 0.14), value: visible)
+        // A hidden star must not swallow the click that tunes the channel.
+        .allowsHitTesting(visible)
     }
 
     private var led: some View {

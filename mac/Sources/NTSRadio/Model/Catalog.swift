@@ -84,6 +84,26 @@ struct Channel: Identifiable, Hashable {
     var showAlias: String { onAir?.showAlias ?? "" }
     var episodeAlias: String { onAir?.episodeAlias ?? "" }
 
+    /// The two things the card's corner can star, built here rather than at the
+    /// button: what a star means is a fact about the programme, not about the
+    /// view drawing it, and the schedule tile in the catalog already builds its
+    /// own from `CatalogRow`. Both are nil until the grid names the aliases —
+    /// about a third of the furthest-out slots have no episode alias, and a
+    /// button that writes an empty alias saves a row nothing can ever open.
+    var savedShow: Saved.Item? {
+        guard let b = onAir, !b.showAlias.isEmpty else { return nil }
+        return Saved.Item(kind: .show, alias: b.showAlias, title: b.title,
+                          subtitle: "NTS \(number) · \(b.startEnd)",
+                          image: background?.absoluteString)
+    }
+
+    var savedEpisode: Saved.Item? {
+        guard let b = onAir, !b.showAlias.isEmpty, !b.episodeAlias.isEmpty else { return nil }
+        return Saved.Item(kind: .episode, alias: b.showAlias, episodeAlias: b.episodeAlias,
+                          title: b.title, subtitle: "NTS \(number) · \(b.startEnd)",
+                          image: background?.absoluteString)
+    }
+
     /// The nts.live episode page for the current broadcast, when the feed gave us
     /// the aliases — lets the show title act as a link.
     var episodeURL: URL? {
