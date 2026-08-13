@@ -67,9 +67,15 @@ struct ChannelRail: View {
     /// A gap between the two channels is worse than a card that isn't quite
     /// square.
     private func card(_ c: Channel, w: CGFloat, h: CGFloat) -> some View {
+        // The genre lookup is handed in as a closure rather than the card
+        // taking the whole `AppModel`: an `@EnvironmentObject` there would
+        // redraw both cards on every publish in the app, the twice-a-second
+        // position tick included, to read two booleans and a dictionary.
         ChannelCard(channel: c,
                     active: model.selection == .channel(c.number),
-                    slotW: w, slotH: h)
+                    slotW: w, slotH: h,
+                    genreID: { model.genreID(named: $0) },
+                    browseGenre: { model.browseGenre($0) })
             .onTapGesture { model.select(.channel(c.number)) }
     }
 }
@@ -82,11 +88,16 @@ struct ChannelRail: View {
 /// on the Atonemo that circle is a button you press, and a flat one on screen was
 /// spending the card's focal point on a channel number already printed above it.
 private struct ChannelCard: View {
-    @EnvironmentObject var model: AppModel
+    /// The starred list itself, not the whole app: this view redraws when what
+    /// you have saved changes, and not when the playhead moves.
+    @ObservedObject var saved = Saved.shared
     let channel: Channel
     let active: Bool
     let slotW: CGFloat
     let slotH: CGFloat
+    /// Explore's id for a genre printed by name, and the door a chip opens.
+    let genreID: (String) -> String?
+    let browseGenre: (String) -> Void
     /// Hovering a card previews it the way hovering a dial wedge does: the photo
     /// comes back up to full strength and the accent outline appears, so the card
     /// answers the pointer before it's clicked. Committing is still the click.
@@ -191,9 +202,9 @@ private struct ChannelCard: View {
         if !tiny, show != nil || episode != nil {
             HStack(spacing: 2) {
                 if let show { star(show, on: "star.fill", off: "star",
-                                   help: model.saved.contains(show) ? "Unfollow this show" : "Follow this show") }
+                                   help: saved.contains(show) ? "Unfollow this show" : "Follow this show") }
                 if let episode { star(episode, on: "bookmark.fill", off: "bookmark",
-                                      help: model.saved.contains(episode) ? "Remove this episode from saved" : "Save this episode") }
+                                      help: saved.contains(episode) ? "Remove this episode from saved" : "Save this episode") }
             }
             .padding(EdgeInsets(top: 8, leading: 0, bottom: 0, trailing: 31))
         }
@@ -205,9 +216,9 @@ private struct ChannelCard: View {
     /// the pair produced. Each keeps its 22pt slot either way, so the one that
     /// stays lit doesn't slide sideways as the other fades in.
     private func star(_ item: Saved.Item, on: String, off: String, help: String) -> some View {
-        let set = model.saved.contains(item)
+        let set = saved.contains(item)
         let visible = hovering || set
-        return Button { model.saved.toggle(item) } label: {
+        return Button { saved.toggle(item) } label: {
             Image(systemName: set ? on : off)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Theme.ink)
@@ -294,8 +305,8 @@ private struct ChannelCard: View {
     /// One Explore knows nothing about stays a label — nothing to hover, nothing
     /// to click — which is also every chip until the vocabulary has loaded.
     @ViewBuilder private func chip(_ g: String) -> some View {
-        if let id = model.genreID(named: g) {
-            Button { model.browseGenre(id) } label: { chipFace(g, inverted: hoveredGenre == g) }
+        if let id = genreID(g) {
+            Button { browseGenre(id) } label: { chipFace(g, inverted: hoveredGenre == g) }
                 .buttonStyle(.hit)
                 .onHover { inside in
                     hoveredGenre = inside ? g : (hoveredGenre == g ? nil : hoveredGenre)

@@ -542,23 +542,46 @@ private struct SectionLabel: View {
     }
 }
 
+/// The tags under a show's title — its genres, then its moods.
+///
+/// A tag Explore files as a genre browses it, the same as a genre chip on a live
+/// channel card. The rest stay labels: the row is handed genres and moods
+/// together, and a mood is not a genre id, so the lookup failing is exactly the
+/// test for "this one has nowhere to go".
 private struct ChipRow: View {
+    @EnvironmentObject var model: AppModel
     let tags: [String]
     var wide = false
+    @State private var hovered: String?
 
     var body: some View {
         FlowLayout(spacing: 5) {
             ForEach(tags, id: \.self) { t in
-                Text(t.uppercased())
-                    .font(Theme.mono(8, .semibold))
-                    .tracking(1.2)
-                    .foregroundStyle(Color(hex: 0xc9c8c2))
-                    .lineLimit(1)
-                    .padding(.horizontal, 6).padding(.vertical, 4)
-                    .overlay(Rectangle().stroke(Theme.hairline(0.14), lineWidth: 1))
+                if let id = model.genreID(named: t) {
+                    Button { model.browseGenre(id) } label: { face(t, lit: hovered == t) }
+                        .buttonStyle(.hit)
+                        .onHover { inside in
+                            hovered = inside ? t : (hovered == t ? nil : hovered)
+                            if inside { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+                        }
+                        .help("Browse \(t) in the archive")
+                } else {
+                    face(t, lit: false)
+                }
             }
         }
         .frame(maxWidth: wide ? 620 : 520, alignment: .leading)
+    }
+
+    private func face(_ t: String, lit: Bool) -> some View {
+        Text(t.uppercased())
+            .font(Theme.mono(8, .semibold))
+            .tracking(1.2)
+            .foregroundStyle(lit ? Theme.popover : Color(hex: 0xc9c8c2))
+            .lineLimit(1)
+            .padding(.horizontal, 6).padding(.vertical, 4)
+            .background(lit ? Theme.ink : .clear)
+            .overlay(Rectangle().stroke(Theme.hairline(0.14), lineWidth: 1))
     }
 }
 

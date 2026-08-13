@@ -36,6 +36,32 @@ final class Saved: ObservableObject {
             }
         }
         var imageURL: URL? { image.flatMap { URL(string: $0) } }
+
+        /// What starring a programme in the schedule writes — the show it
+        /// belongs to, or the one broadcast.
+        ///
+        /// Both live here rather than at each caller because there are three of
+        /// them now (the catalog's schedule tile, and the live card's two
+        /// glyphs) and they must agree: the same subtitle, and the same answer
+        /// to "is there enough here to save at all". `nil` means the grid has
+        /// not named the aliases, which is the case for about a third of the
+        /// furthest-out slots — a row saved without them can never be reopened.
+        static func show(_ b: NTSAPI.Broadcast, image: URL? = nil) -> Item? {
+            guard !b.showAlias.isEmpty else { return nil }
+            return Item(kind: .show, alias: b.showAlias, title: b.title,
+                        subtitle: subtitle(b), image: (b.image ?? image)?.absoluteString)
+        }
+
+        static func episode(_ b: NTSAPI.Broadcast, image: URL? = nil) -> Item? {
+            guard !b.showAlias.isEmpty, !b.episodeAlias.isEmpty else { return nil }
+            return Item(kind: .episode, alias: b.showAlias, episodeAlias: b.episodeAlias,
+                        title: b.title, subtitle: subtitle(b),
+                        image: (b.image ?? image)?.absoluteString)
+        }
+
+        private static func subtitle(_ b: NTSAPI.Broadcast) -> String {
+            "NTS \(b.channel) · \(b.startEnd)"
+        }
     }
 
     @Published private(set) var items: [Item] = []
@@ -96,10 +122,14 @@ final class Saved: ObservableObject {
         try? await NTSFavourites.registerDevice(token: token)
         guard let favourites = try? await NTSFavourites.fetch(token: token) else { return }
 
-        remote = Dictionary(favourites.map { f in
+        // Merged into what this session has already created rather than
+        // replacing it: a star made before the first sync completes must keep
+        // its document name, or unstarring it would have nothing to delete.
+        let fetched = Dictionary(favourites.map { f in
             let (show, episode) = Self.normalized(f)
             return (show + ":" + episode, f)
         }, uniquingKeysWith: { first, _ in first })
+        remote.merge(fetched) { mine, _ in mine }
         syncedWithAccount = true
 
         var merged = items
@@ -159,22 +189,56 @@ final class Saved: ObservableObject {
         return (f.showAlias, f.episodeAlias)
     }
 
+    /// Creates still in flight, so an unstar can wait for the document name
+    /// rather than giving up. Keyed like `remote`.
+    private var creating: [String: Task<NTSFavourites.Favourite?, Never>] = [:]
+
+    /// How a favourite is addressed in `remote` and `creating` — the pair of
+    /// aliases, since an episode is only identifiable as both.
+    private static func key(_ item: Item) -> String {
+        item.alias + ":" + (item.episodeAlias ?? "")
+    }
+
     private func starOnAccount(_ item: Item) {
         // Mixtapes are this app's own idea of a bookmark; NTS files favourites
         // against shows and episodes only, so there is nowhere to put one.
         guard item.kind != .mixtape, let token else { return }
-        Task {
-            guard let token = try? await token() else { return }
-            try? await NTSFavourites.add(showAlias: item.alias, episodeAlias: item.episodeAlias ?? "", token: token)
+        let key = Self.key(item)
+        let create = Task { () -> NTSFavourites.Favourite? in
+            guard let token = try? await token() else { return nil }
+            return try? await NTSFavourites.add(showAlias: item.alias,
+                                                episodeAlias: item.episodeAlias ?? "", token: token)
+        }
+        creating[key] = create
+        Task { @MainActor [weak self] in
+            let created = await create.value
+            guard let self, self.creating[key] == create else { return }
+            self.creating[key] = nil
+            // Remember what was made, so unstarring it later in this same
+            // session has a document to delete. `remote` used to be written
+            // only by `sync()` at launch, which meant a star and an unstar in
+            // one session deleted the local row and left the account's — and
+            // the next launch's sync brought it straight back.
+            if let created { self.remote[key] = created }
         }
     }
 
     private func unstarOnAccount(_ item: Item) {
-        let key = item.alias + ":" + (item.episodeAlias ?? "")
-        guard item.kind != .mixtape, let token, let favourite = remote[key] else { return }
+        guard item.kind != .mixtape, let token else { return }
+        let key = Self.key(item)
+        let known = remote[key]
+        let pending = creating[key]
         remote[key] = nil
+        creating[key] = nil
+        guard known != nil || pending != nil else { return }
         Task {
-            guard let token = try? await token() else { return }
+            // Unstarring faster than Firestore answers the create is the case
+            // that has no document name yet: wait for the create rather than
+            // dropping the delete.
+            var pick = known
+            if pick == nil, let pending { pick = await pending.value }
+            guard let favourite = pick, !favourite.name.isEmpty,
+                  let token = try? await token() else { return }
             try? await NTSFavourites.remove(name: favourite.name, token: token)
         }
     }

@@ -50,10 +50,9 @@ struct CatalogRow: Identifiable, Hashable {
         let alias = b.showAlias.isEmpty ? (resolved?.alias ?? "") : b.showAlias
         target = alias.isEmpty ? nil : .show(alias: alias, title: b.title)
         playable = .channel(b.channel)
-        savedItem = alias.isEmpty ? nil : Saved.Item(
-            kind: .show, alias: alias, title: b.title,
-            subtitle: "NTS \(b.channel) · \(b.startEnd)",
-            image: (b.image ?? resolved?.pictureURL)?.absoluteString)
+        // The index can supply an alias the slot itself lacks, so the item is
+        // built from a broadcast carrying whichever of the two is present.
+        savedItem = Saved.Item.show(b.withShowAlias(alias), image: resolved?.pictureURL)
     }
 
     /// An Explore result. It plays where a schedule slot only tunes a channel:

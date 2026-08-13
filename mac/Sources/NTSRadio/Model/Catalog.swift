@@ -90,19 +90,9 @@ struct Channel: Identifiable, Hashable {
     /// own from `CatalogRow`. Both are nil until the grid names the aliases —
     /// about a third of the furthest-out slots have no episode alias, and a
     /// button that writes an empty alias saves a row nothing can ever open.
-    var savedShow: Saved.Item? {
-        guard let b = onAir, !b.showAlias.isEmpty else { return nil }
-        return Saved.Item(kind: .show, alias: b.showAlias, title: b.title,
-                          subtitle: "NTS \(number) · \(b.startEnd)",
-                          image: background?.absoluteString)
-    }
+    var savedShow: Saved.Item? { onAir.flatMap { Saved.Item.show($0, image: background) } }
 
-    var savedEpisode: Saved.Item? {
-        guard let b = onAir, !b.showAlias.isEmpty, !b.episodeAlias.isEmpty else { return nil }
-        return Saved.Item(kind: .episode, alias: b.showAlias, episodeAlias: b.episodeAlias,
-                          title: b.title, subtitle: "NTS \(number) · \(b.startEnd)",
-                          image: background?.absoluteString)
-    }
+    var savedEpisode: Saved.Item? { onAir.flatMap { Saved.Item.episode($0, image: background) } }
 
     /// The nts.live episode page for the current broadcast, when the feed gave us
     /// the aliases — lets the show title act as a link.

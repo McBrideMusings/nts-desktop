@@ -91,6 +91,14 @@ enum NTSAPI {
             guard !showAlias.isEmpty, !episodeAlias.isEmpty else { return nil }
             return URL(string: "https://www.nts.live/shows/\(showAlias)/episodes/\(episodeAlias)")
         }
+
+        /// The same slot under an alias the show index supplied — the schedule
+        /// leaves a few of them blank, and the index knows the show anyway.
+        func withShowAlias(_ alias: String) -> Broadcast {
+            Broadcast(channel: channel, title: title, start: start, end: end, startEnd: startEnd,
+                      genres: genres, location: location, image: image,
+                      showAlias: alias, episodeAlias: episodeAlias)
+        }
     }
 
     // MARK: - Infinite mixtapes

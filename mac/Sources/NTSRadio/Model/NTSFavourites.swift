@@ -139,8 +139,14 @@ enum NTSFavourites {
                            body: ["fields": fields], token: token)
     }
 
-    /// Star something on the account.
-    static func add(showAlias: String, episodeAlias: String = "", token: String) async throws {
+    /// Star something on the account, answering with the row Firestore created.
+    ///
+    /// The document name is the whole point of the return value: it is what a
+    /// later delete addresses, and without it an unstar has to hope the row was
+    /// in the snapshot `Saved.sync()` read at launch — which a star made in this
+    /// session never is.
+    @discardableResult
+    static func add(showAlias: String, episodeAlias: String = "", token: String) async throws -> Favourite {
         let uid = try accountID(from: token)
         let fields: [String: Any] = [
             "show_alias": ["stringValue": showAlias],
@@ -154,8 +160,11 @@ enum NTSFavourites {
             // in it is meaningful to anything that reads these back.
             "session": ["mapValue": ["fields": ["firebase_user_uid": ["stringValue": uid]]]],
         ]
-        _ = try await send("POST", path: "\(root)/favourites",
-                           body: ["fields": fields], token: token)
+        let data = try await send("POST", path: "\(root)/favourites",
+                                  body: ["fields": fields], token: token)
+        let created = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        return Favourite(name: created?["name"] as? String ?? "",
+                         showAlias: showAlias, episodeAlias: episodeAlias)
     }
 
     /// Unstar it. `name` is the document path a fetch handed back.
