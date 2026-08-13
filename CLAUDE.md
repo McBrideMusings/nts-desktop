@@ -179,6 +179,7 @@ never draws one: it is the only place a key equivalent can live, and without it
   osascript -e 'tell application "NTS Radio" to filter explore mood "sedative" genres {"ambientnewage"}'
   osascript -e 'tell application "NTS Radio" to explore more'
   osascript -e 'tell application "NTS Radio" to browse genre "Kosmische"'
+  osascript -e 'tell application "NTS Radio" to open show "veronica-vasicka"'
   osascript -e 'tell application "NTS Radio" to seek to 1800'
   osascript -e 'tell application "NTS Radio" to open catalog searching for "veronica"'
   osascript -e 'tell application "NTS Radio" to close catalog'

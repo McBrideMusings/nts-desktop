@@ -21,9 +21,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The city stays a label: Explore has no location filter, and 12 of the 1834
   indexed shows carry a location at all, written "LDN" where the card prints
   "LONDON".
+- A show's genre tags in the archive browse that genre too, the same as a
+  channel card's chips. Its mood tags stay labels, which falls out of the same
+  lookup — a mood is not a genre id, so nothing pretends it has somewhere to go.
 - `browse genre "<name>"` in the AppleScript dictionary — the genre chip's own
   door, taking the name the card prints, so the name-to-id translation is
   drivable without a mouse.
+- `open show "<alias>"`, plus `catalogDetail` and `detailTags` in the `state`
+  blob. A show's page could only be reached by clicking a tile, so nothing about
+  that pane could be driven or read back — and a detail pane covering the whole
+  catalog was invisible from `state` while the grid's own fields carried on
+  describing the list underneath it.
 - Unstarring reaches the NTS account in every case, not just for stars that
   predate the launch sync. Removing a favourite needs the Firestore document
   name, and only rows in the snapshot read at startup had one — so a star and an
