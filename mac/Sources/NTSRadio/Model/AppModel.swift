@@ -113,8 +113,18 @@ final class AppModel: ObservableObject {
     @Published private(set) var showEpisodesLoading = false
 
     @Published var selection: Selection = .idle
-    @Published var muted = false { didSet { engine.apply(volume: volume, muted: muted) } }
-    @Published var volume: Double = 72 { didSet { engine.apply(volume: volume, muted: muted) } }
+    @Published var muted = UserDefaults.standard.bool(forKey: "muted") {
+        didSet {
+            engine.apply(volume: volume, muted: muted)
+            UserDefaults.standard.set(muted, forKey: "muted")
+        }
+    }
+    @Published var volume: Double = UserDefaults.standard.object(forKey: "volume") as? Double ?? 72 {
+        didSet {
+            engine.apply(volume: volume, muted: muted)
+            UserDefaults.standard.set(volume, forKey: "volume")
+        }
+    }
     @Published var hoverIndex: Int? = nil
     /// Where the dial's index mark is pointing, in degrees, accumulated across
     /// turns rather than wrapped into 0..<360 — so it is free to wind past a full
