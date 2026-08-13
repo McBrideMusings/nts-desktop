@@ -30,6 +30,55 @@ extension ButtonStyle where Self == HitButtonStyle {
     static var hit: HitButtonStyle { HitButtonStyle() }
 }
 
+// MARK: - Label that is a link when it has somewhere to go
+
+/// A label that becomes a link when `url` is non-nil: it switches to
+/// `linkFont`/`linkColor` (NTS shows clickable labels bold white), shows an
+/// underline + pointer cursor on hover, and opens the page in the browser when
+/// clicked. Plain text otherwise — the schedule names programmes it has no
+/// episode alias for, and a dead underline would promise a page that isn't there.
+///
+/// **A `Button`, not an `onTapGesture`.** The channel card is itself one big tap
+/// target that tunes the channel, and a tap gesture inside it leaves which one
+/// wins up to gesture resolution; a button consumes its own click, so opening the
+/// episode page cannot also change what you are listening to.
+struct LinkLabel: View {
+    let text: String
+    let url: URL?
+    let font: Font
+    var linkFont: Font? = nil
+    let color: Color
+    var linkColor: Color? = nil
+    var tracking: CGFloat = 0
+    var lineLimit: Int = 1
+    @State private var hovering = false
+
+    var body: some View {
+        let isLink = url != nil
+        Button {
+            if let url { NSWorkspace.shared.open(url) }
+        } label: {
+            Text(text)
+                .font(isLink ? (linkFont ?? font) : font)
+                .tracking(tracking)
+                .underline(isLink && hovering)
+                .foregroundStyle(isLink ? (linkColor ?? color) : color)
+                .lineLimit(lineLimit)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .buttonStyle(.hit)
+        .disabled(!isLink)
+        .onHover { inside in
+            hovering = inside
+            guard isLink else { return }
+            if inside { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+        }
+        .help(url?.absoluteString ?? "")
+    }
+}
+
 // MARK: - Track row model
 
 struct Track: Identifiable, Hashable {

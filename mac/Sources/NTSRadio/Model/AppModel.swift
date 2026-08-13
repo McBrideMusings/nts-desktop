@@ -684,6 +684,39 @@ final class AppModel: ObservableObject {
         exploreFilters.mood = exploreFilters.mood == id ? nil : id
     }
 
+    /// The Explore id for a genre named the way a broadcast prints it —
+    /// "Kosmische" on a channel card is `ambientnewage-kosmiche` in Explore's
+    /// vocabulary. Matching goes through the name because that is all the
+    /// schedule carries: its slots list genres as display strings and never as
+    /// ids. Nil while the vocabulary is still loading, or for a tag Explore
+    /// doesn't file (NTS tags episodes more freely than it filters them), which
+    /// is what leaves a chip as plain text rather than a link to nothing.
+    func genreID(named name: String) -> String? {
+        let key = Self.genreKey(name)
+        for genre in genres {
+            if Self.genreKey(genre.name) == key { return genre.id }
+            if let sub = genre.subgenres.first(where: { Self.genreKey($0.name) == key }) { return sub.id }
+        }
+        return nil
+    }
+
+    /// NTS's own list has entries with a trailing space ("Amapiano "), and case
+    /// differs between the genre list and a broadcast's tags.
+    private static func genreKey(_ s: String) -> String {
+        s.trimmingCharacters(in: .whitespaces).lowercased()
+    }
+
+    /// Open the catalog on Explore showing one genre. The same door the
+    /// `filter explore` command opens, so a chip on a channel card and a script
+    /// land in one place rather than two that can drift.
+    func browseGenre(_ id: String) {
+        catalogTab = .explore
+        query = ""
+        detail = nil
+        show(.catalog)
+        exploreFilters = NTSAPI.ExploreFilters(genres: [id])
+    }
+
     /// The name to show for a selected genre id. Subgenre ids are prefixed with
     /// their primary (`ambientnewage-ambient`), so this walks both levels.
     func genreName(_ id: String) -> String {

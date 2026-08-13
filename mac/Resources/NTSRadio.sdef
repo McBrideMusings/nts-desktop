@@ -178,6 +178,13 @@
             <result type="text" description="The state after starring, as JSON."/>
         </command>
 
+        <command name="browse genre" code="NTSrBRWS"
+                 description="Open the archive filtered to one genre, the same as clicking a genre chip on a channel card.">
+            <cocoa class="NTSBrowseCommand"/>
+            <direct-parameter type="text" description="The genre by the name the card prints, e.g. Kosmische. Fails for a genre Explore does not file, which is the case the card leaves as plain text."/>
+            <result type="text" description="The state after opening, as JSON."/>
+        </command>
+
         <command name="open settings" code="NTSrSETT"
                  description="Open the Settings window — the same window ⌘, opens, not a panel inside the radio window.">
             <cocoa class="NTSOpenSettingsCommand"/>

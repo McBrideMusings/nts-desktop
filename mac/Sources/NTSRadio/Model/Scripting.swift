@@ -448,6 +448,34 @@ final class NTSStarCommand: NTSCommand {
     }
 }
 
+/// The channel card's genre chip, scripted. It takes the genre by the name the
+/// card prints rather than by an Explore id, because that translation is the
+/// part worth being able to drive: NTS tags episodes with genres Explore does
+/// not file, and those chips are deliberately left as plain text.
+@objc(NTSBrowseCommand)
+final class NTSBrowseCommand: NTSCommand {
+    override func performDefaultImplementation() -> Any? {
+        run {
+            let m = AppModel.shared
+            let name = (self.directParameter as? String ?? "").trimmingCharacters(in: .whitespaces)
+            guard !name.isEmpty else {
+                self.scriptErrorNumber = -1703   // errAETypeError
+                self.scriptErrorString = "Give a genre as the card prints it, e.g. browse genre \"Kosmische\"."
+                return false
+            }
+            guard let id = m.genreID(named: name) else {
+                self.scriptErrorNumber = -1703
+                self.scriptErrorString = m.genres.isEmpty
+                    ? "The genre list hasn't loaded yet — try again in a moment."
+                    : "\"\(name)\" is not a genre Explore files. The card leaves that chip as plain text."
+                return false
+            }
+            m.browseGenre(id)
+            return true
+        }
+    }
+}
+
 @objc(NTSSeekCommand)
 final class NTSSeekCommand: NTSCommand {
     override func performDefaultImplementation() -> Any? {

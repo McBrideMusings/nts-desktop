@@ -174,39 +174,6 @@ private struct TracksButton: View {
     }
 }
 
-/// A now-playing label that becomes a link when `url` is non-nil: it switches to
-/// `linkFont`/`linkColor` (NTS shows clickable labels bold white), shows an
-/// underline + pointer cursor on hover, and opens the page in the browser on tap.
-/// Plain text otherwise.
-private struct LinkLabel: View {
-    let text: String
-    let url: URL?
-    let font: Font
-    var linkFont: Font? = nil
-    let color: Color
-    var linkColor: Color? = nil
-    var tracking: CGFloat = 0
-    @State private var hovering = false
-
-    var body: some View {
-        let isLink = url != nil
-        Text(text)
-            .font(isLink ? (linkFont ?? font) : font)
-            .tracking(tracking)
-            .underline(isLink && hovering)
-            .foregroundStyle(isLink ? (linkColor ?? color) : color)
-            .lineLimit(1)
-            .contentShape(Rectangle())
-            .onHover { inside in
-                hovering = inside
-                guard isLink else { return }
-                if inside { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
-            }
-            .onTapGesture { if let url { NSWorkspace.shared.open(url) } }
-            .help(url?.absoluteString ?? "")
-    }
-}
-
 /// A dot-matrix level panel — five columns of seven lamps, filling from the
 /// bottom, with a peak lamp held above each column that steps down as the loud
 /// moment holding it up ages out. The quantising to whole lamps is what makes it

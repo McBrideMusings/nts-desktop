@@ -91,6 +91,8 @@ private struct ChannelCard: View {
     /// comes back up to full strength and the accent outline appears, so the card
     /// answers the pointer before it's clicked. Committing is still the click.
     @State private var hovering = false
+    /// Which genre chip the pointer is on — decides only how that chip draws.
+    @State private var hoveredGenre: String?
 
     /// Below this slot height the card drops the genre chips and shrinks the
     /// title, so two cards still fit when the window is short.
@@ -231,7 +233,7 @@ private struct ChannelCard: View {
                     Text(channel.startEnd).monospacedDigit()
                         .foregroundStyle(active ? channel.accent : Color(hex: 0xcfcec8))
                 } else {
-                    Text(location)
+                    cityLabel
                     if !channel.startEnd.isEmpty {
                         Text("·").opacity(0.5)
                         Text(channel.startEnd).monospacedDigit()
@@ -246,11 +248,14 @@ private struct ChannelCard: View {
             .foregroundStyle(Color(hex: 0xcfcec8))
             .lineLimit(1)
 
-            Text(channel.show.uppercased())
-                .font(Theme.display(narrow ? 13 : (compact ? 14 : 16), .black))
-                .foregroundStyle(Theme.ink)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+            // The programme's own page on nts.live, when the grid gave both
+            // aliases — the same link the now-playing bar's title carries, on the
+            // card that is actually showing the programme.
+            LinkLabel(text: channel.show.uppercased(),
+                      url: channel.episodeURL,
+                      font: Theme.display(narrow ? 13 : (compact ? 14 : 16), .black),
+                      color: Theme.ink,
+                      lineLimit: 2)
 
             if !compact && !genres.isEmpty && chipsFit {
                 HStack(spacing: 5) {
@@ -262,6 +267,13 @@ private struct ChannelCard: View {
         .padding(EdgeInsets(top: 0, leading: 14, bottom: 13, trailing: 14))
     }
 
+    /// The city is a label, not a link, and that is a measurement rather than a
+    /// preference: Explore filters on moods and genres only, so the fallback was
+    /// the catalog's own text search — and 12 of the 1834 indexed shows carry a
+    /// location at all, written "LDN" and "NYC" where the card prints "LONDON"
+    /// and "NEW YORK". Searching for what this label says finds nothing.
+    private var cityLabel: some View { Text(location) }
+
     // MARK: Genre chips
 
     private static let chipFont = Theme.mono(8, .semibold)
@@ -271,15 +283,34 @@ private struct ChannelCard: View {
     /// Chips are one line, always — the row is a single band of boxes the same
     /// height, and a long genre shrinks its own text to stay on that line rather
     /// than wrapping and making its box twice as tall as its neighbours.
-    private func chip(_ g: String) -> some View {
+    ///
+    /// A chip whose genre Explore also files by that name browses it: the box
+    /// inverts under the pointer and clicking opens the catalog filtered to it.
+    /// One Explore knows nothing about stays a label — nothing to hover, nothing
+    /// to click — which is also every chip until the vocabulary has loaded.
+    @ViewBuilder private func chip(_ g: String) -> some View {
+        if let id = model.genreID(named: g) {
+            Button { model.browseGenre(id) } label: { chipFace(g, inverted: hoveredGenre == g) }
+                .buttonStyle(.hit)
+                .onHover { inside in
+                    hoveredGenre = inside ? g : (hoveredGenre == g ? nil : hoveredGenre)
+                    if inside { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+                }
+                .help("Browse \(g) in the archive")
+        } else {
+            chipFace(g, inverted: false)
+        }
+    }
+
+    private func chipFace(_ g: String, inverted: Bool) -> some View {
         Text(g.uppercased())
             .font(Self.chipFont)
             .tracking(1)
             .lineLimit(1)
             .minimumScaleFactor(Self.chipMinScale)
-            .foregroundStyle(Theme.popover)
+            .foregroundStyle(inverted ? Theme.ink : Theme.popover)
             .padding(.horizontal, 5).padding(.vertical, 3)
-            .background(Theme.ink.opacity(0.85))
+            .background(inverted ? Theme.popover.opacity(0.92) : Theme.ink.opacity(0.85))
     }
 
     /// The AppKit twin of `chipFont`, purely for measuring — `Theme.mono` is
