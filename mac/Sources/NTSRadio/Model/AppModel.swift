@@ -119,10 +119,19 @@ final class AppModel: ObservableObject {
             UserDefaults.standard.set(muted, forKey: "muted")
         }
     }
+    /// Dragging the volume slider fires this on every frame; only the disk write
+    /// is debounced (`engine.apply` below stays live so audio tracks the drag).
+    private var volumePersist: Task<Void, Never>?
     @Published var volume: Double = UserDefaults.standard.object(forKey: "volume") as? Double ?? 72 {
         didSet {
             engine.apply(volume: volume, muted: muted)
-            UserDefaults.standard.set(volume, forKey: "volume")
+            let volume = volume
+            volumePersist?.cancel()
+            volumePersist = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                guard !Task.isCancelled else { return }
+                UserDefaults.standard.set(volume, forKey: "volume")
+            }
         }
     }
     @Published var hoverIndex: Int? = nil
