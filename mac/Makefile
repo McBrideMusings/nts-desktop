@@ -43,6 +43,12 @@ dmg: ## Build a distributable .dmg from the .app (ad-hoc signed — no personal 
 	hdiutil create -volname "$(APP_NAME)" -srcfolder "$(APP_BUNDLE)" -ov -format UDZO "$(OUT)/$(APP_NAME).dmg"
 	@echo "Built $(OUT)/$(APP_NAME).dmg"
 
+notarize: app ## Build a Developer ID-signed, notarized .dmg (needs CODE_SIGN_IDENTITY="Developer ID Application: …" + the App Store Connect API key env vars)
+	rm -f "$(OUT)/$(APP_NAME).dmg"
+	hdiutil create -volname "$(APP_NAME)" -srcfolder "$(APP_BUNDLE)" -ov -format UDZO "$(OUT)/$(APP_NAME).dmg"
+	./notarize.sh "$(OUT)/$(APP_NAME).dmg"
+	@echo "Built and notarized $(OUT)/$(APP_NAME).dmg"
+
 install: app ## Install the .app into /Applications
 	rm -rf "/Applications/$(APP_NAME).app"
 	ditto "$(APP_BUNDLE)" "/Applications/$(APP_NAME).app"

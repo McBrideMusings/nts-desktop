@@ -29,8 +29,13 @@ if [ -z "$id" ]; then
   [ -z "$id" ] && id="-"
 fi
 
-if codesign --force --deep --identifier "$identifier" --sign "$id" "$target" 2>/dev/null \
-   || codesign --force --deep --sign "$id" "$target"; then
+extra_opts=()
+case "$id" in
+  "Developer ID Application"*) extra_opts=(--options runtime --timestamp) ;;
+esac
+
+if codesign --force --deep --identifier "$identifier" "${extra_opts[@]}" --sign "$id" "$target" 2>/dev/null \
+   || codesign --force --deep "${extra_opts[@]}" --sign "$id" "$target"; then
   printf '  ✓ codesigned %s (%s)\n' "$(basename "$target")" "${id:0:14}"
 else
   echo "  ✗ codesign failed for $target" >&2
