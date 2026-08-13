@@ -185,6 +185,13 @@
             <result type="text" description="The state after opening, as JSON."/>
         </command>
 
+        <command name="open show" code="NTSrSHOW"
+                 description="Open a show's page in the archive — its blurb, genre and mood tags, and its episodes — the same as clicking its tile.">
+            <cocoa class="NTSOpenShowCommand"/>
+            <direct-parameter type="text" description="A show alias, e.g. veronica-vasicka."/>
+            <result type="text" description="The state after opening, as JSON."/>
+        </command>
+
         <command name="open settings" code="NTSrSETT"
                  description="Open the Settings window — the same window ⌘, opens, not a panel inside the radio window.">
             <cocoa class="NTSOpenSettingsCommand"/>

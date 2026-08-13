@@ -122,6 +122,23 @@ enum ScriptState {
             "exploreLoading": m.exploreLoading,
             "moodCount": m.moods.count,
             "genreCount": m.genres.count,
+            // Which detail pane is open over the grid, and the tags it draws.
+            // A pane covering the whole catalog was invisible from here — the
+            // grid's own fields keep describing the list underneath it — and
+            // its tags are chips you can click, so what they say is behaviour
+            // rather than decoration.
+            "catalogDetail": {
+                switch m.detail {
+                case .none: return ""
+                case .show(let alias, _): return "show:\(alias)"
+                case .mixtape(let alias): return "mixtape:\(alias)"
+                }
+            }() as String,
+            "detailTags": {
+                guard case .show(let alias, _) = m.detail else { return [] as [String] }
+                let d = m.showDetails[alias]
+                return (d?.genres ?? []) + (d?.moods ?? [])
+            }() as [String],
             "catalogQuery": m.query,
             "catalogRows": m.catalogRows.count,
             "catalogFirstRows": m.catalogRows.prefix(3).map { "\($0.title) · \($0.meta)" },
@@ -443,6 +460,30 @@ final class NTSStarCommand: NTSCommand {
                                       title: indexed?.name ?? ShowIndex.title(from: raw),
                                       subtitle: indexed?.location ?? "",
                                       image: indexed?.picture))
+            return true
+        }
+    }
+}
+
+/// A show's page in the archive — the pane carrying its blurb, its genre and
+/// mood tags and its episode list. Clicking a tile is the only other way in, so
+/// without this nothing about that pane can be driven or read back.
+@objc(NTSOpenShowCommand)
+final class NTSOpenShowCommand: NTSCommand {
+    override func performDefaultImplementation() -> Any? {
+        run {
+            let m = AppModel.shared
+            let alias = (self.directParameter as? String ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !alias.isEmpty else {
+                self.scriptErrorNumber = -1703   // errAETypeError
+                self.scriptErrorString = "Give a show alias, e.g. open show \"veronica-vasicka\"."
+                return false
+            }
+            m.query = ""
+            m.show(.catalog)
+            m.detail = .show(alias: alias, fallbackTitle: ShowIndex.title(from: alias))
+            Task { await m.loadShow(alias) }
             return true
         }
     }

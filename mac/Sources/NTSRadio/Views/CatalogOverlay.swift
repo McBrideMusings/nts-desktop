@@ -373,7 +373,9 @@ private struct ShowDetailPane: View {
 
                 let tags = (detail?.genres ?? slot?.genres ?? []) + (detail?.moods ?? [])
                 if !tags.isEmpty {
-                    ChipRow(tags: tags)
+                    ChipRow(tags: tags,
+                            genreID: { model.genreID(named: $0) },
+                            browseGenre: { model.browseGenre($0) })
                         .padding(.top, 14)
                 }
 
@@ -549,19 +551,27 @@ private struct SectionLabel: View {
 /// together, and a mood is not a genre id, so the lookup failing is exactly the
 /// test for "this one has nowhere to go".
 private struct ChipRow: View {
-    @EnvironmentObject var model: AppModel
     let tags: [String]
     var wide = false
-    @State private var hovered: String?
+    /// Explore's id for a tag printed by name, and the door a chip opens —
+    /// handed in rather than read off `AppModel`, the same way `ChannelCard`
+    /// takes them. A row of chips has no other reason to hear about every
+    /// publish in the app.
+    let genreID: (String) -> String?
+    let browseGenre: (String) -> Void
+    /// The tag under the pointer, by position. Not by value: a show's genres and
+    /// its moods arrive as one list, the same word can appear in both, and
+    /// keying the hover on the string lit two chips at once.
+    @State private var hovered: Int?
 
     var body: some View {
         FlowLayout(spacing: 5) {
-            ForEach(tags, id: \.self) { t in
-                if let id = model.genreID(named: t) {
-                    Button { model.browseGenre(id) } label: { face(t, lit: hovered == t) }
+            ForEach(Array(tags.enumerated()), id: \.offset) { i, t in
+                if let id = genreID(t) {
+                    Button { browseGenre(id) } label: { face(t, lit: hovered == i) }
                         .buttonStyle(.hit)
                         .onHover { inside in
-                            hovered = inside ? t : (hovered == t ? nil : hovered)
+                            hovered = inside ? i : (hovered == i ? nil : hovered)
                             if inside { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
                         }
                         .help("Browse \(t) in the archive")
