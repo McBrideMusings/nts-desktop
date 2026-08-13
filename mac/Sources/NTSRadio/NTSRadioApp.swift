@@ -166,9 +166,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         else { windowController.toggle(relativeTo: statusItem.button) }
     }
 
+    /// Built fresh on every right-click, so the play/pause title, the mute tick
+    /// and the dot next to the live channel are read off the model at the moment
+    /// the menu opens rather than cached.
     private func showStatusMenu() {
         guard let button = statusItem.button else { return }
         let menu = NSMenu()
+        // Every item's enabled state is set here. Left on, AppKit re-derives it
+        // from whether the target responds to the selector — which is always —
+        // and Play/Mute would look live with nothing loaded.
+        menu.autoenablesItems = false
+
+        // Nothing loaded means there is nothing to play or silence, so both of
+        // these are dimmed rather than absent — the menu keeps its shape.
+        let playPause = NSMenuItem(title: model.isPlaying ? "Pause" : "Play",
+                                   action: #selector(togglePlay), keyEquivalent: "")
+        playPause.target = self
+        playPause.isEnabled = !model.isIdle
+        menu.addItem(playPause)
+        let mute = NSMenuItem(title: "Mute", action: #selector(toggleMute), keyEquivalent: "")
+        mute.target = self
+        mute.state = model.muted ? .on : .off
+        mute.isEnabled = !model.isIdle
+        menu.addItem(mute)
+
+        // The two live channels only — the mixtapes are a dial of thirty and
+        // belong in the window, not here.
+        menu.addItem(.separator())
+        for channel in model.catalog.channels {
+            let item = NSMenuItem(title: "Live \(channel.number)",
+                                  action: #selector(tuneChannel(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = channel.number
+            item.state = model.selection == .channel(channel.number) ? .on : .off
+            menu.addItem(item)
+        }
+
+        menu.addItem(.separator())
         let dock = NSMenuItem(title: "Show in Dock", action: #selector(toggleDock), keyEquivalent: "")
         dock.target = self
         dock.state = model.showInDock ? .on : .off
@@ -184,6 +218,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func toggleDock() { model.showInDock.toggle() }
+
+    @objc private func togglePlay() { model.togglePlay() }
+
+    @objc private func toggleMute() { model.muted.toggle() }
+
+    /// Tune to a live channel, exactly as clicking its card in the window does —
+    /// the tag is the channel number the menu was built with.
+    @objc private func tuneChannel(_ sender: NSMenuItem) {
+        model.select(.channel(sender.tag))
+    }
 
     /// The status item's route into the Settings window — the same one the gear
     /// in the title bar and `osascript … open settings` take.
