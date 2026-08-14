@@ -37,7 +37,9 @@ The whole app lives in the `mac/` Swift package (root `Makefile`/`admin.toml` ju
 `.catalog` — written only by `show(_:)`, so the two-segment switch in the
 now-playing bar can never light both. The tracklist is **not** a third case: it is
 a drawer (`AppModel.tracksOpen`) that covers whichever pane is up and gives it
-back, with its own button outside the switch.
+back, with its own button outside the switch. All four combinations of the two
+are real, visible states. This replaced two independent `Bool`s whose fourth
+combination drew the catalog over the tracklist while leaving both buttons lit.
 
 Nothing is drawn over the radio window. Settings and the account are the two
 panes of one real window (`SettingsWindowController` + `SettingsView`), so the
@@ -62,8 +64,8 @@ Four rules for that window:
   screen on every switch to a taller pane.
 
 There is a main menu (`AppDelegate.installMainMenu`) even though an agent app
-never draws one: it is the only place a key equivalent can live, for menu-key
-shortcuts like ⌘W and ⌘V in the sign-in fields.
+never draws one: it is the only place a key equivalent can live, and without it
+⌘, opened nothing, ⌘W closed nothing, and the sign-in fields had no ⌘V.
 
 ### NTS API limits worth knowing before extending the catalog
 
