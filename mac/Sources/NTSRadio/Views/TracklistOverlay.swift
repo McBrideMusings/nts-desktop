@@ -18,9 +18,13 @@ struct TracklistOverlay: View {
             // Header: small label + now-playing block (title + subtitle) + close.
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("NOW PLAYING — \(model.tracksLabel)")
-                        .font(Theme.mono(9, .regular)).tracking(1.6)
-                        .foregroundStyle(Theme.ch1)
+                    HStack(spacing: 6) {
+                        Text("NOW PLAYING")
+                        Text("·").opacity(0.5)
+                        Text(model.tracksLabel)
+                    }
+                    .font(Theme.mono(9, .regular)).tracking(1.6)
+                    .foregroundStyle(Theme.ch1)
                     Text(model.displayName)
                         .font(Theme.display(24, .black)).tracking(-0.4)
                         .foregroundStyle(Theme.ink)
@@ -115,10 +119,8 @@ private struct TrackRow: View {
         }
         .padding(.vertical, 11)
         .padding(.horizontal, 22)
+        .background(playing ? Theme.ch1.opacity(0.10) : Color.clear)
         .overlay(alignment: .top) { Rectangle().fill(Theme.hairline(0.07)).frame(height: 1) }
-        .overlay(alignment: .leading) {
-            if playing { Rectangle().fill(Theme.ch1).frame(width: 3) }
-        }
     }
 
     private func copy() {
