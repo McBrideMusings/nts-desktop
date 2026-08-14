@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-NTS Radio is a native macOS menu-bar app (SwiftUI, Swift 6) for streaming NTS Radio (nts.live) — the two live channels and all of NTS's Infinite Mixtapes, picked from a radial cover-art dial. It plays streams via AVPlayer, fetches the mixtape catalog live from `https://www.nts.live/api/v2/mixtapes` (disk-cached for offline/instant launch), and — for signed-in NTS Supporters accounts — subscribes to Google Firestore's Listen API for real-time live tracklists. Active development; the last commit merged a "now-playing source links" feature and the changelog is still at `0.1.0`.
+NTS Radio (git@github.com:McBrideMusings/nts-desktop.git) is a native macOS menu-bar app (SwiftUI, Swift 6) for streaming NTS Radio (nts.live) — the two live channels and all of NTS's Infinite Mixtapes, picked from a radial cover-art dial. It plays streams via AVPlayer, fetches the mixtape catalog live from `https://www.nts.live/api/v2/mixtapes` (disk-cached for offline/instant launch), and — for signed-in NTS Supporters accounts — subscribes to Google Firestore's Listen API for real-time live tracklists. Active development; the last commit merged a "now-playing source links" feature and the changelog is still at `0.1.0`.
 
 ## Commands
 
@@ -37,33 +37,31 @@ The whole app lives in the `mac/` Swift package (root `Makefile`/`admin.toml` ju
 `.catalog` — written only by `show(_:)`, so the two-segment switch in the
 now-playing bar can never light both. The tracklist is **not** a third case: it is
 a drawer (`AppModel.tracksOpen`) that covers whichever pane is up and gives it
-back, with its own button outside the switch. All four combinations of the two are
-real, visible states. This replaced two independent `Bool`s whose fourth
+back, with its own button outside the switch. All four combinations of the two
+are real, visible states. This replaced two independent `Bool`s whose fourth
 combination drew the catalog over the tracklist while leaving both buttons lit.
 
-Nothing is drawn over the radio window. Settings and the account were both sheets
-inside it, with painted traffic lights; they are the two panes of one real window
-now (`SettingsWindowController` + `SettingsView`), so the title bar carries only a
-gear — whose green dot is the signed-in state the account button used to show.
+Nothing is drawn over the radio window. Settings and the account are the two
+panes of one real window (`SettingsWindowController` + `SettingsView`), so the
+title bar carries only a gear — whose green dot is the signed-in state.
 
-Four things about that window, each of which cost a wrong attempt first:
+Four rules for that window:
 
-- **SwiftUI's `Settings` scene does not work here.** The app is an agent
-  (`.accessory`) whenever "Show in Dock" is off, so there is no app menu for that
-  scene to hang off; `openSettings()` reports success and creates no window. The
-  scene declaration in `NTSRadioApp` stays an `EmptyView` placeholder only because
-  an `App` must declare one.
+- **Don't use SwiftUI's `Settings` scene** — the app is an `.accessory` agent
+  whenever "Show in Dock" is off, so there is no app menu for that scene to hang
+  off and `openSettings()` reports success and creates no window; the
+  `NTSRadioApp` declaration stays an `EmptyView` placeholder because an `App`
+  must declare one.
 - **The tabs are an `NSToolbar` with `toolbarStyle = .preference`**, not a
-  SwiftUI `TabView` — a `TabView` of `.tabItem`s draws a small segmented picker,
-  not the icon-and-label toolbar every Mac preferences window has.
-- **One hosted view, whose pane changes** (`SettingsSelection`) — never a swapped
-  `contentViewController`. Swapping made AppKit size the window to the incoming
-  view first, so each tab click shrank the window, flashed the toolbar's overflow
-  chevron, and grew back.
-- **Never resize that window by hand.** `NSHostingController.sizingOptions =
-  [.preferredContentSize]` lets AppKit do it. `setContentSize` keeps the
-  bottom-left corner — AppKit's origin — so every switch to a taller pane walked
-  the window up the screen.
+  SwiftUI `TabView`, whose `.tabItem`s draw a small segmented picker rather than
+  the icon-and-label toolbar every Mac preferences window has.
+- **Use one hosted view whose pane changes** (`SettingsSelection`), never a
+  swapped `contentViewController`, which makes AppKit size the window to the
+  incoming view first.
+- **Never resize that window by hand** — set `NSHostingController.sizingOptions
+  = [.preferredContentSize]` and let AppKit do it, because `setContentSize`
+  keeps the bottom-left corner (AppKit's origin) and walks the window up the
+  screen on every switch to a taller pane.
 
 There is a main menu (`AppDelegate.installMainMenu`) even though an agent app
 never draws one: it is the only place a key equivalent can live, and without it
@@ -156,7 +154,6 @@ never draws one: it is the only place a key equivalent can live, and without it
 
 ## Notes
 
-- Own project — `origin` is `git@github.com:McBrideMusings/nts-desktop.git`; commit straight to `main`.
 - Live tracklists require signing in with a paid NTS Supporters account; the Firestore listener path is only exercised when authenticated.
 - `CLAUDE.local.md` documents the dev-loop convention in more detail: after code changes, press **R** in the already-running `admin dev` session rather than starting a second one.
 - `mac/Sources/NTSFirestore/Generated/` is generated protobuf/gRPC code, not hand-written — regenerate via `mac/Proto/regenerate.sh` rather than editing directly.
