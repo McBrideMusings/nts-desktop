@@ -2,7 +2,7 @@
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
     <channel>
         <title>NTS Radio</title>
-        <link>https://raw.githubusercontent.com/McBrideMusings/nts-desktop/main/docs/appcast.xml</link>
+        <link>https://raw.githubusercontent.com/McBrideMusings/nts-desktop/main/.github/appcast.xml</link>
         <description>NTS Radio release updates</description>
         <language>en</language>
         <!-- Prepended by the CI release job (see .github/workflows/ci-cd.yml) with one

@@ -12,8 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Auto-update via Sparkle: a "Check for Updates…" item in the status menu and
   the main app menu, plus a toggle and button in Settings ▸ General. CI signs
   every tagged release's DMG (EdDSA) and publishes an appcast to
-  `docs/appcast.xml` on `main`, read by the app at
-  `raw.githubusercontent.com/McBrideMusings/nts-desktop/main/docs/appcast.xml`
+  `.github/appcast.xml` on `main`, read by the app at
+  `raw.githubusercontent.com/McBrideMusings/nts-desktop/main/.github/appcast.xml`
   — reachable once the repo goes public; it 404s on the current private repo.
   Release notes come from CHANGELOG.md's own per-version section. `CFBundleVersion`
   is now a real, monotonically increasing build number (bumped by CI from the

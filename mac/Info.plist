@@ -31,7 +31,7 @@
     <key>OSAScriptingDefinition</key>
     <string>NTSRadio.sdef</string>
     <key>SUFeedURL</key>
-    <string>https://raw.githubusercontent.com/McBrideMusings/nts-desktop/main/docs/appcast.xml</string>
+    <string>https://raw.githubusercontent.com/McBrideMusings/nts-desktop/main/.github/appcast.xml</string>
     <key>SUPublicEDKey</key>
     <string>nYOtVKr576kMc1v4Ja1srcbvoS7bn5CM7i0NBkn1Sq4=</string>
     <key>SUEnableAutomaticChecks</key>
