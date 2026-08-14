@@ -220,24 +220,42 @@ private enum Keychain {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ]
-        // There is nothing to replace on the very first write, so a missing item is
-        // the expected case here rather than a failure.
-        let deleted = SecItemDelete(query as CFDictionary)
-        if deleted != errSecSuccess, deleted != errSecItemNotFound {
-            Log.auth.error("could not replace the stored token: \(message(deleted), privacy: .public)")
-        }
-        var add = query
-        add[kSecValueData as String] = data
-        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        let added = SecItemAdd(add as CFDictionary, nil)
-        if added != errSecSuccess {
-            // This is the one that matters. The session keeps working now, because
-            // the token is still in memory — but nothing reaches disk, so the next
-            // launch finds no token and the user is silently signed out.
-            Log.auth.error("""
-                could not store the refresh token: \(message(added), privacy: .public) — this \
-                session will work, but sign-in will not survive a relaunch
-                """)
+        // Firebase rotates the refresh token on every exchange, so this runs on
+        // (almost) every launch, not just the first. Deleting and re-adding needs
+        // the right to delete the existing item, which a code-signature change
+        // revokes — the delete is refused, the add then collides with the item
+        // that survived, and the rotated token never reaches disk. An update
+        // needs no such ownership right, so probe for the item first and update
+        // in place; add is only for the genuinely-first write.
+        var probe = query
+        probe[kSecMatchLimit as String] = kSecMatchLimitOne
+        let found = SecItemCopyMatching(probe as CFDictionary, nil)
+        switch found {
+        case errSecSuccess:
+            let attributes: [String: Any] = [kSecValueData as String: data]
+            let updated = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+            if updated != errSecSuccess {
+                // This is the one that matters. The session keeps working now, because
+                // the token is still in memory — but nothing reaches disk, so the next
+                // launch finds no token and the user is silently signed out.
+                Log.auth.error("""
+                    could not update the stored refresh token: \(message(updated), privacy: .public) — this \
+                    session will work, but sign-in will not survive a relaunch
+                    """)
+            }
+        case errSecItemNotFound:
+            var add = query
+            add[kSecValueData as String] = data
+            add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+            let added = SecItemAdd(add as CFDictionary, nil)
+            if added != errSecSuccess {
+                Log.auth.error("""
+                    could not store the refresh token: \(message(added), privacy: .public) — this \
+                    session will work, but sign-in will not survive a relaunch
+                    """)
+            }
+        default:
+            Log.auth.error("could not check for the stored token: \(message(found), privacy: .public)")
         }
     }
 
