@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepend a release item to docs/appcast.xml — invoked by the CI release job.
+"""Prepend a release item to .github/appcast.xml — invoked by the CI release job.
 
 Release notes are pulled from CHANGELOG.md's `## [VERSION]` section (already
 rolled from Unreleased by the /release skill before the tag was pushed) and
@@ -97,7 +97,7 @@ def main():
                          help='sign_update output, e.g. sparkle:edSignature="..." length="123"')
     parser.add_argument("--pub-date", required=True)
     parser.add_argument("--changelog", default="CHANGELOG.md")
-    parser.add_argument("--appcast", default="docs/appcast.xml")
+    parser.add_argument("--appcast", default=".github/appcast.xml")
     args = parser.parse_args()
 
     # This string is embedded directly into an XML attribute list (ITEM_TEMPLATE's

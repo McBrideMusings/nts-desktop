@@ -169,7 +169,7 @@ jobs:
             --pub-date "$(date -R)"
           git config user.name "pierce"
           git config user.email "3522175+McBrideMusings@users.noreply.github.com"
-          git add docs/appcast.xml
+          git add .github/appcast.xml
           git commit -m "appcast: nts-radio $VERSION"
           # A tag pushed while another release is still publishing its appcast
           # commit would otherwise lose this push as non-fast-forward.
