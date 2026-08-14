@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Sparkle
 
 /// Which pane of Settings is showing. The toolbar in `SettingsWindowController`
 /// owns the choice; these are the panes it swaps between.
@@ -68,6 +69,15 @@ struct SettingsView: View {
 private struct GeneralSettings: View {
     @ObservedObject private var model = AppModel.shared
 
+    /// Bridges Sparkle's plain `Bool` property (not `@Published`) into a
+    /// SwiftUI `Toggle` — read/write straight through to the updater on access.
+    private var autoChecksForUpdates: Binding<Bool> {
+        Binding(
+            get: { AppDelegate.updaterController.updater.automaticallyChecksForUpdates },
+            set: { AppDelegate.updaterController.updater.automaticallyChecksForUpdates = $0 }
+        )
+    }
+
     private var version: String {
         let info = Bundle.main.infoDictionary
         let short = info?["CFBundleShortVersionString"] as? String ?? "0.1.0"
@@ -89,9 +99,14 @@ private struct GeneralSettings: View {
             Divider().padding(.vertical, 6)
 
             LabeledContent("Version:", value: version)
-            // No Check for Updates row: auto-update was closed as out of scope
-            // (GitHub #2 — a private repo can serve neither an appcast nor the
-            // .dmg), so a button here would promise something never coming.
+            LabeledContent("Updates:") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle("Automatically check for updates", isOn: autoChecksForUpdates)
+                    Button("Check for Updates…") {
+                        AppDelegate.updaterController.checkForUpdates(nil)
+                    }
+                }
+            }
             LabeledContent("About:") {
                 Button("About NTS Radio") {
                     NSApp.activate(ignoringOtherApps: true)

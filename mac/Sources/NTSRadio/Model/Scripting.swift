@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import Sparkle
 
 /// The app's control surface: AppleScript terminology backed by the same
 /// `AppModel` the UI drives, so a script can tune, play, pause and — crucially —
@@ -178,6 +179,10 @@ enum ScriptState {
             // and by how much — a step of -22.5 and one of +337.5 land the index
             // mark in the same place but are not the same movement.
             "knobAngle": (m.knobAngle * 100).rounded() / 100,
+            // Sparkle's own state — otherwise "did Check for Updates actually do
+            // anything" is only answerable by watching a window appear.
+            "autoChecksForUpdates": AppDelegate.updaterController.updater.automaticallyChecksForUpdates,
+            "canCheckForUpdates": AppDelegate.updaterController.updater.canCheckForUpdates,
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: dict,
                                                      options: [.sortedKeys, .prettyPrinted]),
@@ -279,6 +284,11 @@ extension NSApplication {
 
     @objc var ntsKnobAngle: Double {
         MainActor.assumeIsolated { AppModel.shared.knobAngle }
+    }
+
+    @objc var ntsAutoChecksForUpdates: Bool {
+        get { MainActor.assumeIsolated { AppDelegate.updaterController.updater.automaticallyChecksForUpdates } }
+        set { MainActor.assumeIsolated { AppDelegate.updaterController.updater.automaticallyChecksForUpdates = newValue } }
     }
 }
 
@@ -636,6 +646,20 @@ final class NTSCloseCatalogCommand: NTSCommand {
             let m = AppModel.shared
             guard m.catalogOpen else { return true }
             m.toggleCatalog()
+            return true
+        }
+    }
+}
+
+/// The same call the status menu's and the main menu's "Check for Updates…"
+/// items make. Sparkle owns everything past this point — the network fetch,
+/// and any window it puts up to report what it found or that the appcast
+/// could not be reached.
+@objc(NTSCheckForUpdatesCommand)
+final class NTSCheckForUpdatesCommand: NTSCommand {
+    override func performDefaultImplementation() -> Any? {
+        run {
+            AppDelegate.updaterController.checkForUpdates(nil)
             return true
         }
     }

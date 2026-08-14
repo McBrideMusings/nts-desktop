@@ -11,6 +11,7 @@ let package = Package(
         .package(url: "https://github.com/grpc/grpc-swift-nio-transport.git", from: "2.9.0"),
         .package(url: "https://github.com/grpc/grpc-swift-protobuf.git", from: "2.4.0"),
         .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.38.0"),
+        .package(url: "https://github.com/sparkle-project/Sparkle.git", from: "2.6.4"),
     ],
     targets: [
         // Firestore Listen client + generated protobuf/gRPC code, isolated from
@@ -28,7 +29,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "NTSRadio",
-            dependencies: ["NTSFirestore"],
+            dependencies: [
+                "NTSFirestore",
+                .product(name: "Sparkle", package: "Sparkle"),
+            ],
             path: "Sources/NTSRadio",
             resources: [
                 .process("Resources")
@@ -37,6 +41,15 @@ let package = Package(
                 // Keep the first pass on Swift 5 language mode to avoid
                 // strict-concurrency churn; tighten later.
                 .swiftLanguageMode(.v5)
+            ],
+            linkerSettings: [
+                // SwiftPM's default rpath for an executable is @loader_path —
+                // the binary's own directory — which only matches the flat
+                // .build/release layout it links against, not a real .app
+                // bundle. `make app` puts Sparkle.framework in the standard
+                // Contents/Frameworks/, so the binary needs the standard
+                // rpath that finds it there too.
+                .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])
             ]
         ),
         // Throwaway: prove the Firestore Listen stream end-to-end with a real

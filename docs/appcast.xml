@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel>
+        <title>NTS Radio</title>
+        <link>https://raw.githubusercontent.com/McBrideMusings/nts-desktop/main/docs/appcast.xml</link>
+        <description>NTS Radio release updates</description>
+        <language>en</language>
+        <!-- Prepended by the CI release job (see .github/workflows/ci-cd.yml) with one
+             <item> per tagged release. Never edit by hand — a manual edit is
+             overwritten by the next tag push. -->
+    </channel>
+</rss>

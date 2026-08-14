@@ -20,13 +20,18 @@ build: ## Compile the release binary
 
 app: build ## Assemble the .app bundle (fonts bundled, mixtapes fetched live)
 	rm -rf "$(APP_BUNDLE)"
-	mkdir -p "$(APP_BUNDLE)/Contents/MacOS" "$(APP_BUNDLE)/Contents/Resources"
+	mkdir -p "$(APP_BUNDLE)/Contents/MacOS" "$(APP_BUNDLE)/Contents/Resources" "$(APP_BUNDLE)/Contents/Frameworks"
 	cp Info.plist "$(APP_BUNDLE)/Contents/Info.plist"
 	cp "$(BUILD_DIR)/$(APP)" "$(APP_BUNDLE)/Contents/MacOS/$(APP)"
 	# SwiftPM resource bundle (Archivo font). Must live in Resources/, NOT MacOS/:
 	# Bundle.module checks Bundle.main.resourceURL first, and a flat resource
 	# bundle inside MacOS/ makes codesign --deep treat it as nested code and fail.
 	cp -R "$(BUILD_DIR)/$(RES_BUNDLE)" "$(APP_BUNDLE)/Contents/Resources/" 2>/dev/null || true
+	# Sparkle.framework: the binary links it by @rpath, which only resolves
+	# inside an app bundle's own Contents/Frameworks — `swift build` leaves it
+	# sitting in .build/release, so without this copy the app is a "Library not
+	# loaded" crash on every launch outside the SPM sandbox that built it.
+	cp -R "$(BUILD_DIR)/Sparkle.framework" "$(APP_BUNDLE)/Contents/Frameworks/"
 	# Scripting dictionary — the app's control surface. Info.plist points at it
 	# by name (OSAScriptingDefinition), so it has to land in Resources/.
 	cp Resources/NTSRadio.sdef "$(APP_BUNDLE)/Contents/Resources/NTSRadio.sdef"

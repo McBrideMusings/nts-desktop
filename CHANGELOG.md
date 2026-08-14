@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Auto-update via Sparkle: a "Check for Updates…" item in the status menu and
+  the main app menu, plus a toggle and button in Settings ▸ General. CI signs
+  every tagged release's DMG (EdDSA) and publishes an appcast to
+  `docs/appcast.xml` on `main`, read by the app at
+  `raw.githubusercontent.com/McBrideMusings/nts-desktop/main/docs/appcast.xml`
+  — reachable once the repo goes public; it 404s on the current private repo.
+  Release notes come from CHANGELOG.md's own per-version section. `CFBundleVersion`
+  is now a real, monotonically increasing build number (bumped by CI from the
+  tag) instead of a hardcoded `1`, since Sparkle's update check compares it, not
+  the marketing version string. New scripted command: `check for updates`.
+
 - Follow a show or save its episode straight from a live channel card: two
   glyphs in the card's top-right corner, left of the live LED. They appear when
   the pointer is on the card, and a star that is already set stays lit, so a

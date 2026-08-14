@@ -183,6 +183,7 @@ never draws one: it is the only place a key equivalent can live, and without it
   osascript -e 'tell application "NTS Radio" to seek to 1800'
   osascript -e 'tell application "NTS Radio" to open catalog searching for "veronica"'
   osascript -e 'tell application "NTS Radio" to close catalog'
+  osascript -e 'tell application "NTS Radio" to check for updates'
   ```
 
   `tune to` is the code path a click takes; `skip by` is the one the media keys

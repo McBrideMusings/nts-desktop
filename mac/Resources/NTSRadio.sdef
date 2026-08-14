@@ -76,6 +76,11 @@
                       description="Where the dial's index mark points, in degrees clockwise from the top. It counts turns instead of wrapping at 360, so comparing two readings tells you which way the dial turned and how far.">
                 <cocoa key="ntsKnobAngle"/>
             </property>
+
+            <property name="auto checks for updates" code="pAUP" type="boolean"
+                      description="Whether Sparkle checks for updates on its own schedule, the same toggle as Settings ▸ General.">
+                <cocoa key="ntsAutoChecksForUpdates"/>
+            </property>
         </class-extension>
 
         <command name="tune to" code="NTSrTUNE"
@@ -210,6 +215,12 @@
                  description="Uncover the faceplate, dropping any search term and open detail.">
             <cocoa class="NTSCloseCatalogCommand"/>
             <result type="text" description="The state after closing, as JSON."/>
+        </command>
+
+        <command name="check for updates" code="NTSrUPDT"
+                 description="Ask Sparkle to check for an update now, the same as the status menu's or the main menu's Check for Updates… item. Sparkle may put up its own window to report what it found.">
+            <cocoa class="NTSCheckForUpdatesCommand"/>
+            <result type="text" description="The state after asking, as JSON."/>
         </command>
 
     </suite>

@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 import Combine
 import ServiceManagement
+import Sparkle
 
 @main
 struct NTSRadioApp: App {
@@ -19,6 +20,13 @@ struct NTSRadioApp: App {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    /// One instance for the app's lifetime — shared with `SettingsView` for the
+    /// "Check for Updates" button, so it isn't created twice. `startingUpdater:
+    /// true` begins the scheduled background checks (`SUScheduledCheckInterval`
+    /// in Info.plist) as soon as anything first touches this property.
+    static let updaterController = SPUStandardUpdaterController(
+        startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+
     private var model: AppModel!
     private var statusItem: NSStatusItem!
     private var windowController: RadioWindowController!
@@ -44,6 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         quitWhenParentExitsInDev()
+        _ = AppDelegate.updaterController   // start scheduled background checks
 
         // The same instance the Settings window reads, which is why it is named
         // on the type rather than made here (see `AppModel.shared`).
@@ -215,6 +224,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         dock.target = self
         dock.state = model.showInDock ? .on : .off
         menu.addItem(dock)
+        let checkUpdates = NSMenuItem(title: "Check for Updates…",
+                                      action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)),
+                                      keyEquivalent: "")
+        checkUpdates.target = AppDelegate.updaterController
+        checkUpdates.isEnabled = AppDelegate.updaterController.updater.canCheckForUpdates
+        menu.addItem(checkUpdates)
         let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settings.target = self
         menu.addItem(settings)
@@ -253,6 +268,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// the visible menu bar, which is why the item titles are the standard ones.
     private func installMainMenu() {
         let appMenu = NSMenu()
+        let checkUpdates = NSMenuItem(title: "Check for Updates…",
+                                      action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)),
+                                      keyEquivalent: "")
+        checkUpdates.target = AppDelegate.updaterController
+        appMenu.addItem(checkUpdates)
+        appMenu.addItem(.separator())
         let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settings.target = self
         appMenu.addItem(settings)
