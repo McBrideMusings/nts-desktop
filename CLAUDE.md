@@ -122,6 +122,15 @@ never draws one: it is the only place a key equivalent can live, and without it
   **No `orderBy` in those queries** — filtering one field and ordering by
   another needs a composite index that does not exist in NTS's project, and
   asking answers `FAILED_PRECONDITION: The query requires an index`.
+- **Supporters entitlement is a third top-level Firestore collection,
+  `subscriptions`** — not a token claim and not a REST field. Query it filtered
+  on `subscriber_email`; each doc carries `status` and `end_time`. Entitled =
+  any doc with `status` in `{active, trialing, on-hold}`, or a cancelled doc
+  still inside its `end_time` grace period. Read off nts.live's own bundle
+  (`onSubscriptionsChange` / `isSubscriptionActive` / `canSeePremiumFeature`).
+  The Firebase ID token carries **no** tier claim — its only custom claim is
+  `host`, which marks radio presenters. Untested: whether the security rules
+  let a bare client read that collection. Trace: `tmp/claude/issue-20-tier-signal.md`.
 - Episode audio is a SoundCloud/Mixcloud page URL in `audio_sources`, which
   AVPlayer cannot open. `/api/v2/resolve-stream?url=<encoded>` returns
   `{"hls": "…m3u8?Policy=…&Signature=…"}` — signed and expiring, so resolve per
