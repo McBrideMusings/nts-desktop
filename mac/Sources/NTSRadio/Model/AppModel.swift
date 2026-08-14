@@ -2,6 +2,7 @@ import SwiftUI
 import Combine
 import ServiceManagement
 import NTSFirestore
+import Sparkle
 
 enum Selection: Equatable {
     case idle              // nothing selected — the default empty state on launch
@@ -205,6 +206,24 @@ final class AppModel: ObservableObject {
     /// AppDelegate observes it and owns applying the activation policy.
     @Published var showInDock: Bool = UserDefaults.standard.bool(forKey: "showInDock") {
         didSet { UserDefaults.standard.set(showInDock, forKey: "showInDock") }
+    }
+
+    /// Sparkle's own `Bool`, not `@Published` — read/written straight through so
+    /// Settings and the scripting layer go through the same model as every other
+    /// setting instead of reaching into `AppDelegate.updaterController` directly.
+    var autoChecksForUpdates: Bool {
+        get { AppDelegate.updaterController.updater.automaticallyChecksForUpdates }
+        set { AppDelegate.updaterController.updater.automaticallyChecksForUpdates = newValue }
+    }
+
+    var canCheckForUpdates: Bool {
+        AppDelegate.updaterController.updater.canCheckForUpdates
+    }
+
+    /// The same call the status menu's and the main menu's "Check for Updates…"
+    /// items make.
+    func checkForUpdates() {
+        AppDelegate.updaterController.checkForUpdates(nil)
     }
 
     /// Live tracklist listener for the current source (nil when signed out).

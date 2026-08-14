@@ -1,6 +1,5 @@
 import AppKit
 import Foundation
-import Sparkle
 
 /// The app's control surface: AppleScript terminology backed by the same
 /// `AppModel` the UI drives, so a script can tune, play, pause and — crucially —
@@ -181,8 +180,8 @@ enum ScriptState {
             "knobAngle": (m.knobAngle * 100).rounded() / 100,
             // Sparkle's own state — otherwise "did Check for Updates actually do
             // anything" is only answerable by watching a window appear.
-            "autoChecksForUpdates": AppDelegate.updaterController.updater.automaticallyChecksForUpdates,
-            "canCheckForUpdates": AppDelegate.updaterController.updater.canCheckForUpdates,
+            "autoChecksForUpdates": m.autoChecksForUpdates,
+            "canCheckForUpdates": m.canCheckForUpdates,
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: dict,
                                                      options: [.sortedKeys, .prettyPrinted]),
@@ -287,8 +286,8 @@ extension NSApplication {
     }
 
     @objc var ntsAutoChecksForUpdates: Bool {
-        get { MainActor.assumeIsolated { AppDelegate.updaterController.updater.automaticallyChecksForUpdates } }
-        set { MainActor.assumeIsolated { AppDelegate.updaterController.updater.automaticallyChecksForUpdates = newValue } }
+        get { MainActor.assumeIsolated { AppModel.shared.autoChecksForUpdates } }
+        set { MainActor.assumeIsolated { AppModel.shared.autoChecksForUpdates = newValue } }
     }
 }
 
@@ -659,7 +658,7 @@ final class NTSCloseCatalogCommand: NTSCommand {
 final class NTSCheckForUpdatesCommand: NTSCommand {
     override func performDefaultImplementation() -> Any? {
         run {
-            AppDelegate.updaterController.checkForUpdates(nil)
+            AppModel.shared.checkForUpdates()
             return true
         }
     }

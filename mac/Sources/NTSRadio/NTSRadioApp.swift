@@ -52,6 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         quitWhenParentExitsInDev()
+        suppressAutoUpdateChecksForDevBuilds()
         _ = AppDelegate.updaterController   // start scheduled background checks
 
         // The same instance the Settings window reads, which is why it is named
@@ -148,6 +149,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         timer.tolerance = 0.01
         RunLoop.main.add(timer, forMode: .common)
         waterlineTimer = timer
+    }
+
+    /// CI only bumps `CFBundleVersion` past its committed placeholder `"1"` on a
+    /// tagged release build — `admin build`/`admin deploy` always ships the
+    /// placeholder, since they build straight from the committed `Info.plist`. If
+    /// Sparkle's automatic background check stayed on by default, every locally
+    /// installed dev copy would nag "update available" forever the moment the
+    /// appcast is reachable, comparing build "1" against whatever the last real
+    /// release published.
+    ///
+    /// `register(defaults:)` sets the *registration-domain* default — the lowest
+    /// priority in `UserDefaults` — so this only changes what a fresh install
+    /// starts at. An explicit choice already made through the Settings toggle
+    /// (which writes `automaticallyChecksForUpdates` directly) lives in a higher
+    /// domain and is never overwritten by this.
+    private func suppressAutoUpdateChecksForDevBuilds() {
+        guard Bundle.main.infoDictionary?["CFBundleVersion"] as? String == "1" else { return }
+        UserDefaults.standard.register(defaults: ["SUEnableAutomaticChecks": false])
     }
 
     /// When run from source (`swift run` / `admin dev`) the app is a bare binary,

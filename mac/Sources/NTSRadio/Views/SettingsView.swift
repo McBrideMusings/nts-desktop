@@ -1,6 +1,5 @@
 import SwiftUI
 import AppKit
-import Sparkle
 
 /// Which pane of Settings is showing. The toolbar in `SettingsWindowController`
 /// owns the choice; these are the panes it swaps between.
@@ -69,12 +68,12 @@ struct SettingsView: View {
 private struct GeneralSettings: View {
     @ObservedObject private var model = AppModel.shared
 
-    /// Bridges Sparkle's plain `Bool` property (not `@Published`) into a
-    /// SwiftUI `Toggle` — read/write straight through to the updater on access.
+    /// Bridges `AppModel`'s plain `Bool` property (not `@Published` — it wraps
+    /// Sparkle's own state) into a SwiftUI `Toggle`.
     private var autoChecksForUpdates: Binding<Bool> {
         Binding(
-            get: { AppDelegate.updaterController.updater.automaticallyChecksForUpdates },
-            set: { AppDelegate.updaterController.updater.automaticallyChecksForUpdates = $0 }
+            get: { model.autoChecksForUpdates },
+            set: { model.autoChecksForUpdates = $0 }
         )
     }
 
@@ -103,7 +102,7 @@ private struct GeneralSettings: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Toggle("Automatically check for updates", isOn: autoChecksForUpdates)
                     Button("Check for Updates…") {
-                        AppDelegate.updaterController.checkForUpdates(nil)
+                        model.checkForUpdates()
                     }
                 }
             }
