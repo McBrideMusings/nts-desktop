@@ -14,6 +14,7 @@ jobs:
     runs-on: macos-14
     outputs:
       sparkle_signature: ${{ steps.sparkle.outputs.signature }}
+      build_number: ${{ steps.version.outputs.build }}
     steps:
       - name: Check out
         uses: actions/checkout@v4
@@ -24,18 +25,25 @@ jobs:
           xcode-version: latest-stable
 
       - name: Set version
+        id: version
         if: startsWith(github.ref, 'refs/tags/')
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Tag '$VERSION' is not a plain MAJOR.MINOR.PATCH — refusing to guess a build number." >&2
+            exit 1
+          fi
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" mac/Info.plist
           # CFBundleVersion is the build number Sparkle's updater actually compares
           # (sparkle:version in the appcast) — it must increase every release, so
           # derive a monotonic integer from the semver instead of leaving it at the
           # placeholder "1". MAJOR*10000 + MINOR*100 + PATCH; safe while minor and
-          # patch both stay under 100.
+          # patch both stay under 100. Computed once here and reused by the release
+          # job's appcast step, rather than recomputed, so there's one source of truth.
           IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
           BUILD=$((MAJOR * 10000 + MINOR * 100 + PATCH))
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" mac/Info.plist
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
 
       - name: Import signing certificate
         id: cert
@@ -87,11 +95,19 @@ jobs:
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
+          trap 'rm -f "$RUNNER_TEMP/sparkle_key.txt"' EXIT
           curl -sL "https://github.com/sparkle-project/Sparkle/releases/download/2.9.5/Sparkle-2.9.5.tar.xz" -o "$RUNNER_TEMP/sparkle.tar.xz"
+          # Pin the release tarball's checksum — this binary gets a plaintext copy
+          # of the private signing key on the next line, so an unverified download
+          # is an unverified path to that key.
+          echo "015336b601493e05c237964954bff6191370003d94edefe663724c88840d73cc  $RUNNER_TEMP/sparkle.tar.xz" | shasum -a 256 -c -
           tar xf "$RUNNER_TEMP/sparkle.tar.xz" -C "$RUNNER_TEMP" bin/sign_update
           echo "$SPARKLE_PRIVATE_KEY" > "$RUNNER_TEMP/sparkle_key.txt"
           SIGNATURE=$("$RUNNER_TEMP/bin/sign_update" "mac/build/NTS-Radio.dmg" -f "$RUNNER_TEMP/sparkle_key.txt")
-          rm -f "$RUNNER_TEMP/sparkle_key.txt"
+          if [[ ! "$SIGNATURE" =~ ^sparkle:edSignature=\"[A-Za-z0-9+/=]+\"\ length=\"[0-9]+\"$ ]]; then
+            echo "sign_update produced an unexpected signature format — refusing to publish it." >&2
+            exit 1
+          fi
           echo "signature=$SIGNATURE" >> "$GITHUB_OUTPUT"
 
       - name: Upload artifact
@@ -142,19 +158,22 @@ jobs:
         if: needs.build.outputs.sparkle_signature != ''
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          BUILD: ${{ needs.build.outputs.build_number }}
+          SIGNATURE: ${{ needs.build.outputs.sparkle_signature }}
         run: |
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
-          BUILD=$((MAJOR * 10000 + MINOR * 100 + PATCH))
           python3 .github/scripts/update_appcast.py \
             --version "$VERSION" \
             --build "$BUILD" \
             --dmg-url "https://github.com/${{ github.repository }}/releases/download/${GITHUB_REF_NAME}/NTS-Radio.dmg" \
-            --signature '${{ needs.build.outputs.sparkle_signature }}' \
+            --signature "$SIGNATURE" \
             --pub-date "$(date -R)"
           git config user.name "pierce"
           git config user.email "3522175+McBrideMusings@users.noreply.github.com"
           git add docs/appcast.xml
           git commit -m "appcast: nts-radio $VERSION"
+          # A tag pushed while another release is still publishing its appcast
+          # commit would otherwise lose this push as non-fast-forward.
+          git pull --rebase origin main
           git push origin main
 
   homebrew:

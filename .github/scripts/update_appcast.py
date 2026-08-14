@@ -100,6 +100,13 @@ def main():
     parser.add_argument("--appcast", default="docs/appcast.xml")
     args = parser.parse_args()
 
+    # This string is embedded directly into an XML attribute list (ITEM_TEMPLATE's
+    # <enclosure> tag) rather than escaped, since escaping it would corrupt the
+    # attribute syntax it already carries — so it's validated shape instead.
+    if not re.fullmatch(r'sparkle:edSignature="[A-Za-z0-9+/=]+" length="[0-9]+"', args.signature):
+        print(f"error: --signature has an unexpected shape: {args.signature!r}", file=sys.stderr)
+        sys.exit(1)
+
     changelog_text = Path(args.changelog).read_text()
     section = changelog_section(changelog_text, args.version)
     if not section:
