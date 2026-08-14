@@ -33,17 +33,26 @@ final class ShowIndex: ObservableObject {
     private static let maxAge: TimeInterval = 24 * 60 * 60
 
     private var built = false
+    private var sortedCache: [NTSAPI.ShowRef]?
 
     private init() {
         for s in Cache.load([NTSAPI.ShowRef].self, from: Self.fileName) ?? [] {
             shows[s.alias] = s
         }
+        sortedCache = nil
     }
 
     var count: Int { shows.count }
 
     /// Everything in the index, sorted by name — the order the catalog lists them.
-    var all: [NTSAPI.ShowRef] { shows.values.sorted { $0.name < $1.name } }
+    var all: [NTSAPI.ShowRef] {
+        if let cached = sortedCache {
+            return cached
+        }
+        let sorted = shows.values.sorted { $0.name < $1.name }
+        sortedCache = sorted
+        return sorted
+    }
 
     func ref(_ alias: String) -> NTSAPI.ShowRef? { shows[alias] }
 
@@ -58,6 +67,7 @@ final class ShowIndex: ObservableObject {
         }
         shows[alias] = NTSAPI.ShowRef(alias: alias, name: name, location: location,
                                       genres: genres, picture: picture, thumb: thumb)
+        sortedCache = nil
         flushSoon()
     }
 
@@ -116,6 +126,7 @@ final class ShowIndex: ObservableObject {
         // for a day and the re-seed never ran once the network came back.
         if seeded { lastSeed = Date() }
         flush()
+        sortedCache = nil
     }
 
     /// A readable name from an alias, for a show the app has only seen in the
