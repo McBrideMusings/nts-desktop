@@ -47,11 +47,7 @@ title bar carries only a gear — whose green dot is the signed-in state.
 
 Four rules for that window:
 
-- **Don't use SwiftUI's `Settings` scene** — the app is an `.accessory` agent
-  whenever "Show in Dock" is off, so there is no app menu for that scene to hang
-  off and `openSettings()` reports success and creates no window; the
-  `NTSRadioApp` declaration stays an `EmptyView` placeholder because an `App`
-  must declare one.
+- **Don't use SwiftUI's `Settings` scene** — see `docs/adr/0003-hand-built-settings-window.md`.
 - **The tabs are an `NSToolbar` with `toolbarStyle = .preference`**, not a
   SwiftUI `TabView`, whose `.tabItem`s draw a small segmented picker rather than
   the icon-and-label toolbar every Mac preferences window has.
@@ -79,13 +75,10 @@ never draws one: it is the only place a key equivalent can live, and without it
   (`AppModel.loadSlotDetail`, which falls back to `/api/v2/shows/<show>` for a
   slot with no episode alias). What comes back is folded into `ShowIndex`, so
   the alias carries artwork everywhere else it appears and on the next launch.
-- `/api/v2/live` is **not used, deliberately**. It returns `now` plus `next` …
-  `next17` per channel with `details` embedded for the first two, but it is
-  served `cache-control: max-age=900`, so for up to fifteen minutes after every
-  changeover it hands back the programme that just finished. Writing that over
-  the grid is what made the rail show the previous hour's show. The grid above
-  is the only record of what is on; anything that needs artwork or genres for
-  the current slot fetches the episode by the aliases the grid supplies.
+- `/api/v2/live` is **not used, deliberately** — see
+  `docs/adr/0001-schedule-grid-not-live-endpoint.md`. The grid above is the
+  only record of what is on; anything that needs artwork or genres for the
+  current slot fetches the episode by the aliases the grid supplies.
 - `"embeds": {"tracklist": []}` — a bare array where the populated case is an
   object — is how an episode with no identified tracks is serialised, and that
   is every episode still on air. Decoding it strictly fails the whole episode
@@ -94,9 +87,8 @@ never draws one: it is the only place a key equivalent can live, and without it
   exactly as nts.live calls it (`?q=…&types[]=show`) with browser headers, and
   even for terms in its own `metadata.popular_terms`. Search is local; there is
   no server search to fall back to.
-- `/api/v2/shows` clamps `limit` to 12 and rejects any `offset` above 1000 with
-  HTTP 422 — at most 1012 of the 1834 shows. Not used: `ShowIndex` seeds from the
-  sitemap instead (below), which has no ceiling.
+- `/api/v2/shows` is not used to seed the index — see
+  `docs/adr/0002-show-index-from-sitemap.md`.
 - `sitemap.xml.gz` → `sitemap{1,2}.xml.gz` is the complete public index and the
   source `ShowIndex` builds from: 1834 show aliases and 89,260 episode URLs in
   ~1.9MB gzipped, three requests, and `robots.txt` is `Allow: /`. Served with
@@ -144,17 +136,7 @@ never draws one: it is the only place a key equivalent can live, and without it
   `moods[]=no-talkin`. 10 moods, 20 primary genres, 438 subgenres. None of it
   needs a user account.
 - Every endpoint above is served `cache-control: max-age=900` with an ETag.
-- **There is no audio to meter.** Both the live relay
-  (`stream-relay-geo.ntslive.net/stream{,2}`) and the mixtape endpoints
-  (`stream-mixtape-geo.ntslive.net/mixtape*`) hand AVPlayer an asset that reaches
-  `readyToPlay` carrying **zero audio tracks**, so an `AVMutableAudioMix` has
-  nothing to attach an `MTAudioProcessingTap` to and no sample ever reaches a
-  callback. Measured, not assumed. The only route that does work is a CoreAudio
-  process tap over the app's own output (`AudioHardwareCreateProcessTap`, macOS
-  14.2+, read through a private aggregate device) — that does deliver real
-  samples, but it is audio capture and therefore a permission prompt, which is
-  not worth paying for a decoration. `LevelLamps` in `NowPlayingBar.swift`
-  invents its levels on purpose and is honest only about *when* it moves.
+- **There is no audio to meter.** See `docs/adr/0004-no-audio-metering.md`.
 - `mac/Sources/NTSFirestore/` — a Firestore Listen (gRPC) client for live channel/mixtape tracklists, with generated protobuf/gRPC Swift code under `Generated/` and source `.proto` files in `mac/Proto/` (see `mac/Proto/regenerate.sh`)
 - `mac/Sources/FSProbe/` — standalone probe binary, separate from the main app target
 - `mixtapes/<slug>/` — per-mixtape assets checked into the repo (cover art, icons, animation `.mp4`s); the `animation_*.mp4` files are gitignored (kept locally, not tracked — the dial doesn't use them yet)
@@ -163,6 +145,11 @@ never draws one: it is the only place a key equivalent can live, and without it
 
 ## Notes
 
+- Decision records: `docs/adr/0001-schedule-grid-not-live-endpoint.md`,
+  `docs/adr/0002-show-index-from-sitemap.md`,
+  `docs/adr/0003-hand-built-settings-window.md`,
+  `docs/adr/0004-no-audio-metering.md`,
+  `docs/adr/0005-discovery-is-the-services-job.md`.
 - Live tracklists require signing in with a paid NTS Supporters account; the Firestore listener path is only exercised when authenticated.
 - `CLAUDE.local.md` documents the dev-loop convention in more detail: after code changes, press **R** in the already-running `admin dev` session rather than starting a second one.
 - `mac/Sources/NTSFirestore/Generated/` is generated protobuf/gRPC code, not hand-written — regenerate via `mac/Proto/regenerate.sh` rather than editing directly.
