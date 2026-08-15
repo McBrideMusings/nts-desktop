@@ -72,6 +72,8 @@ final class AppModel: ObservableObject {
     let auth = NTSAuth()
     let saved = Saved.shared
     let showIndex = ShowIndex.shared
+    let slotArt = SlotArtLoader()
+    let explore = ExploreLoader()
 
     // MARK: Catalog surface
 
@@ -259,10 +261,22 @@ final class AppModel: ObservableObject {
         // ours so a view watching the model repaints when the stream starts or
         // the dial's contents move.
         for upstream in [engine.objectWillChange, catalog.objectWillChange,
-                         saved.objectWillChange, showIndex.objectWillChange] {
+                         saved.objectWillChange, showIndex.objectWillChange,
+                         slotArt.objectWillChange, explore.objectWillChange] {
             upstream
                 .sink { [weak self] in self?.objectWillChange.send() }
                 .store(in: &bag)
+        }
+        // The loader knows nothing about the catalog or the show index —
+        // both effects are performed here, by the caller that owns them.
+        slotArt.noteShow = { [weak self] alias, name, location, genres, picture in
+            self?.showIndex.note(alias: alias, name: name, location: location,
+                                 genres: genres, picture: picture)
+        }
+        slotArt.onPersist = { [weak self] in
+            guard let self else { return }
+            let live = Set(self.catalog.channels.flatMap { $0.upcoming }.map(SlotArtLoader.slotKey))
+            self.slotArt.flush(keeping: live)
         }
         engine.apply(volume: volume, muted: muted)
         catalog.mixtapes = Catalog.build(from: Cache.loadFeed())   // instant/offline seed
@@ -290,7 +304,7 @@ final class AppModel: ObservableObject {
         Task { await showIndex.buildIfStale() }
         Task {
             await loadExploreVocabulary()
-            reloadExplore()
+            explore.reload()
         }
     }
 
@@ -648,7 +662,7 @@ final class AppModel: ObservableObject {
         guard q.isEmpty else { return searchRows(q) }
         switch catalogTab {
         case .explore:
-            return exploreEpisodes.map(CatalogRow.init)
+            return explore.episodes.map(CatalogRow.init)
         case .schedule:
             return schedule.map(row(for:))
         case .saved:
@@ -658,54 +672,15 @@ final class AppModel: ObservableObject {
 
     // MARK: Explore
 
-    /// What Explore is filtered to. Every change re-runs the search from the
-    /// first page — a filter that left the old results underneath it would be
-    /// showing episodes that no longer match.
-    @Published var exploreFilters = NTSAPI.ExploreFilters() {
-        didSet { guard exploreFilters != oldValue else { return }; reloadExplore() }
-    }
-    @Published private(set) var exploreEpisodes: [NTSAPI.EpisodeCard] = []
-    /// How many episodes match, which is usually far more than are loaded — the
-    /// grid pages twelve at a time through thousands.
-    @Published private(set) var exploreTotal = 0
-    @Published private(set) var exploreLoading = false
+    /// The mood/genre vocabulary and the drawer state that edits
+    /// `explore.filters`. Paging and the filter-change race live on
+    /// `ExploreLoader` itself — see `explore`.
     @Published private(set) var moods: [NTSAPI.Mood] = []
     @Published private(set) var genres: [NTSAPI.Genre] = []
     /// Which primary genre the drawer has open. One at a time: twenty primaries
     /// carry 438 subgenres, and all of them at once is a wall.
     @Published var openGenre: String?
     @Published var genreDrawerOpen = false
-
-    private var exploreLoad: Task<Void, Never>?
-
-    /// Start Explore over from its first page.
-    func reloadExplore() {
-        exploreLoad?.cancel()
-        exploreEpisodes = []
-        exploreTotal = 0
-        loadExplorePage(offset: 0)
-    }
-
-    /// Fetch the next twelve, if there are more and nothing is already in flight.
-    /// The grid calls this as its last row appears.
-    func loadMoreExplore() {
-        guard !exploreLoading, exploreEpisodes.count < exploreTotal else { return }
-        loadExplorePage(offset: exploreEpisodes.count)
-    }
-
-    private func loadExplorePage(offset: Int) {
-        let filters = exploreFilters
-        exploreLoading = true
-        exploreLoad = Task { [weak self] in
-            defer { Task { @MainActor in self?.exploreLoading = false } }
-            guard let page = try? await NTSAPI.explore(filters, offset: offset) else { return }
-            guard !Task.isCancelled, let self, self.exploreFilters == filters else { return }
-            // Paging can race a filter change; the guard above is why a late page
-            // can't land under filters that no longer asked for it.
-            self.exploreEpisodes += page.episodes
-            self.exploreTotal = page.total
-        }
-    }
 
     /// Load the mood and genre vocabularies once. Both are small, static lists.
     private func loadExploreVocabulary() async {
@@ -717,12 +692,12 @@ final class AppModel: ObservableObject {
     }
 
     func toggleGenre(_ id: String) {
-        if let i = exploreFilters.genres.firstIndex(of: id) { exploreFilters.genres.remove(at: i) }
-        else { exploreFilters.genres.append(id) }
+        if let i = explore.filters.genres.firstIndex(of: id) { explore.filters.genres.remove(at: i) }
+        else { explore.filters.genres.append(id) }
     }
 
     func toggleMood(_ id: String) {
-        exploreFilters.mood = exploreFilters.mood == id ? nil : id
+        explore.filters.mood = explore.filters.mood == id ? nil : id
     }
 
     /// The Explore id for a genre named the way a broadcast prints it —
@@ -764,7 +739,7 @@ final class AppModel: ObservableObject {
         query = ""
         detail = nil
         show(.catalog)
-        exploreFilters = NTSAPI.ExploreFilters(genres: [id])
+        explore.filters = NTSAPI.ExploreFilters(genres: [id])
     }
 
     /// The name to show for a selected genre id. Subgenre ids are prefixed with
@@ -856,164 +831,13 @@ final class AppModel: ObservableObject {
 
     // MARK: Timeline artwork
 
-    /// What a schedule row draws, keyed by `<show>/<episode>`.
-    ///
-    /// The grid publishes no artwork, no genres and no city — only a title, a
-    /// time and two aliases — and the show index behind the rows is seeded from
-    /// the sitemap, which is URLs and nothing else. So without this every row
-    /// but the handful of shows the app had met elsewhere drew the placeholder
-    /// mark and no second line: 296 of the fortnight's shows, across both
-    /// channels, blank.
-    ///
-    /// Filled per row as it scrolls into view rather than in one sweep at open:
-    /// the fortnight is ~345 slots and nobody scrolls all of it. Kept on disk
-    /// (trimmed to the current grid) so a relaunch doesn't re-ask for the rows
-    /// this session already paid for.
-    @Published private(set) var slotDetails: [String: SlotDetail] = Cache.load([String: SlotDetail].self, from: slotDetailFile) ?? [:]
-
-    nonisolated private static let slotDetailFile = "schedule-art.json"
-
-    /// Slots asked for, so a row that leaves and re-enters the viewport doesn't
-    /// ask twice. A failure drops out again — otherwise a scroll taken while the
-    /// network was down would leave those rows blank until the app was
-    /// relaunched, with nothing to prompt a second attempt.
-    private var slotDetailAsked: Set<String> = []
-
-    func slotDetail(_ slot: NTSAPI.Broadcast) -> SlotDetail? {
-        slotDetails[Self.slotKey(slot)]
-    }
-
-    /// Two airings of the same episode share an answer, which is the point of
-    /// keying by episode rather than by slot. A slot NTS has not named an
-    /// episode for yet has nothing to share, so it keys by its own id instead of
-    /// colliding with every other unnamed slot of the same show.
-    static func slotKey(_ slot: NTSAPI.Broadcast) -> String {
-        slot.episodeAlias.isEmpty ? "\(slot.showAlias)/#\(slot.id)"
-                                  : "\(slot.showAlias)/\(slot.episodeAlias)"
-    }
-
-    /// Rows waiting for a fetch, newest first — the ones nearest what is on
-    /// screen. Dragging the scrollbar through a fortnight touches ~345 rows in a
-    /// second, and firing all of them means hundreds of requests for rows that
-    /// are already gone by the time they answer.
-    private var slotDetailQueue: [NTSAPI.Broadcast] = []
-    private var slotDetailRunning = 0
-    private static let slotDetailConcurrency = 4
-
-    /// Fetch one schedule row's episode — its photograph, genres and city.
-    ///
-    /// The episode rather than the show, so a repeat carries the cover of the
-    /// broadcast being repeated instead of the show's standing one. A slot with
-    /// no episode alias yet (the furthest-out ~30% of the grid) falls back to
-    /// the show, which still has artwork.
-    func loadSlotDetail(_ slot: NTSAPI.Broadcast) {
-        guard !slot.showAlias.isEmpty else { return }
-        let key = Self.slotKey(slot)
-        guard slotDetails[key] == nil, slotDetailAsked.insert(key).inserted else { return }
-        slotDetailQueue.append(slot)
-        pumpSlotDetails()
-    }
-
-    /// A row that scrolled away before its turn came gives up its place. One
-    /// already in flight is left alone — it is nearly paid for, and the answer
-    /// is kept either way.
-    func cancelSlotDetail(_ slot: NTSAPI.Broadcast) {
-        let key = Self.slotKey(slot)
-        guard let i = slotDetailQueue.firstIndex(where: { Self.slotKey($0) == key }) else { return }
-        slotDetailQueue.remove(at: i)
-        slotDetailAsked.remove(key)
-    }
-
-    private func pumpSlotDetails() {
-        while slotDetailRunning < Self.slotDetailConcurrency, let slot = slotDetailQueue.popLast() {
-            slotDetailRunning += 1
-            fetchSlotDetail(slot)
-        }
-    }
-
-    private func fetchSlotDetail(_ slot: NTSAPI.Broadcast) {
-        let key = Self.slotKey(slot)
-        Task { [weak self] in
-            defer {
-                if let self {
-                    self.slotDetailRunning -= 1
-                    self.pumpSlotDetails()
-                }
-            }
-            let show = slot.showAlias, episode = slot.episodeAlias
-            var image: URL?
-            var genres: [String] = []
-            var location = ""
-            var name = slot.title
-            var fromShow = false
-
-            if !episode.isEmpty,
-               let ep = try? await NTSAPI.episode(show: show, episode: episode,
-                                                  reportAs: "schedule-art") {
-                image = ep.image
-                genres = ep.genres
-                location = [ep.locationLong, ep.location].first { !$0.isEmpty } ?? ""
-                if !ep.name.isEmpty { name = ep.name }
-            } else if let s = try? await NTSAPI.show(alias: show) {
-                image = s.image
-                genres = s.genres
-                location = s.location
-                if !s.name.isEmpty { name = s.name }
-                fromShow = true
-            } else {
-                self?.slotDetailAsked.remove(key)
-                return
-            }
-
-            guard let self else { return }
-            withAnimation(.easeInOut(duration: 0.25)) {
-                self.slotDetails[key] = SlotDetail(slotID: slot.id, image: image,
-                                                   genres: genres, location: location)
-            }
-            self.saveSlotDetailsSoon()
-            // Only the show endpoint's answer is folded into the index. An
-            // episode's title and cover belong to that broadcast, not to the
-            // show — and `note` keeps the first rich entry it is given, so
-            // writing one there would make "Lung Dart 10th August 2026" the
-            // show's name in search for good.
-            if fromShow {
-                self.showIndex.note(alias: show, name: name, location: location,
-                                    genres: genres, picture: image?.absoluteString)
-            }
-        }
-    }
-
-    private var slotDetailSaveTask: Task<Void, Never>?
-
-    /// Write the row artwork a few seconds after the fetches stop, trimmed to
-    /// the grid that is actually on screen — otherwise the file would accumulate
-    /// every broadcast the app ever scrolled past.
-    private func saveSlotDetailsSoon() {
-        slotDetailSaveTask?.cancel()
-        slotDetailSaveTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
-            guard !Task.isCancelled, let self else { return }
-            self.slotDetailSaveTask = nil
-            let live = self.trimSlotDetails()
-            // Encoding and writing happen off the main actor: the UI is running
-            // while a scroll is what triggers this.
-            Task.detached { Cache.save(live, to: Self.slotDetailFile) }
-        }
-    }
-
-    /// Drop the rows that have left the grid, and answer with what is left.
-    @discardableResult private func trimSlotDetails() -> [String: SlotDetail] {
-        let live = Set(catalog.channels.flatMap { $0.upcoming }.map(Self.slotKey))
-        slotDetails = slotDetails.filter { live.contains($0.key) }
-        return slotDetails
-    }
-
     /// The synchronous write, for quit: a detached task would not outlive the
-    /// process.
+    /// process. `SlotArtLoader` owns the queue, the cache and the debounce;
+    /// this is only the live-key set it needs, computed from the catalog the
+    /// loader itself never reads.
     func saveSlotDetails() {
-        slotDetailSaveTask?.cancel()
-        slotDetailSaveTask = nil
-        Cache.save(trimSlotDetails(), to: Self.slotDetailFile)
+        let live = Set(catalog.channels.flatMap { $0.upcoming }.map(SlotArtLoader.slotKey))
+        slotArt.flush(keeping: live, sync: true)
     }
 
     private static let dayKey: DateFormatter = {
@@ -1149,7 +973,7 @@ final class AppModel: ObservableObject {
         guard !slot.showAlias.isEmpty, !slot.episodeAlias.isEmpty else { return }
         // The timeline's ON AIR row wants exactly this episode, so it takes the
         // rail's copy rather than asking NTS for the same JSON a second time.
-        slotDetailAsked.insert(Self.slotKey(slot))
+        slotArt.adopt(slot, detail: nil)
         detailTasks[number] = Task { [weak self] in
             guard let ep = try? await NTSAPI.episode(show: slot.showAlias, episode: slot.episodeAlias,
                                                      reportAs: "on-air-detail"),
@@ -1157,12 +981,11 @@ final class AppModel: ObservableObject {
                   let i = self.catalog.channels.firstIndex(where: { $0.number == number }),
                   self.catalog.channels[i].onAir?.id == slot.id
             else { return }
-            self.slotDetails[Self.slotKey(slot)] = SlotDetail(
+            self.slotArt.adopt(slot, detail: SlotDetail(
                 slotID: slot.id,
                 image: ep.image,
                 genres: ep.genres,
-                location: [ep.locationLong, ep.location].first { !$0.isEmpty } ?? "")
-            self.saveSlotDetailsSoon()
+                location: [ep.locationLong, ep.location].first { !$0.isEmpty } ?? ""))
             withAnimation(.easeInOut(duration: 0.3)) {
                 self.catalog.channels[i].detail = SlotDetail(
                     slotID: slot.id,

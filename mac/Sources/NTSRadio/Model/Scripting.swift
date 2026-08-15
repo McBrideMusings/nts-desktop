@@ -275,7 +275,7 @@ final class NTSFilterExploreCommand: NTSCommand {
             m.query = ""
             m.detail = nil
             m.show(.catalog)
-            m.exploreFilters = filters
+            m.explore.filters = filters
             return true
         }
     }
@@ -285,7 +285,7 @@ final class NTSFilterExploreCommand: NTSCommand {
 final class NTSExploreMoreCommand: NTSCommand {
     override func performDefaultImplementation() -> Any? {
         run {
-            AppModel.shared.loadMoreExplore()
+            AppModel.shared.explore.loadMore()
             return true
         }
     }
