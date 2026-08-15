@@ -148,7 +148,7 @@ private struct SlotRow: View {
 
     private var indexed: NTSAPI.ShowRef? { model.showIndex.ref(slot.showAlias) }
     /// This broadcast's own photograph, city and genres, once fetched.
-    private var detail: SlotDetail? { model.slotDetail(slot) }
+    private var detail: SlotDetail? { model.slotArt.detail(for: slot) }
     private var onAir: Bool { model.onAirSlot?.id == slot.id }
     private var past: Bool { (slot.end ?? .distantFuture) <= Date() }
 
@@ -216,11 +216,11 @@ private struct SlotRow: View {
         // The row asks for its own artwork as it scrolls in. `LazyVStack` only
         // builds visible rows, so this is the fortnight fetched a screen at a
         // time instead of 345 requests at open.
-        .onAppear { model.loadSlotDetail(slot) }
+        .onAppear { model.slotArt.request(slot) }
         // Scrolled past before its turn came: give up the place in the queue, so
         // a drag through the fortnight doesn't spend its requests on rows that
         // are already gone.
-        .onDisappear { model.cancelSlotDetail(slot) }
+        .onDisappear { model.slotArt.cancel(slot) }
     }
 
     /// This broadcast's photograph, then the show's standing one from the index,

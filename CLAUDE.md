@@ -72,7 +72,7 @@ never draws one: it is the only place a key equivalent can live, and without it
   yet. No genres, location or artwork — every slot that wants those fetches
   `/api/v2/shows/<show>/episodes/<episode>` for itself: the rail for the
   programme on air, and each schedule row as it scrolls into view
-  (`AppModel.loadSlotDetail`, which falls back to `/api/v2/shows/<show>` for a
+  (`SlotArtLoader.request`, which falls back to `/api/v2/shows/<show>` for a
   slot with no episode alias). What comes back is folded into `ShowIndex`, so
   the alias carries artwork everywhere else it appears and on the next launch.
 - `/api/v2/live` is **not used, deliberately** — see

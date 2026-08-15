@@ -29,21 +29,21 @@ struct ExploreView: View {
             moodRow
 
             HStack(spacing: 7) {
-                Toggle_("GENRES\(model.exploreFilters.genres.isEmpty ? "" : " · \(model.exploreFilters.genres.count)")",
-                        on: model.genreDrawerOpen || !model.exploreFilters.genres.isEmpty) {
+                Toggle_("GENRES\(model.explore.filters.genres.isEmpty ? "" : " · \(model.explore.filters.genres.count)")",
+                        on: model.genreDrawerOpen || !model.explore.filters.genres.isEmpty) {
                     model.genreDrawerOpen.toggle()
                 }
                 // Two toggles that are not toggles at NTS's end: "Music Only" is
                 // the mood tag `no-talkin`, and "Focused" is `genre_count`.
-                Toggle_("MUSIC ONLY", on: model.exploreFilters.musicOnly) {
-                    model.exploreFilters.musicOnly.toggle()
+                Toggle_("MUSIC ONLY", on: model.explore.filters.musicOnly) {
+                    model.explore.filters.musicOnly.toggle()
                 }
-                Toggle_("FOCUSED", on: model.exploreFilters.focused) {
-                    model.exploreFilters.focused.toggle()
+                Toggle_("FOCUSED", on: model.explore.filters.focused) {
+                    model.explore.filters.focused.toggle()
                 }
                 Spacer(minLength: 0)
-                if !model.exploreFilters.isEmpty {
-                    Button { model.exploreFilters = .init() } label: {
+                if !model.explore.filters.isEmpty {
+                    Button { model.explore.filters = .init() } label: {
                         Text("CLEAR")
                             .font(Theme.mono(9, .bold))
                             .tracking(1.2)
@@ -53,7 +53,7 @@ struct ExploreView: View {
                 }
             }
 
-            if !model.exploreFilters.genres.isEmpty { selectedGenres }
+            if !model.explore.filters.genres.isEmpty { selectedGenres }
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 11)
@@ -64,7 +64,7 @@ struct ExploreView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 7) {
                 ForEach(model.moods) { mood in
-                    let on = model.exploreFilters.mood == mood.id
+                    let on = model.explore.filters.mood == mood.id
                     Button { model.toggleMood(mood.id) } label: {
                         HStack(spacing: 6) {
                             Rectangle()
@@ -94,7 +94,7 @@ struct ExploreView: View {
 
     private var selectedGenres: some View {
         FlowLayout(spacing: 5) {
-            ForEach(model.exploreFilters.genres, id: \.self) { id in
+            ForEach(model.explore.filters.genres, id: \.self) { id in
                 Button { model.toggleGenre(id) } label: {
                     HStack(spacing: 4) {
                         Text(model.genreName(id).uppercased())
@@ -118,7 +118,7 @@ struct ExploreView: View {
             LazyVStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 6) {
                     Text(scopeLine)
-                    if model.exploreLoading {
+                    if model.explore.loading {
                         Text("· LOADING").foregroundStyle(Theme.inkMuted.opacity(0.7))
                     }
                 }
@@ -137,7 +137,7 @@ struct ExploreView: View {
                                 // rather than a scroll offset: the grid reflows
                                 // between one and three columns with the window,
                                 // so there is no fixed height to measure against.
-                                if row.id == model.catalogRows.last?.id { model.loadMoreExplore() }
+                                if row.id == model.catalogRows.last?.id { model.explore.loadMore() }
                             }
                     }
                 }
@@ -147,10 +147,10 @@ struct ExploreView: View {
     }
 
     private var scopeLine: String {
-        if model.exploreEpisodes.isEmpty {
-            return model.exploreLoading ? "SEARCHING NTS" : "NOTHING MATCHES THESE FILTERS"
+        if model.explore.episodes.isEmpty {
+            return model.explore.loading ? "SEARCHING NTS" : "NOTHING MATCHES THESE FILTERS"
         }
-        return "\(model.exploreEpisodes.count) OF \(model.exploreTotal) EPISODES"
+        return "\(model.explore.episodes.count) OF \(model.explore.total) EPISODES"
     }
 }
 
@@ -210,7 +210,7 @@ private struct GenreDrawer: View {
     }
 
     private func chip(_ name: String, id: String) -> some View {
-        let on = model.exploreFilters.genres.contains(id)
+        let on = model.explore.filters.genres.contains(id)
         return Button { model.toggleGenre(id) } label: {
             Text(name.uppercased())
                 .font(Theme.mono(8, .bold))

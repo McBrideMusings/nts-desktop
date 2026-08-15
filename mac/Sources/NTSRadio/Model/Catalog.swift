@@ -27,7 +27,7 @@ struct Mixtape: Identifiable, Hashable {
 /// ignores a response that arrives after the changeover it was meant for
 /// (`Channel.nowPlaying`) rather than dressing the wrong show in the previous
 /// one's photograph. The timeline has no such race — its rows don't change
-/// programme underneath them — and matches by `AppModel.slotKey` instead, so
+/// programme underneath them — and matches by `SlotArtLoader.slotKey` instead, so
 /// there `slotID` is only a record of which airing paid for the fetch.
 /// Codable because the timeline keeps a copy on disk: a fortnight of rows is a
 /// fortnight of episode requests, and a relaunch should not repeat them.
