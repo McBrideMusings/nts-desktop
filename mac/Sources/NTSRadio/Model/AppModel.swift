@@ -257,10 +257,14 @@ final class AppModel: ObservableObject {
     private var bag = Set<AnyCancellable>()
 
     init() {
-        // Both are observable objects of their own; republish their changes as
-        // ours so a view watching the model repaints when the stream starts or
-        // the dial's contents move.
-        for upstream in [engine.objectWillChange, catalog.objectWillChange,
+        // Each is an observable object of its own; republish its changes as ours
+        // so a view watching the model repaints when the dial's contents move.
+        // engine.objectWillChange is deliberately NOT republished here: the
+        // engine ticks roughly once a second during playback, and forwarding it
+        // would invalidate this whole model — and everything observing it,
+        // including the catalog row list — on every tick. Views that need
+        // per-second playback state observe the engine directly instead.
+        for upstream in [catalog.objectWillChange,
                          saved.objectWillChange, showIndex.objectWillChange,
                          slotArt.objectWillChange, explore.objectWillChange] {
             upstream

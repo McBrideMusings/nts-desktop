@@ -3,12 +3,18 @@ import AppKit
 
 struct TracklistOverlay: View {
     @EnvironmentObject var model: AppModel
+    // engine.position advances roughly once a second and is no longer
+    // republished through AppModel (see AppModel.init) — observed directly so
+    // this view still rebuilds each tick. `model.currentTrack` itself reads
+    // `engine.position` fresh on each rebuild, so it needs no change.
+    @EnvironmentObject var engine: PlayerEngine
 
     private static let colDim = Color(hex: 0x6f6f6b)   // column-header / faint label
 
     /// Which row is "now playing" — `AppModel.currentTrack`, resolved to its
     /// index in the list this view is actually iterating.
     private var currentIndex: Int? {
+        _ = engine.position
         guard let current = model.currentTrack else { return nil }
         return model.tracks.firstIndex(of: current)
     }

@@ -14,6 +14,10 @@ import SwiftUI
 /// sibling to the ones beneath, so only the last-drawn wedge would respond.)
 struct DialView: View {
     @EnvironmentObject var model: AppModel
+    // isPlaying ticks with playback and is no longer republished through
+    // AppModel (see AppModel.init) — observed directly so the mixtape stage
+    // animation keeps starting and stopping with playback.
+    @EnvironmentObject var engine: PlayerEngine
 
     /// Resolved dial geometry. Every radius is a fraction of the dial's diameter,
     /// which is itself the smaller of the two dimensions — the dial is round, so
@@ -164,7 +168,7 @@ struct DialView: View {
     }
 
     private var playingMixtape: Mixtape? {
-        guard model.isPlaying, case .mixtape = model.selection else { return nil }
+        guard engine.isPlaying, case .mixtape = model.selection else { return nil }
         return model.currentMixtape
     }
 

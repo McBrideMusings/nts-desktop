@@ -34,6 +34,7 @@ enum Snapshot {
             shotView(name, PopoverView()
                 .environmentObject(model)
                 .environmentObject(model.auth)
+                .environmentObject(model.engine)
                 .frame(width: size.width, height: size.height))
         }
 

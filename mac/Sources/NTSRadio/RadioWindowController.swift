@@ -42,6 +42,7 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
         let root = PopoverView()
             .environmentObject(model)
             .environmentObject(model.auth)
+            .environmentObject(model.engine)
         // The content view spans the whole window (`.fullSizeContentView`) and
         // `PopoverView` opens with its own `Theme.titleBarHeight` strip laid out from
         // the top of the window — the same constant that sizes the title-bar
@@ -82,6 +83,7 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
         let topBar = TitleBarControls()
             .environmentObject(model)
             .environmentObject(model.auth)
+            .environmentObject(model.engine)
         let topBarVC = NSTitlebarAccessoryViewController()
         topBarVC.layoutAttribute = .top
         let topBarHost = NSHostingView(rootView: topBar)
