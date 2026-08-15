@@ -33,6 +33,7 @@ struct CatalogOverlay: View {
                 grid
             }
         }
+        .animation(.easeOut(duration: 0.2), value: model.catalogTab)
         .background(Theme.popover.opacity(0.97))
         .background(.ultraThinMaterial)
         .transition(.opacity)

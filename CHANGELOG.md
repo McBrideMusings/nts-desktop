@@ -104,6 +104,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Catalog tab switches now crossfade instead of cutting — switching between
+  Schedule, Saved, and Explore uses the same `.easeOut(duration: 0.2)` curve as
+  pane switches, and rapid presses remain interruptible.
 - The channel cards are now the programme's photograph, shown for **both**
   channels — the inactive one dimmed rather than drained of colour, where before
   only the playing channel's artwork appeared at all. The 86pt accent disc is
