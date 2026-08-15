@@ -8,14 +8,18 @@ import SwiftUI
 /// appearing is how the bar says which kind of thing is playing.
 struct SeekBar: View {
     @EnvironmentObject var model: AppModel
+    // Position and duration tick roughly once a second and are no longer
+    // republished through AppModel (see AppModel.init) — observed directly so
+    // the playhead and elapsed-time label keep advancing.
+    @EnvironmentObject var engine: PlayerEngine
 
     /// Where the thumb is being dragged to, as a fraction of the whole. Non-nil
     /// only mid-drag: while it is set the bar follows the finger rather than the
     /// audio, so the playhead doesn't fight the hand.
     @State private var scrubbing: Double?
 
-    private var duration: Double { model.engine.duration }
-    private var position: Double { model.engine.position }
+    private var duration: Double { engine.duration }
+    private var position: Double { engine.position }
     private var fraction: Double {
         if let scrubbing { return scrubbing }
         guard duration > 0 else { return 0 }
@@ -63,7 +67,7 @@ struct SeekBar: View {
                     .onEnded { value in
                         guard width > 0, duration > 0 else { scrubbing = nil; return }
                         let target = min(1, max(0, value.location.x / width))
-                        model.engine.seek(to: target * duration)
+                        engine.seek(to: target * duration)
                         scrubbing = nil
                     }
             )

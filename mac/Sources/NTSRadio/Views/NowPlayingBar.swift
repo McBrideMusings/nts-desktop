@@ -3,6 +3,10 @@ import AppKit
 
 struct NowPlayingBar: View {
     @EnvironmentObject var model: AppModel
+    // Playback state ticks roughly once a second and is no longer republished
+    // through AppModel (see AppModel.init) — observed directly so the seek
+    // reveal, play/pause icon and level meter still repaint on the tick.
+    @EnvironmentObject var engine: PlayerEngine
 
     /// The window's width. The bar's right-hand cluster costs a fixed ~145pt, so
     /// in a narrow window it eats the title down to "LO…" — below this width the
@@ -22,7 +26,7 @@ struct NowPlayingBar: View {
             // Only a finite recording has a position to show. The engine decides
             // that from the item's own duration, so nothing here has to know what
             // kind of source is tuned.
-            if model.engine.isSeekable {
+            if engine.isSeekable {
                 SeekBar()
                     .padding(.horizontal, 16)
                     .padding(.top, 9)
@@ -32,13 +36,13 @@ struct NowPlayingBar: View {
         }
         .background(Theme.nowBar)
         .overlay(alignment: .top) { Rectangle().fill(Theme.hairline(0.08)).frame(height: 1) }
-        .animation(.easeOut(duration: 0.2), value: model.engine.isSeekable)
+        .animation(.easeOut(duration: 0.2), value: engine.isSeekable)
     }
 
     private var controls: some View {
         HStack(spacing: 14) {
             Button { model.togglePlay() } label: {
-                Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
+                Image(systemName: engine.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.popover)
                     .frame(width: 36, height: 36)
@@ -77,7 +81,7 @@ struct NowPlayingBar: View {
                 // stalled stream leaves the button showing pause while the
                 // speakers are silent, and a meter that keeps moving through
                 // that is telling the user something untrue.
-                LevelLamps(running: model.engine.isRendering && !model.muted,
+                LevelLamps(running: engine.isRendering && !model.muted,
                            accent: model.accent)
 
                 Rectangle().fill(Theme.hairline(0.12)).frame(width: 1, height: 22)
