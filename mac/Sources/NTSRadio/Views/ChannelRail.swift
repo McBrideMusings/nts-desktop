@@ -3,6 +3,10 @@ import AppKit
 
 struct ChannelRail: View {
     @EnvironmentObject var model: AppModel
+    // Not read through `model.engine` — AppModel deliberately doesn't republish
+    // the engine's per-tick state (see AppModel.init), so a card reading
+    // `isRendering` that way would never notice a stall resolve.
+    @EnvironmentObject var engine: PlayerEngine
 
     /// Which side the rail's dividing hairline sits on — the edge facing the dial.
     let edge: Edge
@@ -71,8 +75,10 @@ struct ChannelRail: View {
         // taking the whole `AppModel`: an `@EnvironmentObject` there would
         // redraw both cards on every publish in the app, the twice-a-second
         // position tick included, to read two booleans and a dictionary.
-        ChannelCard(channel: c,
-                    active: model.selection == .channel(c.number),
+        let active = model.selection == .channel(c.number)
+        return ChannelCard(channel: c,
+                    active: active,
+                    buffering: active && engine.isPlaying && !engine.isRendering,
                     slotW: w, slotH: h,
                     genreID: { model.genreID(named: $0) },
                     browseGenre: { model.browseGenre($0) })
@@ -93,6 +99,8 @@ private struct ChannelCard: View {
     @ObservedObject var saved = Saved.shared
     let channel: Channel
     let active: Bool
+    /// Play was pressed for this channel and audio isn't rendering yet.
+    let buffering: Bool
     let slotW: CGFloat
     let slotH: CGFloat
     /// Explore's id for a genre printed by name, and the door a chip opens.
@@ -137,6 +145,10 @@ private struct ChannelCard: View {
                 .frame(height: compact ? 92 : 132)
                 .frame(maxHeight: .infinity, alignment: .bottom)
                 .opacity(tiny ? 0 : 1)
+
+            if buffering {
+                ShimmerSweep().blendMode(.plusLighter)
+            }
 
             if !tiny { meta }
         }
@@ -234,10 +246,14 @@ private struct ChannelCard: View {
     }
 
     private var led: some View {
-        Circle()
-            .fill(active ? Theme.liveDot : Theme.liveDot.opacity(0.35))
+        // Buffering dims the LED the same as an inactive channel's — lit but
+        // not asserting "playing" until audio actually is.
+        let lit = active && !buffering
+        return Circle()
+            .fill(Theme.liveDot)
+            .opacity(lit ? 1 : 0.35)
             .frame(width: 7, height: 7)
-            .shadow(color: Theme.liveDot.opacity(active ? 0.9 : 0), radius: 5)
+            .shadow(color: Theme.liveDot.opacity(lit ? 0.9 : 0), radius: 5)
             .padding(EdgeInsets(top: 16, leading: 0, bottom: 0, trailing: 14))
     }
 
@@ -254,7 +270,7 @@ private struct ChannelCard: View {
                         Text(channel.startEnd).monospacedDigit()
                     }
                     Text("·").opacity(0.5)
-                    Text(active ? "◉ PLAYING" : "LIVE")
+                    Text(active ? (buffering ? "BUFFERING" : "◉ PLAYING") : "LIVE")
                         .foregroundStyle(active ? channel.accent : Color(hex: 0xcfcec8))
                 }
             }

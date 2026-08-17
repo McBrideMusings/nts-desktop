@@ -39,6 +39,13 @@ struct NowPlayingBar: View {
         .animation(.easeOut(duration: 0.2), value: engine.isSeekable)
     }
 
+    /// Play was pressed, but no audio is coming out yet — the stream is still
+    /// connecting or has stalled. `isPlaying` alone can't say this: it's set the
+    /// instant play is pressed and never revised, so it stays true through a
+    /// stall. `isRendering` is the actual AVPlayer rate, which is what a loading
+    /// state has to disagree with `isPlaying` about to exist at all.
+    private var buffering: Bool { !model.isIdle && engine.isPlaying && !engine.isRendering }
+
     private var controls: some View {
         HStack(spacing: 14) {
             Button { model.togglePlay() } label: {
@@ -47,6 +54,11 @@ struct NowPlayingBar: View {
                     .foregroundStyle(Theme.popover)
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(Theme.ink))
+                    .overlay {
+                        if buffering {
+                            ShimmerSweep(diagonal: false).clipShape(Circle())
+                        }
+                    }
             }
             .buttonStyle(.hit)
             .disabled(model.isIdle)
@@ -62,10 +74,11 @@ struct NowPlayingBar: View {
                     color: model.isIdle ? Theme.inkMuted : Theme.ink
                 )
                 // Mixtape source episode — when it's a link, NTS shows it bold white
-                // (vs the muted, regular non-link descriptor).
+                // (vs the muted, regular non-link descriptor). Buffering pre-empts
+                // both: there is nothing truer to say about the stream right now.
                 LinkLabel(
-                    text: model.isIdle ? "PICK A MIXTAPE OR CHANNEL" : model.subtitle,
-                    url: model.nowPlayingEpisodeURL,
+                    text: model.isIdle ? "PICK A MIXTAPE OR CHANNEL" : (buffering ? "BUFFERING" : model.subtitle),
+                    url: buffering ? nil : model.nowPlayingEpisodeURL,
                     font: Theme.mono(10, .regular),
                     linkFont: Theme.mono(10, .bold),
                     color: Theme.inkMuted,

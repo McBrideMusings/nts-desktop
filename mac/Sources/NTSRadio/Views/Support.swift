@@ -203,6 +203,46 @@ final class LoopingPlayerView: NSView {
     }
 }
 
+// MARK: - Loading sweep
+
+/// A light sweep, used to say "requested but not yet rendering audio" without
+/// swapping any icon — the level-lamp panel's hardware language rather than a
+/// spinner. Two shapes share it: a rotating ring behind the transport button,
+/// and a diagonal pass over a channel card.
+///
+/// Reduce Motion doesn't stop the sweep entirely — a `buffering` state that
+/// draws identically to `playing` would be a real regression, not a courtesy
+/// skipped — it slows to a state a glance can still register as "moving,
+/// deliberately," rather than the near-flicker the full-speed loop reads as.
+struct ShimmerSweep: View {
+    var diagonal = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var phase: CGFloat = -1
+
+    var body: some View {
+        GeometryReader { proxy in
+            let w = proxy.size.width
+            LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0),
+                    .init(color: .white.opacity(0.16), location: 0.5),
+                    .init(color: .clear, location: 1),
+                ],
+                startPoint: .leading, endPoint: .trailing
+            )
+            .frame(width: w * 0.55)
+            .rotationEffect(.degrees(diagonal ? 12 : 0))
+            .offset(x: phase * w * 1.8)
+        }
+        .allowsHitTesting(false)
+        .onAppear {
+            withAnimation(.linear(duration: reduceMotion ? 3.2 : 1.5).repeatForever(autoreverses: false)) {
+                phase = 1
+            }
+        }
+    }
+}
+
 // MARK: - Per-line highlighted text (NTS "chip" style)
 
 /// Text wrapped in a solid black highlight block. The prototype uses per-line
