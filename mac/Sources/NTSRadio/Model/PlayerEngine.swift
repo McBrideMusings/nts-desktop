@@ -91,8 +91,12 @@ final class PlayerEngine: ObservableObject {
         duration = (length.isFinite && length > 0) ? length : 0
     }
 
-    func load(_ url: URL, autoplay: Bool) {
-        if url != currentURL {
+    /// `force` re-requests the stream even if `url` matches what's already
+    /// loaded — for live channels and mixtapes, resuming from pause must
+    /// reconnect at the live edge, not replay the AVPlayerItem's buffered
+    /// audio from wherever it was paused.
+    func load(_ url: URL, autoplay: Bool, force: Bool = false) {
+        if url != currentURL || force {
             currentURL = url
             // A new item starts at zero with an unknown length. Leaving the old
             // values up would show the previous episode's scrubber against this

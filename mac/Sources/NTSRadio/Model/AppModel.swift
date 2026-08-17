@@ -523,13 +523,13 @@ final class AppModel: ObservableObject {
         listener.start()
     }
 
-    func loadCurrent(autoplay: Bool) {
+    func loadCurrent(autoplay: Bool, force: Bool = false) {
         if case .episode(let show, let episode) = selection {
             loadEpisode(show: show, episode: episode, autoplay: autoplay)
             return
         }
         let url = currentMixtape?.streamURL ?? currentChannel?.streamURL
-        if let url { engine.load(url, autoplay: autoplay) }
+        if let url { engine.load(url, autoplay: autoplay, force: force) }
     }
 
     /// Fetch an episode and start it.
@@ -568,14 +568,20 @@ final class AppModel: ObservableObject {
 
     func togglePlay() {
         if engine.isPlaying { engine.pause() }
-        else { loadCurrent(autoplay: true) }
+        // Resuming a live channel or mixtape must rejoin at the head, not
+        // replay the buffer from wherever it was when paused.
+        else { loadCurrent(autoplay: true, force: true) }
     }
 
     /// Start the current source (the system Play button — distinct from toggle,
     /// which the media key sends).
     func play() {
         guard !isIdle else { return }
-        loadCurrent(autoplay: true)
+        // Only force a reconnect when actually resuming from pause — calling
+        // `play` while already playing (the AppleScript command, a stray
+        // media-key event) must stay a no-op, not force a live reconnect that
+        // audibly interrupts a stream that was already running.
+        loadCurrent(autoplay: true, force: !engine.isPlaying)
     }
 
     func pause() { engine.pause() }
