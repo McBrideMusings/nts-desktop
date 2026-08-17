@@ -55,8 +55,12 @@ struct NowPlayingBar: View {
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(Theme.ink))
                     .overlay {
+                        // Theme.ink is a light disc — a white sweep the card
+                        // uses was invisible on it. The button turns a dark
+                        // wedge instead, same as the icon sitting on top of it.
                         if buffering {
-                            ShimmerSweep(diagonal: false).clipShape(Circle())
+                            RecordShimmer(color: Theme.popover, opacity: 0.4)
+                                .clipShape(Circle())
                         }
                     }
             }

@@ -205,17 +205,15 @@ final class LoopingPlayerView: NSView {
 
 // MARK: - Loading sweep
 
-/// A light sweep, used to say "requested but not yet rendering audio" without
-/// swapping any icon — the level-lamp panel's hardware language rather than a
-/// spinner. Two shapes share it: a rotating ring behind the transport button,
-/// and a diagonal pass over a channel card.
+/// A diagonal light pass, used to say "requested but not yet rendering audio"
+/// without swapping any icon — the level-lamp panel's hardware language rather
+/// than a spinner. For the channel card, whose photo isn't round.
 ///
 /// Reduce Motion doesn't stop the sweep entirely — a `buffering` state that
 /// draws identically to `playing` would be a real regression, not a courtesy
 /// skipped — it slows to a state a glance can still register as "moving,
 /// deliberately," rather than the near-flicker the full-speed loop reads as.
 struct ShimmerSweep: View {
-    var diagonal = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var phase: CGFloat = -1
 
@@ -231,13 +229,43 @@ struct ShimmerSweep: View {
                 startPoint: .leading, endPoint: .trailing
             )
             .frame(width: w * 0.55)
-            .rotationEffect(.degrees(diagonal ? 12 : 0))
+            .rotationEffect(.degrees(12))
             .offset(x: phase * w * 1.8)
         }
         .allowsHitTesting(false)
         .onAppear {
             withAnimation(.linear(duration: reduceMotion ? 3.2 : 1.5).repeatForever(autoreverses: false)) {
                 phase = 1
+            }
+        }
+    }
+}
+
+/// The same "buffering" signal as `ShimmerSweep`, drawn as a wedge turning
+/// around a circle instead — for the two round surfaces, the transport button
+/// and the mixtape knob, where a turning highlight reads as the record itself
+/// spinning rather than a light passing over a photo.
+struct RecordShimmer: View {
+    var color: Color = .white
+    var opacity: Double = 0.18
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var rotation: Double = 0
+
+    var body: some View {
+        AngularGradient(
+            stops: [
+                .init(color: .clear, location: 0),
+                .init(color: color.opacity(opacity), location: 0.14),
+                .init(color: .clear, location: 0.32),
+                .init(color: .clear, location: 1),
+            ],
+            center: .center
+        )
+        .rotationEffect(.degrees(rotation))
+        .allowsHitTesting(false)
+        .onAppear {
+            withAnimation(.linear(duration: reduceMotion ? 3.4 : 1.2).repeatForever(autoreverses: false)) {
+                rotation = 360
             }
         }
     }

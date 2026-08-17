@@ -172,6 +172,14 @@ struct DialView: View {
         return model.currentMixtape
     }
 
+    /// Play was pressed for the tuned mixtape and audio isn't rendering yet —
+    /// the same gap `NowPlayingBar` and `ChannelRail` watch for, read here
+    /// because the knob is the one part of the dial that shows what's playing.
+    private var mixtapeBuffering: Bool {
+        guard case .mixtape = model.selection else { return false }
+        return engine.isPlaying && !engine.isRendering
+    }
+
     @ViewBuilder private func stageBackground(_ g: Geo) -> some View {
         if let m = playingMixtape {
             ZStack {
@@ -250,6 +258,10 @@ struct DialView: View {
                 .saturation(0.7)
                 RadialGradient(colors: [.black.opacity(0.62), .black.opacity(0.93)],
                                center: .center, startRadius: 0, endRadius: g.face * 0.62)
+            }
+
+            if mixtapeBuffering {
+                RecordShimmer()
             }
 
             VStack(spacing: g.face * 0.035) {
