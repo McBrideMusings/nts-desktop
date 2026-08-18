@@ -977,7 +977,11 @@ final class AppModel: ObservableObject {
         catalog.channels[idx].detail = SlotDetail(
             slotID: slot.id,
             image: slot.image ?? indexed?.pictureURL,
-            genres: slot.genres.isEmpty ? (indexed?.genres ?? []) : slot.genres,
+            // Genres never fall back to the show-level index: that cache holds
+            // whichever episode of this show NTS first tagged, so an untagged
+            // episode would inherit another episode's genres instead of showing
+            // none, same as nts.live does for it.
+            genres: slot.genres,
             location: slot.location.isEmpty ? (indexed?.location ?? "") : slot.location)
 
         guard !slot.showAlias.isEmpty, !slot.episodeAlias.isEmpty else { return }
