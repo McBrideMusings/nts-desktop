@@ -159,6 +159,18 @@ struct CatalogOverlay: View {
             .foregroundStyle(Theme.inkMuted)
             .padding(.horizontal, 18)
             .padding(.top, 14)
+
+            // A user who isn't searching doesn't need to hear about the
+            // backfill — this only matters while a query might be missing a
+            // show whose name hasn't loaded yet.
+            if model.backfill.remaining > 0 {
+                Text("Still learning show names — \(model.backfill.remaining) to go. Searching for a host's name may miss them until this finishes. It runs once on this machine; leave the app open and it'll complete on its own.")
+                    .font(Theme.ui(11))
+                    .foregroundStyle(Theme.inkMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 18)
+                    .padding(.top, 8)
+            }
         }
 
         if rows.isEmpty { emptyState } else { tileGrid(rows) }

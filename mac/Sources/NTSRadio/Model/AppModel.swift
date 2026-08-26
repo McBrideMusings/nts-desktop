@@ -3,6 +3,7 @@ import Combine
 import ServiceManagement
 import NTSFirestore
 import Sparkle
+import EpisodeMatch
 
 enum Selection: Equatable {
     case idle              // nothing selected — the default empty state on launch
@@ -90,6 +91,7 @@ final class AppModel: ObservableObject {
     let saved = Saved.shared
     let showIndex = ShowIndex.shared
     let episodeIndex = EpisodeIndex.shared
+    let backfill = ShowDetailBackfill.shared
     let slotArt = SlotArtLoader()
     let explore = ExploreLoader()
 
@@ -297,7 +299,8 @@ final class AppModel: ObservableObject {
         // per-second playback state observe the engine directly instead.
         for upstream in [catalog.objectWillChange,
                          saved.objectWillChange, showIndex.objectWillChange,
-                         slotArt.objectWillChange, explore.objectWillChange] {
+                         slotArt.objectWillChange, explore.objectWillChange,
+                         backfill.objectWillChange] {
             upstream
                 .sink { [weak self] in self?.objectWillChange.send() }
                 .store(in: &bag)
@@ -336,7 +339,10 @@ final class AppModel: ObservableObject {
         nowPlaying = NowPlayingCenter(model: self)
         Task { await refreshMixtapes() }
         Task { await pollSchedule() }
-        Task { await refreshSitemapIndices() }
+        Task {
+            await refreshSitemapIndices()
+            await backfill.start()
+        }
         Task {
             await loadExploreVocabulary()
             explore.reload()
@@ -931,23 +937,27 @@ final class AppModel: ObservableObject {
     private func searchRows(_ q: String) -> [CatalogRow] {
         var rows: [CatalogRow] = []
         var seen = Set<String>()
+        // Folded so "pu$$yrap" (or a query typed without the punctuation a
+        // real show name carries) still matches — see `ShowSearch`.
+        let folded = ShowSearch.fold(q)
 
         // Mixtapes first: sixteen of them, and their credits are the only route
         // from a host's name to the mixtape carrying their show.
-        for (i, m) in catalog.mixtapes.enumerated() where m.searchText.contains(q) {
+        for (i, m) in catalog.mixtapes.enumerated() where m.searchText.contains(folded) {
             rows.append(CatalogRow(m, detent: i + 1))
             seen.insert("mixtape:\(m.alias)")
         }
         // Then anything on the air today, so a match you can play right now
         // outranks the same show's index entry.
-        for b in schedule where b.searchText.contains(q) {
+        for b in schedule where b.searchText.contains(folded) {
             rows.append(row(for: b))
             if !b.showAlias.isEmpty { seen.insert("show:\(b.showAlias)") }
         }
-        for s in showIndex.all where s.haystack.contains(q) {
-            guard !seen.contains("show:\(s.alias)") else { continue }
-            rows.append(CatalogRow(s))
-        }
+        let hits = showIndex.all
+            .filter { ShowSearch.matches(query: q, haystack: $0.haystack) }
+            .filter { !seen.contains("show:\($0.alias)") }
+            .sorted { ShowSearch.rank(query: q, $0) < ShowSearch.rank(query: q, $1) }
+        rows.append(contentsOf: hits.map(CatalogRow.init))
         return rows
     }
 
@@ -956,7 +966,10 @@ final class AppModel: ObservableObject {
     /// coverage rather than the apology it used to be.
     var searchScope: String {
         let n = showIndex.count
-        if showIndex.building { return "INDEXING SHOWS — \(n) SO FAR" }
+        if showIndex.building { return "READING NTS'S SITEMAP — \(n) SHOWS SO FAR" }
+        if backfill.remaining > 0 {
+            return "\(catalog.mixtapes.count) MIXTAPES · \(schedule.count) SCHEDULED · \(n) SHOWS · \(backfill.remaining) STILL LOADING NAMES"
+        }
         return "\(catalog.mixtapes.count) MIXTAPES · \(schedule.count) SCHEDULED · \(n) SHOWS"
     }
 
@@ -992,8 +1005,11 @@ final class AppModel: ObservableObject {
     func loadShow(_ alias: String) async {
         if showDetails[alias] == nil, let d = try? await NTSAPI.show(alias: alias) {
             showDetails[alias] = d
-            showIndex.note(alias: alias, name: d.name, location: d.location,
-                           genres: d.genres, picture: d.image?.absoluteString)
+            // The same fetch the backfill would otherwise make later —
+            // recording it here means this alias never re-queues for that.
+            showIndex.noteDetailed(alias: alias, name: d.name, location: d.location,
+                                   genres: d.genres, picture: d.image?.absoluteString,
+                                   description: d.description, detailed: Date())
         }
         if showEpisodes[alias] == nil { loadMoreEpisodes(for: alias) }
     }

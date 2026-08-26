@@ -71,5 +71,14 @@ let package = Package(
             path: "Sources/FSProbe",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        // Unit tests against the pure EpisodeMatch/ShowSearch matching logic
+        // — no network, no disk, so these run without the app or a live
+        // sitemap.
+        .testTarget(
+            name: "EpisodeMatchTests",
+            dependencies: ["EpisodeMatch"],
+            path: "Tests/EpisodeMatchTests",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
     ]
 )

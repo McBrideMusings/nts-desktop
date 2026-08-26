@@ -1,4 +1,5 @@
 import Foundation
+import EpisodeMatch
 
 /// Minimal client for nts.live's public API — the schedule grid, shows and
 /// episodes, the mixtape catalog, Explore. Best-effort + defensive: every field
@@ -245,20 +246,80 @@ enum NTSAPI {
 
     /// One show in the searchable index. Codable so the index survives relaunch —
     /// building it costs ~85 requests, which is not something to repeat on launch.
-    struct ShowRef: Codable, Hashable, Identifiable {
+    struct ShowRef: Codable, Hashable, Identifiable, ShowSearchable {
         let alias: String
         let name: String
         let location: String
         let genres: [String]
         let picture: String?
         let thumb: String?
+        /// The host blurb from `/api/v2/shows/<alias>`, entity-decoded plain
+        /// text. `""` until the backfill (or a visited detail page) reaches
+        /// this alias.
+        let description: String
+        /// When `/api/v2/shows/<alias>` was last read for this alias. Nil
+        /// means it is still in the backfill queue and `name` may still be
+        /// the alias-derived guess (`ShowIndex.title(from:)`).
+        let detailed: Date?
+
+        /// Everything a query is matched against, folded once at build time
+        /// — not part of the wire format, always recomputed from the fields
+        /// above so a decode can't leave it stale.
+        let haystack: String
+
         var id: String { alias }
 
         var pictureURL: URL? { picture.flatMap { URL(string: $0) } }
         var thumbURL: URL? { (thumb ?? picture).flatMap { URL(string: $0) } }
         var pageURL: URL? { URL(string: "https://www.nts.live/shows/\(alias)") }
-        /// Everything a query is matched against, lowercased once at build time.
-        var haystack: String { "\(name) \(location) \(genres.joined(separator: " "))".lowercased() }
+
+        init(alias: String, name: String, location: String, genres: [String],
+             picture: String? = nil, thumb: String? = nil, description: String = "",
+             detailed: Date? = nil) {
+            self.alias = alias
+            self.name = name
+            self.location = location
+            self.genres = genres
+            self.picture = picture
+            self.thumb = thumb
+            self.description = description
+            self.detailed = detailed
+            self.haystack = ShowSearch.haystack(name: name, alias: alias, location: location,
+                                                 genres: genres, description: description)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case alias, name, location, genres, picture, thumb, description, detailed
+        }
+
+        /// `description`/`detailed` are optional on decode so an on-disk
+        /// index written before this change still loads — they default to
+        /// "not yet backfilled" rather than versioning the cache file.
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            self.init(
+                alias: try c.decode(String.self, forKey: .alias),
+                name: try c.decode(String.self, forKey: .name),
+                location: try c.decode(String.self, forKey: .location),
+                genres: try c.decode([String].self, forKey: .genres),
+                picture: try c.decodeIfPresent(String.self, forKey: .picture),
+                thumb: try c.decodeIfPresent(String.self, forKey: .thumb),
+                description: try c.decodeIfPresent(String.self, forKey: .description) ?? "",
+                detailed: try c.decodeIfPresent(Date.self, forKey: .detailed)
+            )
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(alias, forKey: .alias)
+            try c.encode(name, forKey: .name)
+            try c.encode(location, forKey: .location)
+            try c.encode(genres, forKey: .genres)
+            try c.encodeIfPresent(picture, forKey: .picture)
+            try c.encodeIfPresent(thumb, forKey: .thumb)
+            try c.encode(description, forKey: .description)
+            try c.encodeIfPresent(detailed, forKey: .detailed)
+        }
     }
 
     /// A show's own page: the host blurb, its genres and moods, its artwork.

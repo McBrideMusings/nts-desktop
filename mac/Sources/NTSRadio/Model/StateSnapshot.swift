@@ -113,6 +113,13 @@ struct StateSnapshot: Codable {
     var onAir: String
     var nextUp: String
 
+    /// The show index's own coverage: how many shows it knows about at all,
+    /// how many have their real name/location/description backfilled
+    /// (`ShowRef.detailed != nil`), how many are still queued, and whether
+    /// the backfill is actively running right now — so a script can watch a
+    /// fresh machine's crawl finish without polling pixels.
+    var showIndex: ShowIndexSnapshot
+
     var mixtapeCount: Int
     var channelCount: Int
     /// What each channel is airing, readable whatever the app is playing —
@@ -129,6 +136,14 @@ struct StateSnapshot: Codable {
     /// anything" is only answerable by watching a window appear.
     var autoChecksForUpdates: Bool
     var canCheckForUpdates: Bool
+}
+
+/// `ShowIndex`'s coverage, mirrored for `StateSnapshot.showIndex`.
+struct ShowIndexSnapshot: Codable {
+    var shows: Int
+    var named: Int
+    var remaining: Int
+    var running: Bool
 }
 
 /// One channel's rail, mirroring `AppModel.catalog.channels`.
@@ -272,6 +287,12 @@ extension AppModel {
             scheduleDays: scheduleDays.map { "\($0.label) · \($0.slots.count)" },
             onAir: onAirSlot.map { "\($0.startEnd) \($0.title)" } ?? "",
             nextUp: nextSlot.map { "\($0.startEnd) \($0.title)" } ?? "",
+            showIndex: ShowIndexSnapshot(
+                shows: showIndex.count,
+                named: showIndex.count - backfill.remaining,
+                remaining: backfill.remaining,
+                running: backfill.running
+            ),
             mixtapeCount: catalog.mixtapes.count,
             channelCount: catalog.channels.count,
             channels: catalog.channels.map { ch in

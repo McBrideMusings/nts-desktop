@@ -23,9 +23,18 @@ Moved verbatim from CLAUDE.md on 15 Aug 2026 — issue #42. This is a move, not 
 - `/api/v2/search` answers 200 with an empty `results` array — even called
   exactly as nts.live calls it (`?q=…&types[]=show`) with browser headers, and
   even for terms in its own `metadata.popular_terms`. Search is local; there is
-  no server search to fall back to.
+  no server search to fall back to. `/api/v2/search/episodes?q=…` (and
+  `?query=…`) is worse than absent: it answers 200 and silently ignores `q`,
+  returning all ~87,683 episodes (`metadata.resultset.count`) regardless of the
+  term. `/api/v2/search/shows` is a bare 400.
 - `/api/v2/shows` is not used to seed the index — see
   `adr/0002-show-index-from-sitemap.md`.
+- `/api/v2/shows/<alias>` is the only source of a show's real name, location
+  and host blurb (`description`, already plain text — `description_html` is
+  the same content with the wrapping tag still on). One response is ~36.9KB
+  (it embeds recent episodes; nothing trims it), so backfilling all ~1,834
+  shows is ~68MB — done once per machine (`ShowDetailBackfill`, keyed off
+  `ShowRef.detailed`), never on a recurring cadence.
 - `sitemap.xml.gz` → `sitemap{1,2}.xml.gz` is the complete public index and the
   source `ShowIndex` builds from: 1834 show aliases and 89,260 episode URLs in
   ~1.9MB gzipped, three requests, and `robots.txt` is `Allow: /`. Served with

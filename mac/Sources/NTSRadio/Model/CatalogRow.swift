@@ -1,4 +1,5 @@
 import Foundation
+import EpisodeMatch
 
 /// One tile in the catalog grid.
 ///
@@ -140,7 +141,7 @@ struct CatalogRow: Identifiable, Hashable {
 
 extension NTSAPI.Broadcast {
     var searchText: String {
-        "\(title) \(location) \(genres.joined(separator: " "))".lowercased()
+        ShowSearch.fold("\(title) \(location) \(genres.joined(separator: " "))")
     }
 }
 
@@ -148,6 +149,6 @@ extension Mixtape {
     /// Includes the credits, so searching a host's name finds the mixtape their
     /// show feeds — the route the dial alone can't express.
     var searchText: String {
-        "\(title) \(subtitle) \(credits.map(\.name).joined(separator: " "))".lowercased()
+        ShowSearch.fold("\(title) \(subtitle) \(credits.map(\.name).joined(separator: " "))")
     }
 }

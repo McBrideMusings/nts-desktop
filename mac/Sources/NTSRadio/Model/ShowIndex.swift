@@ -66,7 +66,25 @@ final class ShowIndex: ObservableObject {
             return
         }
         shows[alias] = NTSAPI.ShowRef(alias: alias, name: name, location: location,
-                                      genres: genres, picture: picture, thumb: thumb)
+                                      genres: genres, picture: picture, thumb: thumb,
+                                      description: shows[alias]?.description ?? "",
+                                      detailed: shows[alias]?.detailed)
+        sortedCache = nil
+        flushSoon()
+    }
+
+    /// Merge a full `/api/v2/shows/<alias>` read into the index — the richest
+    /// source there is, so unlike `note(_:)` this always wins rather than
+    /// deferring to whatever is already on file. Used by `ShowDetailBackfill`
+    /// and by opening a show's detail page, both of which fetched the same
+    /// endpoint `note(_:)`'s sparser callers never see.
+    func noteDetailed(alias: String, name: String, location: String, genres: [String],
+                       picture: String?, description: String, detailed: Date) {
+        guard !alias.isEmpty else { return }
+        let existing = shows[alias]
+        shows[alias] = NTSAPI.ShowRef(alias: alias, name: name, location: location, genres: genres,
+                                      picture: picture ?? existing?.picture, thumb: existing?.thumb,
+                                      description: description, detailed: detailed)
         sortedCache = nil
         flushSoon()
     }
