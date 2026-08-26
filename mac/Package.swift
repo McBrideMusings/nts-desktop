@@ -14,6 +14,14 @@ let package = Package(
         .package(url: "https://github.com/sparkle-project/Sparkle.git", from: "2.6.4"),
     ],
     targets: [
+        // Pure Ratcliff/Obershelp string matching + NTS date-alias vocabulary,
+        // with zero I/O — so the accuracy probe can link it without pulling in
+        // the app's Cache/NTSAPI/MainActor machinery.
+        .target(
+            name: "EpisodeMatch",
+            path: "Sources/EpisodeMatch",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
         // Firestore Listen client + generated protobuf/gRPC code, isolated from
         // the app so a probe tool can share it.
         .target(
@@ -31,6 +39,7 @@ let package = Package(
             name: "NTSRadio",
             dependencies: [
                 "NTSFirestore",
+                "EpisodeMatch",
                 .product(name: "Sparkle", package: "Sparkle"),
             ],
             path: "Sources/NTSRadio",
@@ -54,9 +63,11 @@ let package = Package(
         ),
         // Throwaway: prove the Firestore Listen stream end-to-end with a real
         // token. `NTS_TOKEN=<idToken> swift run FSProbe <mixtape-alias>`.
+        // `swift run FSProbe accuracy` instead runs the episode-index-resolver
+        // accuracy harness against the live sitemap.
         .executableTarget(
             name: "FSProbe",
-            dependencies: ["NTSFirestore"],
+            dependencies: ["NTSFirestore", "EpisodeMatch"],
             path: "Sources/FSProbe",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),

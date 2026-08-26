@@ -21,6 +21,10 @@ struct StateSnapshot: Codable {
     var subtitle: String
     var currentTrack: String
     var trackCount: Int
+    /// The secondary label's link — the nts.live episode page for a mixtape's
+    /// current source episode (resolved from the sitemap when Firestore left
+    /// the aliases empty). Empty when there is none to show.
+    var episodeURL: String
 
     /// Audio held but not yet played — how far the speakers trail the
     /// stream, and so how far ahead of them the tracklist runs.
@@ -212,6 +216,7 @@ extension AppModel {
             subtitle: subtitle,
             currentTrack: track.map { "\($0.artist) — \($0.title)" } ?? "",
             trackCount: tracks.count,
+            episodeURL: nowPlayingEpisodeURL?.absoluteString ?? "",
             bufferSeconds: (engine.bufferedAhead * 10).rounded() / 10,
             pendingTrack: pendingTrack?.name ?? "",
             pendingSeconds: pendingTrack?.seconds ?? 0,

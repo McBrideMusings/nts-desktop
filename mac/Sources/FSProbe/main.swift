@@ -5,6 +5,13 @@ import NTSFirestore
 //   NTS_TOKEN=<firebase-id-token> swift run FSProbe <mixtape-alias|1|2>
 // Pass a mixtape alias, or "1"/"2" for live channel 1/2. Prints the newest-
 // first list on every push, then exits after ~25s.
+//
+//   swift run FSProbe accuracy
+// runs the episode-index-resolver accuracy harness instead (see AccuracyProbe.swift).
+
+if CommandLine.arguments.dropFirst().first == "accuracy" {
+    await AccuracyProbe.run()
+}
 
 let arg = CommandLine.arguments.dropFirst().first ?? "memory-lane"
 // "1"/"2" select a live channel; anything else is a mixtape alias.

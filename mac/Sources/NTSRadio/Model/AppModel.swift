@@ -89,6 +89,7 @@ final class AppModel: ObservableObject {
     let auth = NTSAuth()
     let saved = Saved.shared
     let showIndex = ShowIndex.shared
+    let episodeIndex = EpisodeIndex.shared
     let slotArt = SlotArtLoader()
     let explore = ExploreLoader()
 
@@ -335,11 +336,24 @@ final class AppModel: ObservableObject {
         nowPlaying = NowPlayingCenter(model: self)
         Task { await refreshMixtapes() }
         Task { await pollSchedule() }
-        Task { await showIndex.buildIfStale() }
+        Task { await refreshSitemapIndices() }
         Task {
             await loadExploreVocabulary()
             explore.reload()
         }
+    }
+
+    /// `ShowIndex` and `EpisodeIndex` both key off the sitemap; walking it
+    /// twice would double the ~1.9MB gzip download and the parse, so this
+    /// fetches once (only if either actually needs a refresh) and hands each
+    /// index its share.
+    private func refreshSitemapIndices() async {
+        let needShow = showIndex.needsBuild
+        let needEpisode = episodeIndex.needsBuild
+        guard needShow || needEpisode else { return }
+        guard let walk = try? await NTSAPI.sitemapWalk() else { return }
+        if needShow { await showIndex.build(showAliases: walk.showAliases) }
+        if needEpisode { await episodeIndex.build(entries: walk.episodes) }
     }
 
     // MARK: Derived view-model
@@ -395,10 +409,18 @@ final class AppModel: ObservableObject {
 
     /// Link for the secondary label: the nts.live episode page for the mixtape's
     /// current source episode. Nil for live channels and before the first push.
+    ///
+    /// NTS's Firestore push sometimes leaves `showAlias`/`episodeAlias` empty;
+    /// when it does, `EpisodeIndex.resolve` matches the display `title` against
+    /// the sitemap instead. That match can refuse (also nil) rather than risk
+    /// a wrong link.
     var nowPlayingEpisodeURL: URL? {
-        guard currentMixtape != nil, let ep = mixtapeEpisode,
-              !ep.showAlias.isEmpty, !ep.episodeAlias.isEmpty else { return nil }
-        return URL(string: "https://www.nts.live/shows/\(ep.showAlias)/episodes/\(ep.episodeAlias)")
+        guard currentMixtape != nil, let ep = mixtapeEpisode else { return nil }
+        if !ep.showAlias.isEmpty, !ep.episodeAlias.isEmpty {
+            return URL(string: "https://www.nts.live/shows/\(ep.showAlias)/episodes/\(ep.episodeAlias)")
+        }
+        guard let resolved = episodeIndex.resolve(title: ep.title) else { return nil }
+        return URL(string: "https://www.nts.live/shows/\(resolved.show)/episodes/\(resolved.episode)")
     }
 
     /// Link for the primary label: the nts.live episode page for a live channel's
@@ -562,6 +584,10 @@ final class AppModel: ObservableObject {
             onUpdate: { [weak self] episode in
                 guard let self, self.activeTitleAlias == alias else { return }
                 self.mixtapeEpisode = episode
+                if let episode, episode.showAlias.isEmpty || episode.episodeAlias.isEmpty {
+                    let resolved = self.episodeIndex.resolve(title: episode.title)
+                    Log.api.debug("mixtape_titles for \(alias, privacy: .public) sent no alias for \"\(episode.title, privacy: .public)\" — EpisodeIndex resolved: \(resolved.map { "\($0.show)/\($0.episode)" } ?? "refused", privacy: .public)")
+                }
             }
         )
         titleListener = listener

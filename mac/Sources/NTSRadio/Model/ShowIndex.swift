@@ -85,30 +85,39 @@ final class ShowIndex: ObservableObject {
         set { UserDefaults.standard.set(newValue, forKey: Self.seededKey) }
     }
 
-    func buildIfStale() async {
-        guard !built, !building else { return }
+    /// Whether the index needs a rebuild — missing, or older than a day. Read
+    /// by `AppModel` before fetching the sitemap, so a walk that only
+    /// `EpisodeIndex` needs doesn't also re-seed a fresh `ShowIndex`.
+    var needsBuild: Bool {
+        guard !built, !building else { return false }
         let age = lastSeed.map { Date().timeIntervalSince($0) }
-        guard shows.isEmpty || (age ?? .infinity) > Self.maxAge else { built = true; return }
-        await build()
+        return shows.isEmpty || (age ?? .infinity) > Self.maxAge
+    }
+
+    /// Build the index if it's missing or older than a day, walking the
+    /// sitemap itself. Safe to call on every launch; a fresh cache makes it a
+    /// no-op. Convenience for callers that don't need to share the walk with
+    /// `EpisodeIndex` — `AppModel`'s launch sequence calls `build(showAliases:)`
+    /// directly instead, off one shared `NTSAPI.sitemapWalk()`.
+    func buildIfStale() async {
+        guard needsBuild else { return }
+        guard let aliases = try? await NTSAPI.sitemapWalk().showAliases else { return }
+        await build(showAliases: aliases)
     }
 
     /// Seed from the sitemap, then top up from what NTS published today.
     ///
     /// Best-effort in both halves: a failure leaves whatever is already indexed
     /// standing rather than emptying it, and `ServiceStatus` has already said so.
-    func build() async {
+    func build(showAliases: [String]) async {
         guard !building else { return }
         building = true
         defer { building = false; built = true }
 
-        var seeded = false
-        if let aliases = try? await NTSAPI.sitemapShowAliases() {
-            seeded = true
-            for alias in aliases {
-                // `note` leaves richer entries alone, so re-seeding never
-                // downgrades a show the app has actually met.
-                note(alias: alias, name: Self.title(from: alias))
-            }
+        for alias in showAliases {
+            // `note` leaves richer entries alone, so re-seeding never
+            // downgrades a show the app has actually met.
+            note(alias: alias, name: Self.title(from: alias))
         }
 
         // The sitemap is regenerated about daily and today's shows are not in it
@@ -121,10 +130,10 @@ final class ShowIndex: ObservableObject {
             }
         }
 
-        // Only a sitemap that actually answered counts as a seed. Stamping it
+        // Only a walk that actually answered counts as a seed. Stamping it
         // regardless would mean a launch with no network marked the index fresh
         // for a day and the re-seed never ran once the network came back.
-        if seeded { lastSeed = Date() }
+        if !showAliases.isEmpty { lastSeed = Date() }
         flush()
         sortedCache = nil
     }
