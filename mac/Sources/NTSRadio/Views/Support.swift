@@ -87,6 +87,18 @@ struct LinkLabel: View {
             if inside { NSCursor.pointingHand.set() } else { exitCursor.set() }
         }
         .help(url?.absoluteString ?? "")
+        .contextMenu {
+            Button("Copy") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(text, forType: .string)
+            }
+            if let url {
+                Button("Copy Link") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(url.absoluteString, forType: .string)
+                }
+            }
+        }
     }
 }
 

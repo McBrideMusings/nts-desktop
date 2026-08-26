@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import GRPCCore
 import GRPCNIOTransportHTTP2
@@ -38,17 +39,41 @@ public final class FirestoreQueryListener<Element: Sendable> {
     /// Force a reconnect before the ~1h ID-token TTL so an expired token can't
     /// silently stall a long-open stream.
     private static var maxStreamAge: TimeInterval { 50 * 60 }
+    /// A gRPC stream that dies silently (half-open TCP after sleep/App Nap)
+    /// throws nothing, so liveness is inferred from Firestore's ~30s keepalive
+    /// cadence instead: no message at all — not even a no-change `targetChange`
+    /// — for this long means the connection is dead.
+    private static var stallThreshold: TimeInterval { 90 }
     private var database: String { "projects/\(Self.projectID)/databases/(default)" }
 
-    /// Thrown when the stream hits `maxStreamAge` — a planned reconnect, distinct
-    /// from cancellation (which stops the listener for good).
-    private struct StreamExpired: Error {}
+    /// Thrown from `requestProducer` to force the stream down for a planned
+    /// reconnect (token expiry or a detected stall) — distinct from a genuine
+    /// transport failure. grpc-swift wraps whatever `requestProducer` throws
+    /// into its own `RPCError` before it reaches `connectOnce()`'s caller, so
+    /// `runLoop` can't tell a planned reconnect from a real error by catching
+    /// this type; `reconnectReason` is the side channel that survives the
+    /// wrap and lets it reset the backoff instead of penalizing it.
+    private struct ForcedReconnect: Error {}
+    private actor ReconnectReason {
+        enum Reason { case none, expired, stalled }
+        private var reason = Reason.none
+        func set(_ r: Reason) { reason = r }
+        func consume() -> Reason {
+            defer { reason = .none }
+            return reason
+        }
+    }
+    private let reconnectReason = ReconnectReason()
 
     private let query: FirestoreQuery
     private let decode: @Sendable (Google_Firestore_V1_Document) -> (sort: Date, value: Element)?
     private let tokenProvider: @Sendable () async throws -> String
     private let onUpdate: @MainActor @Sendable ([Element]) -> Void
     private var task: Task<Void, Never>?
+    /// The in-flight `connectOnce()` attempt, so `forceReconnect()` can cancel
+    /// just that attempt without stopping the listener for good.
+    private var currentConnection: Task<Void, Error>?
+    private var wakeObserver: NSObjectProtocol?
 
     public init(query: FirestoreQuery,
                 decode: @escaping @Sendable (Google_Firestore_V1_Document) -> (sort: Date, value: Element)?,
@@ -63,31 +88,66 @@ public final class FirestoreQueryListener<Element: Sendable> {
     public func start() {
         guard task == nil else { return }
         task = Task { [weak self] in await self?.runLoop() }
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: nil
+        ) { [weak self] _ in self?.forceReconnect() }
     }
 
     public func stop() {
         task?.cancel()
         task = nil
+        currentConnection?.cancel()
+        currentConnection = nil
+        if let wakeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
+        }
+        wakeObserver = nil
     }
 
-    deinit { task?.cancel() }
+    deinit {
+        task?.cancel()
+        currentConnection?.cancel()
+        if let wakeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
+        }
+    }
+
+    /// Tear down the in-flight connection so `runLoop` rebuilds it — used on
+    /// wake, where a half-open stream from before sleep would otherwise sit
+    /// silent until `stallThreshold` catches it.
+    private func forceReconnect() {
+        currentConnection?.cancel()
+    }
 
     // MARK: - Connection lifecycle
 
     private func runLoop() async {
         var attempt = 0
         while !Task.isCancelled {
+            let connection = Task { try await self.connectOnce() }
+            currentConnection = connection
             do {
-                try await connectOnce()
+                try await connection.value
                 attempt = 0
             } catch is CancellationError {
-                return
-            } catch is StreamExpired {
+                // Either the listener was stopped for good (outer task
+                // cancelled) or `forceReconnect()` cancelled just this
+                // attempt — the latter reconnects rather than stopping.
+                if Task.isCancelled { return }
                 attempt = 0
                 continue
             } catch {
-                attempt += 1
+                switch await reconnectReason.consume() {
+                case .expired, .stalled:
+                    // A planned reconnect (token TTL or a detected stall), not
+                    // a real failure — don't penalize it with backoff.
+                    attempt = 0
+                    continue
+                case .none:
+                    attempt += 1
+                }
             }
+            currentConnection = nil
             if Task.isCancelled { return }
             let delay = min(30.0, pow(2.0, Double(min(attempt, 5))))
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
@@ -109,6 +169,7 @@ public final class FirestoreQueryListener<Element: Sendable> {
         let request = makeListenRequest()
         let emit = onUpdate
         let decode = self.decode
+        let reconnectReason = self.reconnectReason
 
         try await withGRPCClient(transport: transport) { client in
             let firestore = Google_Firestore_V1_Firestore.Client(wrapping: client)
@@ -119,14 +180,25 @@ public final class FirestoreQueryListener<Element: Sendable> {
                     // Hold the send side open so the server keeps streaming, but cap
                     // the lifetime: the bearer token is sent only at open and expires
                     // (~1h), so tear down and reconnect with a fresh one before then.
+                    // The same poll also catches a silently dead connection: Firestore
+                    // sends a `targetChange` keepalive roughly every 30s, so no message
+                    // at all for `stallThreshold` means the stream died without an error.
                     let deadline = Date().addingTimeInterval(Self.maxStreamAge)
                     while !Task.isCancelled {
                         try await Task.sleep(nanoseconds: 30 * 1_000_000_000)
-                        if Date() >= deadline { throw StreamExpired() }
+                        if Date() >= deadline {
+                            await reconnectReason.set(.expired)
+                            throw ForcedReconnect()
+                        }
+                        if await store.timeSinceLastMessage() >= Self.stallThreshold {
+                            await reconnectReason.set(.stalled)
+                            throw ForcedReconnect()
+                        }
                     }
                 },
                 onResponse: { response in
                     for try await message in response.messages {
+                        await store.touch()
                         switch message.responseType {
                         case .documentChange(let change):
                             let doc = change.document
@@ -187,6 +259,10 @@ public final class FirestoreQueryListener<Element: Sendable> {
     /// Holds the current document set for one connection, newest-first on read.
     private actor Store {
         private var docs: [String: (sort: Date, value: Element)] = [:]
+        private var lastMessageAt = Date()
+
+        func touch() { lastMessageAt = Date() }
+        func timeSinceLastMessage() -> TimeInterval { Date().timeIntervalSince(lastMessageAt) }
 
         func upsert(_ name: String, _ entry: (sort: Date, value: Element)?) -> [Element] {
             docs[name] = entry

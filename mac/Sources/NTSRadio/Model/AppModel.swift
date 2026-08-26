@@ -14,6 +14,23 @@ enum Selection: Equatable {
     case episode(show: String, episode: String)
 }
 
+/// The key `AppModel.sourceCache` is keyed by — a mixtape alias or channel
+/// number, the two sources that carry a live tracklist. `nil` for `.idle` and
+/// `.episode`, which have nothing to cache (an episode's tracklist is loaded
+/// whole, not streamed).
+enum SourceKey: Hashable {
+    case mixtape(String)
+    case channel(Int)
+
+    init?(_ selection: Selection) {
+        switch selection {
+        case .mixtape(let alias): self = .mixtape(alias)
+        case .channel(let number): self = .channel(number)
+        case .idle, .episode: return nil
+        }
+    }
+}
+
 /// Which of the two places the window is. **One slot, not one flag each.**
 ///
 /// These are peers — two views of the station you switch between and stay in —
@@ -241,6 +258,19 @@ final class AppModel: ObservableObject {
     private var titleListener: MixtapeTitleListener?
     private var activeTitleAlias: String?
 
+    /// The last published tracks and mixtape episode for a source that isn't
+    /// selected right now, stamped with when they were captured — so switching
+    /// away and back within a couple of minutes shows what was already known
+    /// instead of a blank list until the next Firestore push. In-memory only:
+    /// a stale cache surviving a relaunch is the bug this exists to avoid.
+    private struct SourceCache {
+        let tracks: [Track]
+        let mixtapeEpisode: MixtapeTitle?
+        let capturedAt: Date
+    }
+    private var sourceCache: [SourceKey: SourceCache] = [:]
+    private static let sourceCacheTTL: TimeInterval = 120
+
     /// Publishes what's playing to the system and receives the media keys /
     /// headset buttons. Built last in `init` because it reads this model.
     private var nowPlaying: NowPlayingCenter?
@@ -405,10 +435,25 @@ final class AppModel: ObservableObject {
     /// Tune to a source. Picking one is a request to hear it, so this starts
     /// playback by default; the media keys and the snapshot renderer opt out.
     func select(_ s: Selection, autoplay: Bool = true) {
+        cacheCurrentSource()
         selection = s
         loadCurrent(autoplay: autoplay)
         updateTracklist()
         updateMixtapeTitle()
+    }
+
+    /// Stash the outgoing source's tracks/episode before `selection` moves on,
+    /// so a return within `sourceCacheTTL` can restore them. See `SourceCache`.
+    private func cacheCurrentSource() {
+        guard let key = SourceKey(selection) else { return }
+        sourceCache[key] = SourceCache(tracks: tracks, mixtapeEpisode: mixtapeEpisode, capturedAt: Date())
+    }
+
+    /// The cached tracks/episode for `selection`, if any and still fresh.
+    private func cachedSource() -> SourceCache? {
+        guard let key = SourceKey(selection), let cached = sourceCache[key],
+              Date().timeIntervalSince(cached.capturedAt) < Self.sourceCacheTTL else { return nil }
+        return cached
     }
 
     /// Open (or tear down) the live tracklist stream for the current source.
@@ -425,7 +470,7 @@ final class AppModel: ObservableObject {
         if listener != nil, wanted == activeStream { return }
         listener?.stop()
         listener = nil
-        publish([])
+        publish(cachedSource()?.tracks ?? [])
         activeStream = wanted
         guard let wanted else { return }
         let hue = wanted.hue
@@ -506,7 +551,7 @@ final class AppModel: ObservableObject {
         if titleListener != nil, alias == activeTitleAlias { return }
         titleListener?.stop()
         titleListener = nil
-        mixtapeEpisode = nil
+        mixtapeEpisode = cachedSource()?.mixtapeEpisode
         activeTitleAlias = alias
         guard let alias else { return }
         let listener = MixtapeTitleListener(
