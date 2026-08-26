@@ -354,35 +354,52 @@ enum NTSAPI {
         var thumb: String? { media?.picture_small ?? media?.picture_thumb ?? picture }
     }
 
-    /// Every show NTS publishes, from its own sitemap.
+    /// One sitemap walk's two outputs: every show alias, and every episode
+    /// alias (with the show it belongs to) NTS's sitemap carries.
+    struct SitemapWalk {
+        let showAliases: [String]
+        /// (show alias, full episode alias) for every `/shows/<alias>/episodes/<episode>`
+        /// URL in the sitemap — 89,625 of them, most (but not all) date-suffixed.
+        let episodes: [(show: String, episodeAlias: String)]
+    }
+
+    /// Every show, and every episode, NTS publishes — read off its own sitemap
+    /// in a single walk.
     ///
     /// This replaces walking `/api/v2/shows`, which clamps `limit` to 12 and
     /// answers `422 Unprocessable Entity: The requested offset is not allowed`
     /// past `offset=1000` — 85 requests to reach 1012 of them, with the rest
     /// simply unreachable. The sitemap is the same catalogue with no ceiling:
-    /// 1,834 aliases, ~1.9MB gzipped, three requests including the index that
-    /// names the parts.
+    /// 1,834 show aliases and 89,625 episode aliases, ~1.9MB gzipped, three
+    /// requests including the index that names the parts.
     ///
     /// The files are served with `Content-Encoding: gzip`, so URLSession
-    /// decompresses them on the way in and this only ever sees XML.
-    static func sitemapShowAliases() async throws -> [String] {
+    /// decompresses them on the way in and this only ever sees XML. Callers
+    /// that want both outputs (`ShowIndex` and `EpisodeIndex`) must share one
+    /// call to this rather than each re-downloading the sitemap; see
+    /// `AppModel`'s launch sequence.
+    static func sitemapWalk() async throws -> SitemapWalk {
         let index = try await fetchData(from: URL(string: "https://www.nts.live/sitemap.xml.gz")!,
                                         endpoint: "sitemap")
         let parts = locations(in: index).filter { $0.hasSuffix(".xml.gz") }
 
-        var aliases: Set<String> = []
+        var showAliases: Set<String> = []
+        var episodes: [(show: String, episodeAlias: String)] = []
         for part in parts {
             guard let url = URL(string: part) else { continue }
             let data = try await fetchData(from: url, endpoint: "sitemap")
             for location in locations(in: data) {
-                // `/shows/<alias>` and `/shows/<alias>/episodes/<episode>` both
-                // name the show; only the first segment is wanted.
-                let parts = location.split(separator: "/").map(String.init)
-                guard let i = parts.firstIndex(of: "shows"), parts.count > i + 1 else { continue }
-                aliases.insert(parts[i + 1])
+                let segments = location.split(separator: "/").map(String.init)
+                guard let i = segments.firstIndex(of: "shows"), segments.count > i + 1 else { continue }
+                let show = segments[i + 1]
+                showAliases.insert(show)
+                // `/shows/<alias>/episodes/<episode>` additionally names an episode.
+                if segments.count > i + 3, segments[i + 2] == "episodes" {
+                    episodes.append((show: show, episodeAlias: segments[i + 3]))
+                }
             }
         }
-        return aliases.sorted()
+        return SitemapWalk(showAliases: showAliases.sorted(), episodes: episodes)
     }
 
     /// Every `<loc>` in a sitemap, without pulling in an XML parser for two tags.
