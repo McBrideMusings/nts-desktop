@@ -268,6 +268,20 @@ final class NTSFilterExploreCommand: NTSCommand {
                 return false
             }
 
+            // Same check as the mood above, for the same reason: an id NTS does
+            // not file matches nothing, so the feed returns empty and the caller
+            // reads a typo as a genuine "no episodes match".
+            if let bad = filters.genres.first(where: { !m.genreIDs.contains($0) }) {
+                self.scriptErrorNumber = -1703   // errAETypeError
+                self.scriptErrorString = m.genres.isEmpty
+                    ? "The genre list hasn't loaded yet — try again in a moment."
+                    : """
+                      \"\(bad)\" is not a genre id. `browse genre` takes the name \
+                      as the card prints it, e.g. browse genre \"Kosmische\".
+                      """
+                return false
+            }
+
             // Filtering implies looking: the chips this stands in for only exist
             // while the catalog is up, so a filter set against a closed catalog
             // would report results nobody can see.

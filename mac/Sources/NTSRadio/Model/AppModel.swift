@@ -803,13 +803,25 @@ final class AppModel: ObservableObject {
     /// second for as long as the window is open.
     private var genreIDsByName: [String: String] = [:]
 
+    /// Every genre id Explore files, both levels. `filter explore` checks a
+    /// scripted id against this the way it already checks a mood: an id NTS has
+    /// never heard of matches no episode, so the feed comes back empty and reads
+    /// as "nothing matches these filters" rather than as the typo it is.
+    private(set) var genreIDs: Set<String> = []
+
     private func rebuildGenreIndex() {
         var index: [String: String] = [:]
+        var ids: Set<String> = []
         for genre in genres {
             index[Self.genreKey(genre.name)] = genre.id
-            for sub in genre.subgenres { index[Self.genreKey(sub.name)] = sub.id }
+            ids.insert(genre.id)
+            for sub in genre.subgenres {
+                index[Self.genreKey(sub.name)] = sub.id
+                ids.insert(sub.id)
+            }
         }
         genreIDsByName = index
+        genreIDs = ids
     }
 
     /// NTS's own list has entries with a trailing space ("Amapiano "), and case
