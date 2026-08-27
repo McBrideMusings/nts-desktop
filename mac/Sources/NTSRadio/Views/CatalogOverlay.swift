@@ -261,6 +261,7 @@ struct Tile: View {
     // live channel you can hear from the rail.
     var body: some View {
         Button {
+            guard !targetsDeadShow else { return }
             if case .episode = row.playable { model.play(row) } else { model.open(row) }
         } label: {
             face
@@ -315,6 +316,11 @@ struct Tile: View {
                 .lineLimit(1)
                 .padding(.top, 4)
         }
+    }
+
+    private var targetsDeadShow: Bool {
+        guard case .show(let alias, _) = row.target else { return false }
+        return model.showIndex.ref(alias)?.dead == true
     }
 
     /// Play and star, revealed on hover so the resting grid stays a wall of
@@ -416,6 +422,11 @@ private struct ShowDetailPane: View {
                         .foregroundStyle(Color(hex: 0xc2c1bc))
                         .lineSpacing(4)
                         .frame(maxWidth: 620, alignment: .leading)
+                        .padding(.top, 14)
+                } else if indexed?.dead == true {
+                    Text("This show’s page is no longer on NTS.")
+                        .font(Theme.ui(12))
+                        .foregroundStyle(Theme.inkMuted)
                         .padding(.top, 14)
                 } else if detail == nil {
                     Text("Loading the show page…")
@@ -636,8 +647,11 @@ private struct CreditRow: View {
     var body: some View {
         FlowLayout(spacing: 6) {
             ForEach(credits) { c in
-                CreditChip(credit: c) {
-                    guard !c.alias.isEmpty else { return }
+                // A credit whose show 404s permanently is exactly like one
+                // with no alias at all — there is nowhere for it to lead.
+                let linked = !c.alias.isEmpty && model.showIndex.ref(c.alias)?.dead != true
+                CreditChip(credit: c, linked: linked) {
+                    guard linked else { return }
                     model.detail = .show(alias: c.alias, fallbackTitle: c.name)
                     model.showDetail.load(c.alias)
                 }
@@ -649,11 +663,11 @@ private struct CreditRow: View {
 
 private struct CreditChip: View {
     let credit: NTSAPI.MixtapeCredit
+    let linked: Bool
     let action: () -> Void
     @State private var hovering = false
 
     var body: some View {
-        let linked = !credit.alias.isEmpty
         Text(credit.name.uppercased())
             .font(Theme.mono(8, .semibold))
             .tracking(1.2)

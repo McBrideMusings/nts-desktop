@@ -52,6 +52,11 @@ final class ShowDetailLoader: ObservableObject {
             guard let self else { return }
             self.detailsInFlight.remove(alias)
             switch result {
+            case .failure(NTSAPI.APIError.http(404)):
+                // NTS has removed this show: mark it dead so the detail pane
+                // stops saying "Loading…" and tiles stop offering to open it.
+                self.showIndex.markDead(alias: alias)
+                return
             case .failure(let error):
                 self.detailErrors[alias] = error.localizedDescription
             case .success(let d):

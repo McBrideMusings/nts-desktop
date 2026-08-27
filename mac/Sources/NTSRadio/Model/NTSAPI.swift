@@ -276,6 +276,13 @@ enum NTSAPI {
         /// means it is still in the backfill queue and `name` may still be
         /// the alias-derived guess (`ShowIndex.title(from:)`).
         let detailed: Date?
+        /// True once `/api/v2/shows/<alias>` has answered a definitive 404 —
+        /// NTS's own sitemap can reference a show that no longer exists on
+        /// their side (dead accounts, takedowns). Distinct from `detailed ==
+        /// nil`: that means "haven't tried yet, keep retrying"; this means
+        /// "tried, and there is nothing there" — never retried again, and
+        /// never rendered as a link (see `ShowIndex.markDead`).
+        let dead: Bool
 
         /// Everything a query is matched against, folded once at build time
         /// — not part of the wire format, always recomputed from the fields
@@ -290,7 +297,7 @@ enum NTSAPI {
 
         init(alias: String, name: String, location: String, genres: [String],
              picture: String? = nil, thumb: String? = nil, description: String = "",
-             detailed: Date? = nil) {
+             detailed: Date? = nil, dead: Bool = false) {
             self.alias = alias
             self.name = name
             self.location = location
@@ -299,17 +306,19 @@ enum NTSAPI {
             self.thumb = thumb
             self.description = description
             self.detailed = detailed
+            self.dead = dead
             self.haystack = ShowSearch.haystack(name: name, alias: alias, location: location,
                                                  genres: genres, description: description)
         }
 
         private enum CodingKeys: String, CodingKey {
-            case alias, name, location, genres, picture, thumb, description, detailed
+            case alias, name, location, genres, picture, thumb, description, detailed, dead
         }
 
-        /// `description`/`detailed` are optional on decode so an on-disk
-        /// index written before this change still loads — they default to
-        /// "not yet backfilled" rather than versioning the cache file.
+        /// `description`/`detailed`/`dead` are optional on decode so an
+        /// on-disk index written before this change still loads — they
+        /// default to "not yet backfilled" / "not known dead" rather than
+        /// versioning the cache file.
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             self.init(
@@ -320,7 +329,8 @@ enum NTSAPI {
                 picture: try c.decodeIfPresent(String.self, forKey: .picture),
                 thumb: try c.decodeIfPresent(String.self, forKey: .thumb),
                 description: try c.decodeIfPresent(String.self, forKey: .description) ?? "",
-                detailed: try c.decodeIfPresent(Date.self, forKey: .detailed)
+                detailed: try c.decodeIfPresent(Date.self, forKey: .detailed),
+                dead: try c.decodeIfPresent(Bool.self, forKey: .dead) ?? false
             )
         }
 
@@ -334,6 +344,7 @@ enum NTSAPI {
             try c.encodeIfPresent(thumb, forKey: .thumb)
             try c.encode(description, forKey: .description)
             try c.encodeIfPresent(detailed, forKey: .detailed)
+            try c.encode(dead, forKey: .dead)
         }
     }
 

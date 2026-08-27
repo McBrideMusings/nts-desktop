@@ -30,19 +30,22 @@ final class ShowDetailBackfill: ObservableObject {
 
     /// How many known shows still have no real name/location/description —
     /// still queued, or (once `running` goes false) failed their one attempt
-    /// this launch and waiting for the next to retry.
+    /// this launch and waiting for the next to retry. A confirmed-dead show
+    /// (`ShowRef.dead`) doesn't count: nothing is "still to load" there,
+    /// NTS's own data says it's gone.
     var remaining: Int {
-        ShowIndex.shared.shows.values.filter { $0.detailed == nil }.count
+        ShowIndex.shared.shows.values.filter { $0.detailed == nil && !$0.dead }.count
     }
 
     /// Fetch every alias in the show index that has never been detailed,
     /// `concurrency` at a time. Safe to call every launch: an index with
     /// nothing left to backfill returns immediately. Quitting mid-crawl loses
     /// nothing — each fetch's result is already on disk (`ShowIndex.flush`),
-    /// so the next launch resumes exactly where this one stopped.
+    /// so the next launch resumes exactly where this one stopped. A show
+    /// already marked dead is never re-queued.
     func start() async {
         guard !running else { return }
-        let queue = ShowIndex.shared.all.filter { $0.detailed == nil }
+        let queue = ShowIndex.shared.all.filter { $0.detailed == nil && !$0.dead }
         guard !queue.isEmpty else { return }
         running = true
         defer { running = false }
@@ -68,14 +71,23 @@ final class ShowDetailBackfill: ObservableObject {
         }
     }
 
-    /// One alias's fetch-and-merge. A failure leaves the existing entry's
+    /// One alias's fetch-and-merge. A 404 means NTS itself says this show is
+    /// gone — permanent, so it's marked dead rather than left to retry
+    /// forever. Any other failure (offline, a timeout, a 5xx) leaves
     /// `detailed` at nil, so it stays queued for the next launch — refusing
-    /// is correct, since NTS answering doesn't mean this alias got worse.
+    /// is correct there, since NTS answering doesn't mean this alias got
+    /// worse.
     private static func fetchOne(alias: String) async {
-        guard let d = try? await NTSAPI.show(alias: alias, silent: true) else { return }
-        ShowIndex.shared.noteDetailed(
-            alias: alias, name: d.name, location: d.location, genres: d.genres,
-            picture: d.image?.absoluteString, description: d.description, detailed: Date()
-        )
+        do {
+            let d = try await NTSAPI.show(alias: alias, silent: true)
+            ShowIndex.shared.noteDetailed(
+                alias: alias, name: d.name, location: d.location, genres: d.genres,
+                picture: d.image?.absoluteString, description: d.description, detailed: Date()
+            )
+        } catch NTSAPI.APIError.http(404) {
+            ShowIndex.shared.markDead(alias: alias)
+        } catch {
+            // Best-effort: leave `detailed` nil for the next launch to retry.
+        }
     }
 }

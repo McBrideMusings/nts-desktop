@@ -68,7 +68,8 @@ final class ShowIndex: ObservableObject {
         shows[alias] = NTSAPI.ShowRef(alias: alias, name: name, location: location,
                                       genres: genres, picture: picture, thumb: thumb,
                                       description: shows[alias]?.description ?? "",
-                                      detailed: shows[alias]?.detailed)
+                                      detailed: shows[alias]?.detailed,
+                                      dead: shows[alias]?.dead ?? false)
         sortedCache = nil
         flushSoon()
     }
@@ -77,14 +78,29 @@ final class ShowIndex: ObservableObject {
     /// source there is, so unlike `note(_:)` this always wins rather than
     /// deferring to whatever is already on file. Used by `ShowDetailBackfill`
     /// and by opening a show's detail page, both of which fetched the same
-    /// endpoint `note(_:)`'s sparser callers never see.
+    /// endpoint `note(_:)`'s sparser callers never see. A successful read
+    /// means the show is not dead, whatever an earlier attempt thought.
     func noteDetailed(alias: String, name: String, location: String, genres: [String],
                        picture: String?, description: String, detailed: Date) {
         guard !alias.isEmpty else { return }
         let existing = shows[alias]
         shows[alias] = NTSAPI.ShowRef(alias: alias, name: name, location: location, genres: genres,
                                       picture: picture ?? existing?.picture, thumb: existing?.thumb,
-                                      description: description, detailed: detailed)
+                                      description: description, detailed: detailed, dead: false)
+        sortedCache = nil
+        flushSoon()
+    }
+
+    /// Record that `/api/v2/shows/<alias>` answered a definitive 404 — NTS's
+    /// own data says this show is gone, not that the network hiccuped.
+    /// Idempotent and permanent: once marked, `ShowDetailBackfill` stops
+    /// queuing it and any view rendering it as a link (`CreditChip`, `Tile`)
+    /// renders it as inert text instead — see `ShowRef.dead`.
+    func markDead(alias: String) {
+        guard !alias.isEmpty, let existing = shows[alias], !existing.dead else { return }
+        shows[alias] = NTSAPI.ShowRef(alias: existing.alias, name: existing.name, location: existing.location,
+                                      genres: existing.genres, picture: existing.picture, thumb: existing.thumb,
+                                      description: existing.description, detailed: existing.detailed, dead: true)
         sortedCache = nil
         flushSoon()
     }
