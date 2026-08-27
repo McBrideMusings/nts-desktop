@@ -968,7 +968,12 @@ final class AppModel: ObservableObject {
         let n = showIndex.count
         if showIndex.building { return "READING NTS'S SITEMAP — \(n) SHOWS SO FAR" }
         if backfill.remaining > 0 {
-            return "\(catalog.mixtapes.count) MIXTAPES · \(schedule.count) SCHEDULED · \(n) SHOWS · \(backfill.remaining) STILL LOADING NAMES"
+            // The crawl only ever runs once per launch, so once it's done
+            // draining, a straggler that kept failing (NTS's own sitemap
+            // pointing at a dead alias, say) won't move again until the app
+            // restarts — "still loading" would be a promise nothing keeps.
+            let tag = backfill.running ? "STILL LOADING NAMES" : "NAMES DIDN'T LOAD"
+            return "\(catalog.mixtapes.count) MIXTAPES · \(schedule.count) SCHEDULED · \(n) SHOWS · \(backfill.remaining) \(tag)"
         }
         return "\(catalog.mixtapes.count) MIXTAPES · \(schedule.count) SCHEDULED · \(n) SHOWS"
     }

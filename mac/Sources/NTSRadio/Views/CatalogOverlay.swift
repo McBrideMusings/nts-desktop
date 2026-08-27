@@ -164,7 +164,7 @@ struct CatalogOverlay: View {
             // backfill — this only matters while a query might be missing a
             // show whose name hasn't loaded yet.
             if model.backfill.remaining > 0 {
-                Text("Still learning show names — \(model.backfill.remaining) to go. Searching for a host's name may miss them until this finishes. It runs once on this machine; leave the app open and it'll complete on its own.")
+                Text(backfillNotice)
                     .font(Theme.ui(11))
                     .foregroundStyle(Theme.inkMuted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -221,6 +221,19 @@ struct CatalogOverlay: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 70)
+    }
+
+    /// Distinguishes an active crawl (where staying open really does help)
+    /// from one that already gave up on a straggler until the next launch —
+    /// the same promise can't cover both.
+    private var backfillNotice: String {
+        let n = model.backfill.remaining
+        if model.backfill.running {
+            return "Still learning show names — \(n) to go. Searching for a host's name may miss them until this finishes. It runs once on this machine; leave the app open and it'll complete on its own."
+        }
+        let plural = n == 1 ? "" : "s"
+        let pronoun = n == 1 ? "it" : "them"
+        return "\(n) show name\(plural) didn't load from NTS. Searching for a host's name may miss \(pronoun) — this is retried automatically the next time the app starts."
     }
 
     private var emptyTabMessage: String {

@@ -72,7 +72,7 @@ final class ShowDetailBackfill: ObservableObject {
     /// `detailed` at nil, so it stays queued for the next launch — refusing
     /// is correct, since NTS answering doesn't mean this alias got worse.
     private static func fetchOne(alias: String) async {
-        guard let d = try? await NTSAPI.show(alias: alias) else { return }
+        guard let d = try? await NTSAPI.show(alias: alias, silent: true) else { return }
         ShowIndex.shared.noteDetailed(
             alias: alias, name: d.name, location: d.location, genres: d.genres,
             picture: d.image?.absoluteString, description: d.description, detailed: Date()

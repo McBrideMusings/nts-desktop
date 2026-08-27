@@ -57,6 +57,8 @@ final class ServiceStatus: ObservableObject {
 
     private init() {}
 
+    /// Logging is the caller's job (`NTSAPI.fetchData`/`fetch` do it for every
+    /// request, reported or not) — this only tracks what the banner shows.
     func failed(_ endpoint: String, _ error: Error) {
         let offline = (error as? URLError).map {
             [.notConnectedToInternet, .networkConnectionLost, .cannotFindHost,
@@ -64,7 +66,6 @@ final class ServiceStatus: ObservableObject {
         } ?? false
 
         let detail = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-        Log.api.error("\(endpoint, privacy: .public) failed: \(detail, privacy: .public)")
 
         if var existing = outage, existing.endpoint == endpoint {
             existing.failures += 1

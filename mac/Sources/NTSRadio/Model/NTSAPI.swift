@@ -36,22 +36,31 @@ enum NTSAPI {
     /// data — they just can't do it silently any more.
     ///
     /// `endpoint` is the short name the banner and the log use, not a URL.
+    /// `reportFailures: false` is for a caller that expects routine failures
+    /// and shouldn't raise the shared "NTS isn't answering" banner over them
+    /// — `ShowDetailBackfill` crawls every alias in NTS's own sitemap, which
+    /// is known to include the occasional dead one, and one dead alias among
+    /// 1,834 healthy requests is not an outage.
     private static func fetch<T: Decodable>(_ type: T.Type,
                                             from url: URL,
                                             endpoint: String,
-                                            headers: [String: String] = [:]) async throws -> T {
-        let data = try await fetchData(from: url, endpoint: endpoint, headers: headers)
+                                            headers: [String: String] = [:],
+                                            reportFailures: Bool = true) async throws -> T {
+        let data = try await fetchData(from: url, endpoint: endpoint, headers: headers,
+                                       reportFailures: reportFailures)
         do {
             return try JSONDecoder().decode(T.self, from: data)
         } catch {
-            await ServiceStatus.shared.failed(endpoint, APIError.malformed)
+            Log.api.error("\(endpoint, privacy: .public) malformed response")
+            if reportFailures { await ServiceStatus.shared.failed(endpoint, APIError.malformed) }
             throw APIError.malformed
         }
     }
 
     private static func fetchData(from url: URL,
                                   endpoint: String,
-                                  headers: [String: String] = [:]) async throws -> Data {
+                                  headers: [String: String] = [:],
+                                  reportFailures: Bool = true) async throws -> Data {
         var request = URLRequest(url: url)
         for (field, value) in headers { request.setValue(value, forHTTPHeaderField: field) }
         do {
@@ -59,10 +68,12 @@ enum NTSAPI {
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
             guard (200..<300).contains(code) else { throw APIError.http(code) }
             Log.api.debug("\(endpoint, privacy: .public) ok, \(data.count) bytes")
-            await ServiceStatus.shared.succeeded(endpoint)
+            if reportFailures { await ServiceStatus.shared.succeeded(endpoint) }
             return data
         } catch {
-            await ServiceStatus.shared.failed(endpoint, error)
+            let detail = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            Log.api.error("\(endpoint, privacy: .public) failed: \(detail, privacy: .public)")
+            if reportFailures { await ServiceStatus.shared.failed(endpoint, error) }
             throw error
         }
     }
@@ -504,9 +515,12 @@ enum NTSAPI {
         )
     }
 
-    static func show(alias: String) async throws -> ShowDetail {
+    /// `silent` is for `ShowDetailBackfill`'s crawl, where a 404 means one
+    /// alias in NTS's own sitemap is stale — not something the user needs an
+    /// "NTS isn't answering" banner over while everything else works fine.
+    static func show(alias: String, silent: Bool = false) async throws -> ShowDetail {
         let url = URL(string: "https://www.nts.live/api/v2/shows/\(alias)")!
-        let s = try await fetch(ShowJSON.self, from: url, endpoint: "show")
+        let s = try await fetch(ShowJSON.self, from: url, endpoint: "show", reportFailures: !silent)
         return ShowDetail(
             alias: alias,
             name: decodeEntities(s.name ?? alias).trimmingCharacters(in: .whitespaces),
