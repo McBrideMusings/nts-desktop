@@ -65,6 +65,9 @@ There is a main menu (`AppDelegate.installMainMenu`) even though an agent app
 never draws one: it is the only place a key equivalent can live, and without it
 ⌘, opened nothing, ⌘W closed nothing, and the sign-in fields had no ⌘V.
 
+- **Vocabulary, the load-bearing numbers, and things that look like bugs and
+  are not: `docs/CONTEXT.md`** — read it before naming anything, and before
+  reporting a defect, so a settled question is not re-raised.
 - **NTS API limits and endpoint quirks: `docs/nts-api.md`** — read it before
   touching the catalog, the API client, or the show index.
 - `mac/Sources/NTSFirestore/` — a Firestore Listen (gRPC) client for live channel/mixtape tracklists, with generated protobuf/gRPC Swift code under `Generated/` and source `.proto` files in `mac/Proto/` (see `mac/Proto/regenerate.sh`)
@@ -75,6 +78,9 @@ never draws one: it is the only place a key equivalent can live, and without it
 
 ## Notes
 
+- **The AppleScript surface, written for a user: `docs/automation.md`** — every
+  command with worked examples, the errors verbatim, and what a script cannot
+  reach. `mac/Resources/NTSRadio.sdef` stays canonical for terminology.
 - Decision records: `docs/adr/0001-schedule-grid-not-live-endpoint.md`,
   `docs/adr/0002-show-index-from-sitemap.md`,
   `docs/adr/0003-hand-built-settings-window.md`,
