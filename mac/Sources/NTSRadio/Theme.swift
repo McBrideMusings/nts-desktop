@@ -73,8 +73,26 @@ enum Theme {
     }
 
     /// Register bundled fonts (Archivo). Call once at launch.
+    ///
+    /// Deliberately avoids `Bundle.module`. SwiftPM's generated accessor looks
+    /// for the resource bundle beside `Bundle.main.bundleURL` — the .app root,
+    /// not `Contents/Resources` — and when that misses it falls back to an
+    /// absolute path inside the `.build` directory of the machine that compiled
+    /// it, then traps with `fatalError` if that is gone too. An installed app
+    /// therefore died at launch the moment `admin clean` ran. Two plain path
+    /// lookups have no such fallback: the .app's own `Contents/Resources` first,
+    /// then the flat SwiftPM bundle that sits next to `admin dev`'s bare binary.
     static func registerFonts() {
-        guard let url = Bundle.module.url(forResource: "Archivo", withExtension: "ttf") else { return }
+        let candidates = [
+            Bundle.main.url(forResource: "Archivo", withExtension: "ttf"),
+            Bundle.main.bundleURL
+                .appendingPathComponent("NTSRadio_NTSRadio.bundle")
+                .appendingPathComponent("Archivo.ttf"),
+        ]
+        guard let url = candidates
+            .compactMap({ $0 })
+            .first(where: { FileManager.default.fileExists(atPath: $0.path) })
+        else { return }
         CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
     }
 }

@@ -7,7 +7,7 @@ CONFIG     := release
 BUILD_DIR  := .build/$(CONFIG)
 OUT        := build
 APP_BUNDLE := $(OUT)/$(APP_NAME).app
-RES_BUNDLE := $(APP)_$(APP).bundle
+FONT_SRC   := Sources/NTSRadio/Resources/Fonts
 ICON_SRC   := Resources/AppIcon.icns
 
 .PHONY: dev run-binary build app dmg install run clean
@@ -23,10 +23,12 @@ app: build ## Assemble the .app bundle (fonts bundled, mixtapes fetched live)
 	mkdir -p "$(APP_BUNDLE)/Contents/MacOS" "$(APP_BUNDLE)/Contents/Resources" "$(APP_BUNDLE)/Contents/Frameworks"
 	cp Info.plist "$(APP_BUNDLE)/Contents/Info.plist"
 	cp "$(BUILD_DIR)/$(APP)" "$(APP_BUNDLE)/Contents/MacOS/$(APP)"
-	# SwiftPM resource bundle (Archivo font). Must live in Resources/, NOT MacOS/:
-	# Bundle.module checks Bundle.main.resourceURL first, and a flat resource
-	# bundle inside MacOS/ makes codesign --deep treat it as nested code and fail.
-	cp -R "$(BUILD_DIR)/$(RES_BUNDLE)" "$(APP_BUNDLE)/Contents/Resources/" 2>/dev/null || true
+	# Archivo, copied from source rather than from the SwiftPM resource bundle.
+	# Theme.registerFonts() reads Contents/Resources directly; nothing in the
+	# shipped app may reach into a build directory, which is what the old
+	# Bundle.module path did — see the comment on registerFonts.
+	cp "$(FONT_SRC)/Archivo.ttf" "$(APP_BUNDLE)/Contents/Resources/Archivo.ttf"
+	cp "$(FONT_SRC)/OFL.txt" "$(APP_BUNDLE)/Contents/Resources/OFL.txt"
 	# Sparkle.framework: the binary links it by @rpath, which only resolves
 	# inside an app bundle's own Contents/Frameworks — `swift build` leaves it
 	# sitting in .build/release, so without this copy the app is a "Library not
