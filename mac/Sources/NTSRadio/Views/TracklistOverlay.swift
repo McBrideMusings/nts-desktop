@@ -61,7 +61,7 @@ struct TracklistOverlay: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         ForEach(Array(model.tracks.enumerated()), id: \.element.id) { idx, track in
-                            TrackRow(track: track, playing: idx == currentIndex)
+                            TrackRow(track: track, playing: idx == currentIndex, lead: model.trackLead)
                         }
                     }
                 }
@@ -87,6 +87,7 @@ struct TracklistOverlay: View {
 private struct TrackRow: View {
     let track: Track
     let playing: Bool
+    let lead: TrackLead
     @State private var copied = false
 
     var body: some View {
@@ -96,16 +97,17 @@ private struct TrackRow: View {
                 .foregroundStyle(playing ? Theme.ch1 : Theme.inkMuted)
                 .frame(width: 50, alignment: .leading)
 
-            // Artist leads, track underneath — the order nts.live lists them in.
-            // A track still being identified can arrive with no artist; it takes
-            // the lead line rather than leaving a blank one.
+            // The chosen line leads, the other sits underneath. A track still
+            // being identified can arrive with no artist; the title takes the
+            // lead line in either order rather than leaving a blank one.
+            let (first, second) = track.lines(leading: lead)
             VStack(alignment: .leading, spacing: 1) {
-                Text(track.artist.isEmpty ? track.title : track.artist)
+                Text(first)
                     .font(Theme.display(15, .bold)).tracking(-0.06)
                     .foregroundStyle(Theme.ink)
                     .lineLimit(1)
-                if !track.artist.isEmpty {
-                    Text(track.title)
+                if let second {
+                    Text(second)
                         .font(Theme.ui(12.5))
                         .foregroundStyle(Theme.inkMuted)
                         .lineLimit(1)
@@ -130,7 +132,8 @@ private struct TrackRow: View {
     }
 
     private func copy() {
-        let text = track.artist.isEmpty ? track.title : "\(track.title) — \(track.artist)"
+        let (first, second) = track.lines(leading: lead)
+        let text = second.map { "\(first) — \($0)" } ?? first
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
         copied = true

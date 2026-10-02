@@ -40,8 +40,8 @@ osascript -e 'tell application "NTS Radio" to get state' | jq .
 
 Grouped by what they answer:
 
-- **Playback** — `source`, `sourceName`, `playing`, `rendering`, `position`, `duration`, `seekable`, `bufferSeconds`, `volume`, `muted`, `episodeStream`, `episodeLoading`, `episodeError`, `episodeURL`
-- **Tracklist** — `currentTrack`, `trackCount`, `pendingTrack`, `pendingSeconds`
+- **Playback** — `source`, `sourceName`, `playing`, `rendering`, `position`, `duration`, `seekable`, `bufferSeconds`, `volume`, `volumeSlider`, `volumeCurve`, `volumeSteepness`, `muted`, `episodeStream`, `episodeLoading`, `episodeError`, `episodeURL`
+- **Tracklist** — `trackLead` (`"title"` or `"artist"`: which line leads a row; `currentTrack` and `pendingTrack` stay "artist — title" either way), `currentTrack`, `trackCount`, `pendingTrack`, `pendingSeconds`
 - **Window** — `pane`, `tracksOpen`, `windowVisible`, `catalogOpen`, `catalogTab`, `catalogQuery`, `catalogDetail`, `detailTags`, `settingsVisible`, `settingsPane`, `knobAngle`
 - **Catalog** — `catalogRows`, `catalogFirstRows`, `savedCount`, `mixtapeCount`, `genreCount`, `moodCount`, `channels`, `onAir`, `nextUp`, `scheduleChannel`, `scheduleDays`, `showIndex`
 - **Explore** — `exploreMood`, `exploreGenres`, `exploreMusicOnly`, `exploreFocused`, `exploreLoaded`, `exploreTotal`
@@ -139,12 +139,15 @@ osascript -e 'tell application "NTS Radio" to check for updates'
 
 Eight are read-only: `state`, `playing`, `rendering`, `source`, `source name`, `current track`, `window visible`, `knob angle`.
 
-Three are writable:
+Six are writable:
 
 ```bash
 osascript -e 'tell application "NTS Radio" to set its volume to 30'
+osascript -e 'tell application "NTS Radio" to set its volume curve to "perceptual"'
+osascript -e 'tell application "NTS Radio" to set its volume steepness to 3'
 osascript -e 'tell application "NTS Radio" to set muted to true'
 osascript -e 'tell application "NTS Radio" to set auto checks for updates to true'
+osascript -e 'tell application "NTS Radio" to set track lead to "artist"'
 ```
 
 ### ⚠️ `set volume to 30` does not work
@@ -164,6 +167,21 @@ osascript -e 'tell application "NTS Radio" to set (volume) to 30'
 
 `get volume` reads fine in every form, and `muted` has no such problem. Tracked as [#90](https://github.com/McBrideMusings/nts-desktop/issues/90).
 
+### `volume` is the output level, not the knob
+
+`volume` (0–100) is the gain the player applies. The knob in the now-playing bar sits at a *position* that the volume curve maps to that gain, `gain = position^steepness`, and `state` reports it separately as `volumeSlider`. Changing `volume curve` or `volume steepness` keeps `volume` fixed and moves `volumeSlider`:
+
+```bash
+osascript -e 'tell application "NTS Radio" to set its volume curve to "linear"'
+osascript -e 'tell application "NTS Radio" to set its volume to 12'
+osascript -e 'tell application "NTS Radio" to set its volume curve to "perceptual"'
+osascript -e 'tell application "NTS Radio" to set its volume steepness to 3'
+osascript -e 'tell application "NTS Radio" to get state' | jq '{volume, volumeSlider, volumeCurve, volumeSteepness}'
+# {"volume":12,"volumeSlider":49,"volumeCurve":"perceptual","volumeSteepness":3}
+```
+
+`volume curve` takes `linear` or `perceptual` and nothing else. `volume steepness` is clamped to 2…5 and does nothing while the curve is linear.
+
 ## Errors
 
 Errors name the valid values rather than reporting a failure:
@@ -176,6 +194,9 @@ filter explore genres {"nonsense"}  → -1703  "nonsense" is not a genre id.
                                              `browse genre` takes the name as the
                                              card prints it, e.g. browse genre
                                              "Kosmische".
+
+set its volume curve to "log"       → -1703  "log" is not a volume curve.
+                                             Use "linear" or "perceptual".
 
 seek to 1800   (on a channel)       → -1708  …tune an episode first.
 show pane "tracks"   (idle)         → -1728  Nothing is playing…

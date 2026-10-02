@@ -58,13 +58,28 @@
             </property>
 
             <property name="volume" code="pVOL" type="integer"
-                      description="Output level, 0 to 100.">
+                      description="Output level, 0 to 100. This is the gain, not the knob position: the state's volumeSlider reports where the knob sits for the current volume curve.">
                 <cocoa key="ntsVolume"/>
+            </property>
+
+            <property name="volume curve" code="pVCV" type="text"
+                      description="How the volume knob maps to the output level: linear or perceptual. Changing it keeps the volume and moves the knob. Anything else is an error.">
+                <cocoa key="ntsVolumeCurve"/>
+            </property>
+
+            <property name="volume steepness" code="pVST" type="real"
+                      description="The perceptual curve's exponent, 2 (gentle) to 5 (steep). Values outside that range are clamped. Has no effect while the curve is linear.">
+                <cocoa key="ntsVolumeSteepness"/>
             </property>
 
             <property name="muted" code="pMUT" type="boolean"
                       description="Whether output is silenced without changing volume.">
                 <cocoa key="ntsMuted"/>
+            </property>
+
+            <property name="track lead" code="pTLD" type="text"
+                      description="Which line leads each tracklist row: 'title' (the default) or 'artist'. Any other value is an error.">
+                <cocoa key="ntsTrackLead"/>
             </property>
 
             <property name="window visible" code="pWIN" type="boolean" access="r"

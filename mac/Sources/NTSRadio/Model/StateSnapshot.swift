@@ -34,6 +34,10 @@ struct StateSnapshot: Codable {
     var pendingTrack: String
     var pendingSeconds: Double
     var volume: Int
+    /// The knob's position, 0–100; `volume` is the output level it maps to.
+    var volumeSlider: Int
+    var volumeCurve: String
+    var volumeSteepness: Double
     var muted: Bool
     var signedIn: Bool
     /// Whether the account's own follows and saved episodes have actually
@@ -142,6 +146,9 @@ struct StateSnapshot: Codable {
     /// two facts a script needs before it reads those files.
     var logDirectory: String
     var recordedSources: [String]
+
+    /// Which line leads a tracklist row — "title" or "artist".
+    var trackLead: String
 }
 
 /// `ShowIndex`'s coverage, mirrored for `StateSnapshot.showIndex`.
@@ -242,6 +249,9 @@ extension AppModel {
             pendingTrack: pendingTrack?.name ?? "",
             pendingSeconds: pendingTrack?.seconds ?? 0,
             volume: Int(volume.rounded()),
+            volumeSlider: Int(volumeSlider.rounded()),
+            volumeCurve: volumeKind.rawValue,
+            volumeSteepness: volumeExponent,
             muted: muted,
             signedIn: auth.isAuthenticated,
             savedCount: saved.items.count,
@@ -318,7 +328,8 @@ extension AppModel {
             autoChecksForUpdates: autoChecksForUpdates,
             canCheckForUpdates: canCheckForUpdates,
             logDirectory: LogFiles.directory.path,
-            recordedSources: recording.sources
+            recordedSources: recording.sources,
+            trackLead: trackLead.rawValue
         )
     }
 }

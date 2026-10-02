@@ -157,6 +157,22 @@ final class AppModel: ObservableObject {
             }
         }
     }
+    @Published var volumeKind: VolumeCurve.Kind = UserDefaults.standard.string(forKey: "volumeCurve")
+        .flatMap(VolumeCurve.Kind.init(rawValue:)) ?? .perceptual {
+        didSet { UserDefaults.standard.set(volumeKind.rawValue, forKey: "volumeCurve") }
+    }
+    @Published var volumeExponent: Double = min(VolumeCurve.exponentRange.upperBound, max(
+        VolumeCurve.exponentRange.lowerBound,
+        UserDefaults.standard.object(forKey: "volumeExponent") as? Double ?? VolumeCurve.defaultExponent)) {
+        didSet { UserDefaults.standard.set(volumeExponent, forKey: "volumeExponent") }
+    }
+    var volumeCurve: VolumeCurve { VolumeCurve(kind: volumeKind, exponent: volumeExponent) }
+    /// The knob's position, 0–100. `volume` (the gain) is what is stored, so
+    /// changing the curve keeps the loudness and moves the knob.
+    var volumeSlider: Double {
+        get { volumeCurve.slider(forGain: volume) }
+        set { volume = volumeCurve.gain(forSlider: newValue) }
+    }
     @Published var hoverIndex: Int? = nil
     /// Where the dial's index mark is pointing, in degrees, accumulated across
     /// turns rather than wrapped into 0..<360 — so it is free to wind past a full
@@ -228,6 +244,13 @@ final class AppModel: ObservableObject {
     /// AppDelegate observes it and owns applying the activation policy.
     @Published var showInDock: Bool = UserDefaults.standard.bool(forKey: "showInDock") {
         didSet { UserDefaults.standard.set(showInDock, forKey: "showInDock") }
+    }
+
+    /// Which of a track's two lines leads each tracklist row. Title first by
+    /// default; persisted here and read live by `TracklistOverlay`.
+    @Published var trackLead: TrackLead = TrackLead(
+        rawValue: UserDefaults.standard.string(forKey: "trackLead") ?? "") ?? .title {
+        didSet { UserDefaults.standard.set(trackLead.rawValue, forKey: "trackLead") }
     }
 
     /// Sparkle's own `Bool`, not `@Published` — read/written straight through so
