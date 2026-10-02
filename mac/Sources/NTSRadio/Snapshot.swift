@@ -111,6 +111,24 @@ enum Snapshot {
                      SettingsView(selection: selection,
                                   auth: NTSAuth.sample(email: "listener@example.com")))
         }
+        // The General pane's volume row in each curve and each appearance. An
+        // off-screen render has no window to take its appearance from, so the
+        // colour scheme and a window-coloured ground are set by hand here.
+        let shotVolume = AppModel.shared.volume
+        let shotKind = AppModel.shared.volumeKind
+        AppModel.shared.volume = 12
+        for kind in VolumeCurve.Kind.allCases {
+            for dark in [false, true] {
+                AppModel.shared.volumeKind = kind
+                let selection = SettingsSelection()
+                shotView("04-settings-general-\(kind.rawValue)-\(dark ? "dark" : "light").png",
+                         SettingsView(selection: selection)
+                            .background(Color(white: dark ? 0.16 : 0.93))
+                            .environment(\.colorScheme, dark ? .dark : .light))
+            }
+        }
+        AppModel.shared.volumeKind = shotKind
+        AppModel.shared.volume = shotVolume
         // The knob face only carries a title once a mixtape is selected, and the
         // longest names are the ones that reach the circle's edge — this is the
         // shot that shows whether they fit.

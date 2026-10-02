@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Charts
 
 /// Which pane of Settings is showing. The toolbar in `SettingsWindowController`
 /// owns the choice; these are the panes it swaps between.
@@ -77,6 +78,8 @@ private struct GeneralSettings: View {
         )
     }
 
+    private var isPerceptual: Bool { model.volumeKind == .perceptual }
+
     private var version: String {
         let info = Bundle.main.infoDictionary
         let short = info?["CFBundleShortVersionString"] as? String ?? "0.1.0"
@@ -91,6 +94,35 @@ private struct GeneralSettings: View {
                     Toggle("Open NTS Radio at login", isOn: $model.startOnLogin)
                     Toggle("Show in Dock", isOn: $model.showInDock)
                     Text("With the Dock icon hidden, NTS Radio lives in the menu bar only.")
+                        .settingsNote()
+                }
+            }
+
+            Divider().padding(.vertical, 6)
+
+            LabeledContent("Volume:") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Picker("Volume", selection: $model.volumeKind) {
+                        Text("Linear").tag(VolumeCurve.Kind.linear)
+                        Text("Perceptual").tag(VolumeCurve.Kind.perceptual)
+                    }
+                    .pickerStyle(.radioGroup)
+                    .labelsHidden()
+
+                    HStack(spacing: 8) {
+                        Text("Gentle").font(.callout).foregroundStyle(.secondary)
+                        Slider(value: $model.volumeExponent, in: VolumeCurve.exponentRange, step: 0.25)
+                            .frame(width: 160)
+                            .accessibilityLabel("Steepness")
+                        Text("Steep").font(.callout).foregroundStyle(.secondary)
+                    }
+                    .disabled(!isPerceptual)
+
+                    VolumeCurveChart(curve: model.volumeCurve, slider: model.volumeSlider)
+                        .frame(width: 330, height: 130)
+                        .opacity(isPerceptual ? 1 : 0.45)
+
+                    Text("Perceptual gives the quiet end of the slider more room, so small adjustments at low volume are easier.")
                         .settingsNote()
                 }
             }
@@ -121,6 +153,53 @@ private struct GeneralSettings: View {
             }
         }
         .settingsPane()
+    }
+}
+
+/// Loudness against knob position: the linear curve as a faint reference, the
+/// chosen curve as the main line, a dot at where the knob is now. The y axis is
+/// dB, because that is how loudness is heard; −∞ at position 0 sits on the −60 floor.
+private struct VolumeCurveChart: View {
+    let curve: VolumeCurve
+    let slider: Double
+
+    private static let linear = VolumeCurve(kind: .linear, exponent: 1)
+    private static let positions = Array(stride(from: 0.0, through: 100.0, by: 1.0))
+
+    var body: some View {
+        Chart {
+            ForEach(Self.positions, id: \.self) { x in
+                LineMark(x: .value("Position", x),
+                         y: .value("dB", Self.linear.decibels(forSlider: x)),
+                         series: .value("Curve", "linear"))
+                    .foregroundStyle(.secondary.opacity(0.4))
+            }
+            ForEach(Self.positions, id: \.self) { x in
+                LineMark(x: .value("Position", x),
+                         y: .value("dB", curve.decibels(forSlider: x)),
+                         series: .value("Curve", "current"))
+                    .foregroundStyle(Color.accentColor)
+                    .lineStyle(StrokeStyle(lineWidth: 2))
+            }
+            PointMark(x: .value("Position", slider),
+                      y: .value("dB", curve.decibels(forSlider: slider)))
+                .foregroundStyle(Color.accentColor)
+                .symbolSize(60)
+        }
+        .chartXScale(domain: 0...100)
+        .chartYScale(domain: -60...0)
+        .chartXAxis {
+            AxisMarks(values: [0, 25, 50, 75, 100])
+        }
+        .chartYAxis {
+            AxisMarks(values: [-60, -40, -20, 0]) { value in
+                AxisGridLine()
+                AxisValueLabel {
+                    if let db = value.as(Double.self) { Text("\(Int(db)) dB") }
+                }
+            }
+        }
+        .accessibilityLabel("Loudness by slider position")
     }
 }
 

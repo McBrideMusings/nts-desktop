@@ -122,7 +122,8 @@ struct NowPlayingBar: View {
             .buttonStyle(.hit)
 
             if !compact {
-                VolumeMeter(volume: $model.volume, muted: model.muted)
+                VolumeMeter(volume: Binding(get: { model.volumeSlider }, set: { model.volumeSlider = $0 }),
+                            muted: model.muted)
             }
         }
         .padding(.horizontal, 16)
