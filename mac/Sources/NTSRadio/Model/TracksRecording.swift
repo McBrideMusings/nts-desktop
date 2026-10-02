@@ -8,37 +8,38 @@ import NTSFirestore
 ///
 /// The tracklist drawer shows a de-duplicated, minute-resolution view of one
 /// source. This keeps the raw feed: every document id, its `start_time` to the
-/// nanosecond, the `artist_names` array as stored, and Firestore's own create and
+/// millisecond, the `artist_names` array as stored, and Firestore's own create and
 /// update times — so a track list that looks wrong can be checked against what
 /// NTS actually wrote.
 @MainActor
 final class TracksRecording {
     private var recorder: FirestoreTracksRecorder?
+    /// The labels of what is being recorded, empty while signed out.
     private(set) var sources: [String] = []
 
     /// Open, change or close the stream so it covers exactly `mixtapes` plus the
     /// two channels while `signedIn`. A call that changes nothing leaves the
     /// connection alone.
     func update(signedIn: Bool, mixtapes: [String], token: @escaping @Sendable () async throws -> String) {
-        let wanted = signedIn
-            ? ["channel-1", "channel-2"] + Set(mixtapes).sorted().map { "mixtape:\($0)" }
-            : []
-        guard wanted != sources else { return }
+        var wanted: [(label: String, filter: LiveTracksFilter)] = []
+        if signedIn {
+            wanted += [1, 2].compactMap { n in
+                LiveTracksFilter.channel(n).map { ("channel-\(n)", $0) }
+            }
+            wanted += Set(mixtapes).sorted().map { ("mixtape:\($0)", LiveTracksFilter.mixtape($0)) }
+        }
+        let labels = wanted.map(\.label)
+        guard labels != sources else { return }
         recorder?.stop()
         recorder = nil
-        sources = wanted
+        sources = labels
         guard !wanted.isEmpty else {
             Log.tracks.info("recorder stopped")
             return
         }
-        let filters: [(label: String, filter: LiveTracksFilter)] = wanted.compactMap { label in
-            if label == "channel-1" { return (label, LiveTracksFilter.channel(1)!) }
-            if label == "channel-2" { return (label, LiveTracksFilter.channel(2)!) }
-            return (label, .mixtape(String(label.dropFirst("mixtape:".count))))
-        }
-        Log.tracks.info("recorder starting with \(filters.count, privacy: .public) sources")
+        Log.tracks.info("recorder starting with \(wanted.count, privacy: .public) sources")
         let recorder = FirestoreTracksRecorder(
-            sources: filters,
+            sources: wanted,
             tokenProvider: token,
             onChange: { LogFiles.tracks.write(Self.line(for: $0)) },
             onLifecycle: { message in

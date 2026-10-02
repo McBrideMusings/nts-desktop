@@ -12,6 +12,8 @@ final class FileLog: @unchecked Sendable {
     private let queue: DispatchQueue
     private var handle: FileHandle?
     private var size = 0
+    /// Set while writes are failing, so a full disk logs one error, not one per line.
+    private var failing = false
 
     init(name: String, maxBytes: Int = 5_000_000) {
         url = LogFiles.directory.appendingPathComponent(name)
@@ -19,10 +21,12 @@ final class FileLog: @unchecked Sendable {
         queue = DispatchQueue(label: "live.nts.desktop.filelog.\(name)")
     }
 
-    /// Append one line. A newline inside `line` would split the record in two, so
-    /// it is written as a literal `\n`.
+    /// Append one line. A line break inside `line` would split the record in
+    /// two, so it is written as a literal `\n` or `\r`.
     func write(_ line: String) {
-        let clean = line.replacingOccurrences(of: "\n", with: "\\n")
+        let clean = line
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "\\r")
         queue.async { self.append(clean + "\n") }
     }
 
@@ -37,8 +41,10 @@ final class FileLog: @unchecked Sendable {
         do {
             try handle.write(contentsOf: data)
             size += data.count
+            failing = false
         } catch {
             self.handle = nil
+            reportFailure(error)
         }
     }
 
@@ -46,8 +52,19 @@ final class FileLog: @unchecked Sendable {
         let fm = FileManager.default
         try? fm.createDirectory(at: LogFiles.directory, withIntermediateDirectories: true)
         if !fm.fileExists(atPath: url.path) { fm.createFile(atPath: url.path, contents: nil) }
-        handle = try? FileHandle(forWritingTo: url)
-        size = Int((try? handle?.seekToEnd()) ?? 0)
+        do {
+            let opened = try FileHandle(forWritingTo: url)
+            size = Int(try opened.seekToEnd())
+            handle = opened
+        } catch {
+            reportFailure(error)
+        }
+    }
+
+    private func reportFailure(_ error: Error) {
+        guard !failing else { return }
+        failing = true
+        Log.app.error("could not write \(self.url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
     }
 
     private func rotate() {
@@ -74,27 +91,28 @@ enum LogFiles {
     static let tracks = FileLog(name: "tracks.log")
 
     /// Timestamps in both logs: local time with its UTC offset, to the millisecond.
-    static func stamp(_ date: Date) -> String {
+    static func stamp(_ date: Date) -> String { stampFormatter.string(from: date) }
+
+    private static let stampFormatter: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         f.timeZone = .current
-        return f.string(from: date)
-    }
+        return f
+    }()
 }
 
 /// Copies what the app logged to the unified log into `app.log`.
 ///
 /// A `Logger` call cannot be intercepted, so rather than wrapping every call
 /// site this reads the process's own entries back from `OSLogStore` every two
-/// seconds. The text is what `log show` would print, including `<private>`
-/// where an interpolation was not marked public.
-@MainActor
-final class AppLogMirror {
+/// seconds, off the main thread. The text is what `log show` would print,
+/// including `<private>` where an interpolation was not marked public.
+final class AppLogMirror: @unchecked Sendable {
     private var task: Task<Void, Never>?
 
     func start() {
         guard task == nil else { return }
-        task = Task { [weak self] in await self?.run() }
+        task = Task.detached(priority: .utility) { [self] in await run() }
     }
 
     func stop() {
@@ -108,14 +126,25 @@ final class AppLogMirror {
             return
         }
         let predicate = NSPredicate(format: "subsystem == %@", Log.subsystem)
-        var last: Date?
+        // Entries can share a timestamp, so "already written" is the date plus
+        // what was at it — a date alone would drop the second of two.
+        var lastDate: Date?
+        var atLastDate: Set<String> = []
         while !Task.isCancelled {
-            let position = last.map { store.position(date: $0) } ?? store.position(timeIntervalSinceLatestBoot: 0)
+            let position = lastDate.map { store.position(date: $0) }
+                ?? store.position(timeIntervalSinceLatestBoot: 0)
             if let entries = try? store.getEntries(at: position, matching: predicate) {
                 for case let entry as OSLogEntryLog in entries {
-                    if let last, entry.date <= last { continue }
-                    last = entry.date
-                    LogFiles.app.write("\(LogFiles.stamp(entry.date))\t\(entry.category)\t\(Self.name(entry.level))\t\(entry.composedMessage)")
+                    let message = entry.composedMessage.replacingOccurrences(of: "\t", with: " ")
+                    let line = "\(LogFiles.stamp(entry.date))\t\(entry.category)\t\(Self.name(entry.level))\t\(message)"
+                    if let last = lastDate {
+                        if entry.date < last { continue }
+                        if entry.date == last, atLastDate.contains(line) { continue }
+                    }
+                    if entry.date != lastDate { atLastDate = [] }
+                    lastDate = entry.date
+                    atLastDate.insert(line)
+                    LogFiles.app.write(line)
                 }
             }
             try? await Task.sleep(nanoseconds: 2_000_000_000)

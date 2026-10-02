@@ -22,7 +22,7 @@ public struct TrackChange: Sendable {
     /// 12), not a track that just aired.
     public let initial: Bool
     public let documentID: String
-    /// `start_time`, to the nanosecond Firestore stored it.
+    /// `start_time` as Firestore stored it.
     public let startTime: Date?
     public let title: String?
     /// The `artist_names` array exactly as stored — one entry per array element,
@@ -46,6 +46,8 @@ public struct TrackChange: Sendable {
 public final class FirestoreTracksRecorder {
     private let stream: FirestoreListenStream
 
+    /// - Parameter sources: what to watch; each `label` is what a `TrackChange`
+    ///   reports as its `source`.
     public init(sources: [(label: String, filter: LiveTracksFilter)],
                 tokenProvider: @escaping @Sendable () async throws -> String,
                 onChange: @escaping @Sendable (TrackChange) -> Void,
@@ -67,15 +69,18 @@ public final class FirestoreTracksRecorder {
                 let now = Date()
                 switch message.responseType {
                 case .documentChange(let change):
-                    for event in await state.change(change, receivedAt: now) { onChange(event) }
+                    if let event = await state.change(change, receivedAt: now) { onChange(event) }
                 case .documentDelete(let del):
-                    for event in await state.gone(del.document, targets: del.removedTargetIds,
-                                                  kind: .deleted, receivedAt: now) { onChange(event) }
+                    onChange(await state.gone(del.document, targets: del.removedTargetIds,
+                                              kind: .deleted, receivedAt: now))
                 case .documentRemove(let rem):
-                    for event in await state.gone(rem.document, targets: rem.removedTargetIds,
-                                                  kind: .removed, receivedAt: now) { onChange(event) }
+                    onChange(await state.gone(rem.document, targets: rem.removedTargetIds,
+                                              kind: .removed, receivedAt: now))
                 case .targetChange(let tc) where tc.targetChangeType == .current:
                     await state.markCurrent(tc.targetIds)
+                case .targetChange(let tc) where tc.targetChangeType == .reset:
+                    // The server is about to resend the whole window.
+                    await state.reset()
                 default:
                     break
                 }
@@ -100,13 +105,18 @@ public final class FirestoreTracksRecorder {
         init(labels: [Int32: String]) { self.labels = labels }
 
         func connected() { current = [] }
+        func reset() {
+            current = []
+            known = [:]
+            summaries = [:]
+        }
         func markCurrent(_ ids: [Int32]) { current.formUnion(ids) }
 
-        func change(_ change: Google_Firestore_V1_DocumentChange, receivedAt: Date) -> [TrackChange] {
+        func change(_ change: Google_Firestore_V1_DocumentChange, receivedAt: Date) -> TrackChange? {
             let doc = change.document
             let updated = doc.hasUpdateTime ? doc.updateTime.date : nil
             let wasKnown = known[doc.name] != nil
-            if wasKnown, known[doc.name]! == updated, updated != nil { return [] }
+            if wasKnown, known[doc.name]! == updated, updated != nil { return nil }
             known[doc.name] = .some(updated)
 
             let fields = doc.fields
@@ -117,28 +127,28 @@ public final class FirestoreTracksRecorder {
             summaries[doc.name] = (title, artists, start)
             let other = fields.keys.filter { !["song_title", "artist_names", "start_time"].contains($0) }.sorted()
 
-            let ids = change.targetIds.isEmpty ? [] : change.targetIds
+            let ids = change.targetIds
             let source = ids.compactMap { labels[$0] }.sorted().joined(separator: ",")
-            return [TrackChange(
+            return TrackChange(
                 source: source.isEmpty ? "unknown" : source,
                 kind: wasKnown ? .modified : .added,
                 initial: !ids.contains { current.contains($0) },
                 documentID: Self.id(of: doc.name),
                 startTime: start, title: title, artists: artists,
                 createTime: doc.hasCreateTime ? doc.createTime.date : nil,
-                updateTime: updated, otherFields: other, receivedAt: receivedAt)]
+                updateTime: updated, otherFields: other, receivedAt: receivedAt)
         }
 
-        func gone(_ name: String, targets: [Int32], kind: TrackChange.Kind, receivedAt: Date) -> [TrackChange] {
+        func gone(_ name: String, targets: [Int32], kind: TrackChange.Kind, receivedAt: Date) -> TrackChange {
             let summary = summaries[name]
             known[name] = nil
             summaries[name] = nil
             let source = targets.compactMap { labels[$0] }.sorted().joined(separator: ",")
-            return [TrackChange(
+            return TrackChange(
                 source: source.isEmpty ? "unknown" : source, kind: kind, initial: false,
                 documentID: Self.id(of: name),
                 startTime: summary?.start, title: summary?.title, artists: summary?.artists,
-                createTime: nil, updateTime: nil, otherFields: [], receivedAt: receivedAt)]
+                createTime: nil, updateTime: nil, otherFields: [], receivedAt: receivedAt)
         }
 
         private static func id(of name: String) -> String {
