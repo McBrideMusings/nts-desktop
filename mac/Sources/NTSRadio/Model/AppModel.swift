@@ -161,8 +161,9 @@ final class AppModel: ObservableObject {
         .flatMap(VolumeCurve.Kind.init(rawValue:)) ?? .perceptual {
         didSet { UserDefaults.standard.set(volumeKind.rawValue, forKey: "volumeCurve") }
     }
-    @Published var volumeExponent: Double = UserDefaults.standard.object(forKey: "volumeExponent") as? Double
-        ?? VolumeCurve.defaultExponent {
+    @Published var volumeExponent: Double = min(VolumeCurve.exponentRange.upperBound, max(
+        VolumeCurve.exponentRange.lowerBound,
+        UserDefaults.standard.object(forKey: "volumeExponent") as? Double ?? VolumeCurve.defaultExponent)) {
         didSet { UserDefaults.standard.set(volumeExponent, forKey: "volumeExponent") }
     }
     var volumeCurve: VolumeCurve { VolumeCurve(kind: volumeKind, exponent: volumeExponent) }
