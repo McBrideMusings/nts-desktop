@@ -132,6 +132,33 @@ extension NSApplication {
         set { MainActor.assumeIsolated { AppModel.shared.volume = Double(min(100, max(0, newValue))) } }
     }
 
+    @objc var ntsVolumeCurve: String {
+        get { MainActor.assumeIsolated { AppModel.shared.volumeKind.rawValue } }
+        set {
+            MainActor.assumeIsolated {
+                guard let kind = VolumeCurve.Kind(rawValue: newValue) else {
+                    let command = NSScriptCommand.current()
+                    command?.scriptErrorNumber = -1703   // errAETypeError
+                    command?.scriptErrorString = """
+                        "\(newValue)" is not a volume curve. Use "linear" or "perceptual".
+                        """
+                    return
+                }
+                AppModel.shared.volumeKind = kind
+            }
+        }
+    }
+
+    @objc var ntsVolumeSteepness: Double {
+        get { MainActor.assumeIsolated { AppModel.shared.volumeExponent } }
+        set {
+            MainActor.assumeIsolated {
+                let r = VolumeCurve.exponentRange
+                AppModel.shared.volumeExponent = min(r.upperBound, max(r.lowerBound, newValue))
+            }
+        }
+    }
+
     @objc var ntsMuted: Bool {
         get { MainActor.assumeIsolated { AppModel.shared.muted } }
         set { MainActor.assumeIsolated { AppModel.shared.muted = newValue } }

@@ -34,6 +34,10 @@ struct StateSnapshot: Codable {
     var pendingTrack: String
     var pendingSeconds: Double
     var volume: Int
+    /// The knob's position, 0–100; `volume` is the output level it maps to.
+    var volumeSlider: Int
+    var volumeCurve: String
+    var volumeSteepness: Double
     var muted: Bool
     var signedIn: Bool
     /// Whether the account's own follows and saved episodes have actually
@@ -236,6 +240,9 @@ extension AppModel {
             pendingTrack: pendingTrack?.name ?? "",
             pendingSeconds: pendingTrack?.seconds ?? 0,
             volume: Int(volume.rounded()),
+            volumeSlider: Int(volumeSlider.rounded()),
+            volumeCurve: volumeKind.rawValue,
+            volumeSteepness: volumeExponent,
             muted: muted,
             signedIn: auth.isAuthenticated,
             savedCount: saved.items.count,
