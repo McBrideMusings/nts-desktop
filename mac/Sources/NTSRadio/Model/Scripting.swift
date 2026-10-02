@@ -137,6 +137,21 @@ extension NSApplication {
         set { MainActor.assumeIsolated { AppModel.shared.muted = newValue } }
     }
 
+    @objc var ntsTrackLead: String {
+        get { MainActor.assumeIsolated { AppModel.shared.trackLead.rawValue } }
+        set {
+            MainActor.assumeIsolated {
+                guard let lead = TrackLead(rawValue: newValue.lowercased()) else {
+                    let command = NSScriptCommand.current()
+                    command?.scriptErrorNumber = -1703   // errAETypeError
+                    command?.scriptErrorString = "\"\(newValue)\" is not a tracklist order. Use \"title\" or \"artist\"."
+                    return
+                }
+                AppModel.shared.trackLead = lead
+            }
+        }
+    }
+
     @objc var ntsWindowVisible: Bool {
         MainActor.assumeIsolated { RadioWindowController.scriptTarget?.isWindowVisible ?? false }
     }

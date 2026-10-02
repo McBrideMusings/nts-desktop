@@ -136,6 +136,9 @@ struct StateSnapshot: Codable {
     /// anything" is only answerable by watching a window appear.
     var autoChecksForUpdates: Bool
     var canCheckForUpdates: Bool
+
+    /// Which line leads a tracklist row — "title" or "artist".
+    var trackLead: String
 }
 
 /// `ShowIndex`'s coverage, mirrored for `StateSnapshot.showIndex`.
@@ -310,7 +313,8 @@ extension AppModel {
             },
             knobAngle: (knobAngle * 100).rounded() / 100,
             autoChecksForUpdates: autoChecksForUpdates,
-            canCheckForUpdates: canCheckForUpdates
+            canCheckForUpdates: canCheckForUpdates,
+            trackLead: trackLead.rawValue
         )
     }
 }

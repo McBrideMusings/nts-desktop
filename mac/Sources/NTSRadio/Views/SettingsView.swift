@@ -97,6 +97,13 @@ private struct GeneralSettings: View {
 
             Divider().padding(.vertical, 6)
 
+            Picker("Tracklist rows lead with:", selection: $model.trackLead) {
+                ForEach(TrackLead.allCases, id: \.self) { Text($0.label).tag($0) }
+            }
+            .pickerStyle(.radioGroup)
+
+            Divider().padding(.vertical, 6)
+
             LabeledContent("Version:", value: version)
             LabeledContent("Updates:") {
                 VStack(alignment: .leading, spacing: 6) {

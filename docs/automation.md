@@ -41,7 +41,7 @@ osascript -e 'tell application "NTS Radio" to get state' | jq .
 Grouped by what they answer:
 
 - **Playback** — `source`, `sourceName`, `playing`, `rendering`, `position`, `duration`, `seekable`, `bufferSeconds`, `volume`, `muted`, `episodeStream`, `episodeLoading`, `episodeError`, `episodeURL`
-- **Tracklist** — `currentTrack`, `trackCount`, `pendingTrack`, `pendingSeconds`
+- **Tracklist** — `trackLead` (`"title"` or `"artist"`: which line leads a row; `currentTrack` and `pendingTrack` stay "artist — title" either way), `currentTrack`, `trackCount`, `pendingTrack`, `pendingSeconds`
 - **Window** — `pane`, `tracksOpen`, `windowVisible`, `catalogOpen`, `catalogTab`, `catalogQuery`, `catalogDetail`, `detailTags`, `settingsVisible`, `settingsPane`, `knobAngle`
 - **Catalog** — `catalogRows`, `catalogFirstRows`, `savedCount`, `mixtapeCount`, `genreCount`, `moodCount`, `channels`, `onAir`, `nextUp`, `scheduleChannel`, `scheduleDays`, `showIndex`
 - **Explore** — `exploreMood`, `exploreGenres`, `exploreMusicOnly`, `exploreFocused`, `exploreLoaded`, `exploreTotal`
@@ -124,12 +124,13 @@ osascript -e 'tell application "NTS Radio" to check for updates'
 
 Eight are read-only: `state`, `playing`, `rendering`, `source`, `source name`, `current track`, `window visible`, `knob angle`.
 
-Three are writable:
+Four are writable:
 
 ```bash
 osascript -e 'tell application "NTS Radio" to set its volume to 30'
 osascript -e 'tell application "NTS Radio" to set muted to true'
 osascript -e 'tell application "NTS Radio" to set auto checks for updates to true'
+osascript -e 'tell application "NTS Radio" to set track lead to "artist"'
 ```
 
 ### ⚠️ `set volume to 30` does not work

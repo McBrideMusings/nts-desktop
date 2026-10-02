@@ -230,6 +230,13 @@ final class AppModel: ObservableObject {
         didSet { UserDefaults.standard.set(showInDock, forKey: "showInDock") }
     }
 
+    /// Which of a track's two lines leads each tracklist row. Title first by
+    /// default; persisted here and read live by `TracklistOverlay`.
+    @Published var trackLead: TrackLead = TrackLead(
+        rawValue: UserDefaults.standard.string(forKey: "trackLead") ?? "") ?? .title {
+        didSet { UserDefaults.standard.set(trackLead.rawValue, forKey: "trackLead") }
+    }
+
     /// Sparkle's own `Bool`, not `@Published` — read/written straight through so
     /// Settings and the scripting layer go through the same model as every other
     /// setting instead of reaching into `AppDelegate.updaterController` directly.

@@ -67,6 +67,11 @@
                 <cocoa key="ntsMuted"/>
             </property>
 
+            <property name="track lead" code="pTLD" type="text"
+                      description="Which line leads each tracklist row: 'title' (the default) or 'artist'. Any other value is an error.">
+                <cocoa key="ntsTrackLead"/>
+            </property>
+
             <property name="window visible" code="pWIN" type="boolean" access="r"
                       description="Whether the radio window is on screen.">
                 <cocoa key="ntsWindowVisible"/>
