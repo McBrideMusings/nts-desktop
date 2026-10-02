@@ -136,6 +136,12 @@ struct StateSnapshot: Codable {
     /// anything" is only answerable by watching a window appear.
     var autoChecksForUpdates: Bool
     var canCheckForUpdates: Bool
+
+    /// Where `app.log` and `tracks.log` are written, and which sources the
+    /// recorder is currently subscribed to (empty while signed out) — the
+    /// two facts a script needs before it reads those files.
+    var logDirectory: String
+    var recordedSources: [String]
 }
 
 /// `ShowIndex`'s coverage, mirrored for `StateSnapshot.showIndex`.
@@ -310,7 +316,9 @@ extension AppModel {
             },
             knobAngle: (knobAngle * 100).rounded() / 100,
             autoChecksForUpdates: autoChecksForUpdates,
-            canCheckForUpdates: canCheckForUpdates
+            canCheckForUpdates: canCheckForUpdates,
+            logDirectory: LogFiles.directory.path,
+            recordedSources: recording.sources
         )
     }
 }

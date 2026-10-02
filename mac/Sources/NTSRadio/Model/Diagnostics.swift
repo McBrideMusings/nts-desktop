@@ -13,8 +13,18 @@ import OSLog
 /// log show --predicate 'subsystem == "live.nts.desktop"' --last 1h --info
 /// log stream --predicate 'subsystem == "live.nts.desktop"' --level info
 /// ```
+///
+/// Two files in `~/Library/Logs/NTS Radio/` (the path is `logDirectory` in the
+/// scripted `state`) hold the same history without `log show`:
+///
+/// - `app.log` — every category below, copied from the unified log every two
+///   seconds by `AppLogMirror`. Tab-separated: time, category, level, message.
+/// - `tracks.log` — one line per `live_tracks` document change for both live
+///   channels and every mixtape, written by `TracksRecording` while signed in.
+///
+/// Each rotates to `<name>.1` at 5MB.
 enum Log {
-    private static let subsystem = Bundle.main.bundleIdentifier ?? "live.nts.desktop"
+    static let subsystem = Bundle.main.bundleIdentifier ?? "live.nts.desktop"
 
     /// Requests to nts.live: what was asked for and what came back.
     static let api = Logger(subsystem: subsystem, category: "api")
@@ -24,6 +34,9 @@ enum Log {
     static let player = Logger(subsystem: subsystem, category: "player")
     /// The app itself: windows, the login item, anything the shell refuses.
     static let app = Logger(subsystem: subsystem, category: "app")
+    /// The `live_tracks` recorder: when its stream connects, reconnects or fails.
+    /// The documents themselves go to `tracks.log`.
+    static let tracks = Logger(subsystem: subsystem, category: "tracks")
 }
 
 /// Whether nts.live is answering, in terms the interface can show.

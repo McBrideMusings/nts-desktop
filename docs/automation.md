@@ -46,10 +46,25 @@ Grouped by what they answer:
 - **Catalog** — `catalogRows`, `catalogFirstRows`, `savedCount`, `mixtapeCount`, `genreCount`, `moodCount`, `channels`, `onAir`, `nextUp`, `scheduleChannel`, `scheduleDays`, `showIndex`
 - **Explore** — `exploreMood`, `exploreGenres`, `exploreMusicOnly`, `exploreFocused`, `exploreLoaded`, `exploreTotal`
 - **App** — `signedIn`, `syncedWithAccount`, `outage`, `running`, `autoChecksForUpdates`, `canCheckForUpdates`
+- **Logs** — `logDirectory`, `recordedSources`
 
 **`playing` and `rendering` are different.** The first means playback was asked for; the second means audio is actually coming out. Wait on `rendering` if you want sound, not intent.
 
 **`pendingTrack` and `pendingSeconds`** expose a track NTS has announced that the app is holding back until the audio it names reaches the speakers. Without these two fields that delay would be unobservable from outside — its whole effect is that nothing happens for a few seconds.
+
+## The logs
+
+`logDirectory` in the state blob is the folder the app writes its two log files to, `~/Library/Logs/NTS Radio`. `recordedSources` lists what the recorder is subscribed to: both live channels and every mixtape while signed in, empty while signed out.
+
+```bash
+dir=$(osascript -e 'tell application "NTS Radio" to get state' | jq -r .logDirectory)
+tail -f "$dir/tracks.log"
+```
+
+- **`tracks.log`** has one tab-separated line per change to a document in NTS's `live_tracks` collection, for every source at once, whichever one is playing: receive time (local, with UTC offset), source (`channel-1`, `channel-2`, `mixtape:<alias>`), kind (`added`, `modified`, `removed` for a document that left the newest 12, `deleted`; `/snapshot` marks the opening 12 Firestore sends when the stream connects), document id, `start`, `title` and `artists` (JSON, so the `artist_names` array shows exactly as NTS stored it), Firestore's `created` and `updated` times, and the names of any other fields. Lines with `stream` in the source column record the connection opening, reconnecting or failing. The token is never written.
+- **`app.log`** has everything the app sends to the unified log (categories `api`, `auth`, `player`, `app`, `tracks`), copied every two seconds, as time, category, level and message. Values the code does not mark public read `<private>`, the same as in `log show`.
+
+Each file moves to `<name>.1` at 5MB, so at most about 10MB of each is kept.
 
 ## The commands
 

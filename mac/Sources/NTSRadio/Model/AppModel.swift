@@ -287,6 +287,12 @@ final class AppModel: ObservableObject {
     private var heldTracks: (tracks: [Track], deadline: Date)?
     private var trackRelease: Task<Void, Never>?
 
+    /// The raw `live_tracks` feed for every source, written to `tracks.log`
+    /// whichever one is playing; and the copy of the app's own log in `app.log`.
+    /// See `Diagnostics.swift`.
+    let recording = TracksRecording()
+    private let logMirror = AppLogMirror()
+
     private var bag = Set<AnyCancellable>()
 
     init() {
@@ -333,6 +339,19 @@ final class AppModel: ObservableObject {
         // Saved is built before auth exists, so it is handed the token source
         // rather than the auth object.
         saved.token = { [auth] in try await auth.validToken() }
+        // The recorder follows sign-in and the catalog's alias list; the
+        // debounce lets the cache seed and the first live refresh land as one
+        // change rather than two stream restarts.
+        Publishers.CombineLatest(auth.$isAuthenticated, catalog.$mixtapes.map { $0.map(\.alias) })
+            .debounce(for: .seconds(1), scheduler: RunLoop.main)
+            .sink { [weak self] signedIn, aliases in
+                guard let self else { return }
+                self.recording.update(signedIn: signedIn, mixtapes: aliases,
+                                      token: { [auth = self.auth] in try await auth.validToken() })
+            }
+            .store(in: &bag)
+        logMirror.start()
+        Log.app.info("launched, logs in \(LogFiles.directory.path, privacy: .public)")
         Task { await saved.sync() }
         updateTracklist()
         updateMixtapeTitle()
