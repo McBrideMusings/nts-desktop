@@ -10,11 +10,18 @@ import Foundation
 /// `explore.filters` from outside.
 @MainActor
 final class ExploreLoader: ObservableObject {
-    /// What Explore is filtered to. Every change re-runs the search from the
-    /// first page — a filter that left the old results underneath it would be
-    /// showing episodes that no longer match.
-    @Published var filters = NTSAPI.ExploreFilters() {
-        didSet { guard filters != oldValue else { return }; reload() }
+    /// What Explore is filtered to, kept across a relaunch. Every change re-runs
+    /// the search from the first page — a filter that left the old results
+    /// underneath it would be showing episodes that no longer match. The
+    /// results themselves are not kept: a relaunch starts again from page one.
+    @Published var filters = UserDefaults.standard.data(forKey: "exploreFilters")
+        .flatMap { try? JSONDecoder().decode(NTSAPI.ExploreFilters.self, from: $0) }
+        ?? NTSAPI.ExploreFilters() {
+        didSet {
+            guard filters != oldValue else { return }
+            UserDefaults.standard.set(try? JSONEncoder().encode(filters), forKey: "exploreFilters")
+            reload()
+        }
     }
     @Published private(set) var episodes: [NTSAPI.EpisodeCard] = []
     /// How many episodes match, which is usually far more than are loaded —

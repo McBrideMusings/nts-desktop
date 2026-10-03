@@ -655,7 +655,7 @@ enum NTSAPI {
     }
 
     /// What Explore is asking for. Empty means "everything, newest first".
-    struct ExploreFilters: Equatable {
+    struct ExploreFilters: Equatable, Codable {
         var mood: String?
         /// Ordered, because the chips read in the order they were picked.
         var genres: [String] = []
