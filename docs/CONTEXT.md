@@ -40,7 +40,7 @@ These are where two pieces of code most easily disagree. Define once, use exactl
 
 **Held track.** A track NTS has pushed that the app is deliberately not showing yet, because the audio it names has not reached the speakers. See the numbers below.
 
-**Saved.** A bookmarked row. Local-first, works signed out, and **also synced two ways** with the account's nts.live favourites when signed in.
+**Saved.** A show, episode or mixtape the user kept. Local-first, works signed out, and **also synced two ways** with the account's nts.live favourites when signed in.
 
 **Signed in** is not the same as **Supporter**. The app knows the first and cannot see the second. The live tracklist and the mixtape's current-episode line come from a Firestore feed only a paid Supporter's token can read; a refusal produces no update, which is indistinguishable from no tracks.
 
