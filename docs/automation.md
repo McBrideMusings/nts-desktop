@@ -1,6 +1,6 @@
 # Automating NTS Radio
 
-NTS Radio can be driven entirely without a mouse. It ships an AppleScript dictionary — seventeen commands and eleven properties — and **every command answers with the same JSON description of the whole app**, so one call both acts and reports.
+NTS Radio can be driven entirely without a mouse. It ships an AppleScript dictionary — eighteen commands and eleven properties — and **every command answers with the same JSON description of the whole app**, so one call both acts and reports.
 
 This is a supported surface, not a debug hatch. Build a Keyboard Maestro macro, a Stream Deck button, a login script that tunes NTS 1 in the morning.
 
@@ -19,16 +19,17 @@ Two things to know before you start:
 
 ## Naming a source
 
-Three forms. The same strings come back in the state blob, so you can read one and pass it straight to `tune to`.
+Four forms. The same strings come back in the state blob, so you can read one and pass it straight to `tune to`.
 
 ```
 channel:1
 channel:2
 mixtape:slow-focus
 episode:anz/anz-25th-june-2026
+idle
 ```
 
-Nothing tuned reports as `idle`.
+Nothing tuned reports as `idle`, and `tune to "idle"` is the same as `stop`.
 
 ## The state blob
 
@@ -74,13 +75,31 @@ Each file moves to `<name>.1` at 5MB, so at most about 10MB of each is kept.
 osascript -e 'tell application "NTS Radio" to tune to "channel:1"'
 osascript -e 'tell application "NTS Radio" to play'
 osascript -e 'tell application "NTS Radio" to pause'
+osascript -e 'tell application "NTS Radio" to stop'
 osascript -e 'tell application "NTS Radio" to skip by 1'
 osascript -e 'tell application "NTS Radio" to seek to 1800'
 ```
 
 `tune to` is the same code path a click takes; `skip by` is the one the media keys take, so a script and a hand cannot produce different results.
 
-**`skip by` moves to the neighbouring *source*, not the next track.** Channels toggle between themselves; mixtapes walk the dial and wrap; an episode does not move; idle does nothing.
+**`stop` puts the app back where it launched.** Nothing tuned (`source` is `idle`), no stream open, `playing` and `rendering` false, the tracklist empty and its drawer down, `knobAngle` 0. `pause` keeps the source loaded; use `stop` to leave things as you found them.
+
+**`skip by` moves to the neighbouring *source*, not the next track.** Mixtapes walk the dial and the two channels toggle; counts past either end wrap around, so with 16 mixtapes `skip by 17` is the same as `skip by 1`, and on a channel any even count lands where it started. An episode and idle have no neighbours, so `skip` fails there instead of answering with an unchanged state:
+
+```
+skip by 1   on an episode → -1708  An episode is not part of a group, so there is
+                                   no neighbour to skip to. Tune a mixtape or a
+                                   channel first.
+skip by 1   when idle     → -1708  Nothing is tuned, so there is nothing to skip
+                                   from. Tune a mixtape or a channel first.
+```
+
+**`until rendering true` makes `tune to` and `skip` answer with the settled state.** Without it the reply comes back the moment the command is taken, before the new stream has started — `rendering` false, `bufferSeconds` 0, no current track yet. With it the reply waits until audio is coming out, an episode's fetch has failed (`episodeError` set), or 10 seconds have passed, whichever is first. A skip while paused stays paused and answers at once. Check `rendering` in the reply: after the 10 seconds it is still false.
+
+```bash
+osascript -e 'tell application "NTS Radio" to tune to "channel:1" until rendering true' | jq .rendering
+# true
+```
 
 **`seek to` works only on an episode** — channels and mixtapes are continuous and have no position. It fails loudly rather than doing nothing:
 
@@ -199,6 +218,7 @@ set its volume curve to "log"       → -1703  "log" is not a volume curve.
                                              Use "linear" or "perceptual".
 
 seek to 1800   (on a channel)       → -1708  …tune an episode first.
+skip by 1      (on an episode)      → -1708  …no neighbour to skip to.
 show pane "tracks"   (idle)         → -1728  Nothing is playing…
 seek to "half"                      → -1700  Can't make "half" into type real.
 ```
@@ -209,21 +229,16 @@ The last is AppleScript's, not the app's — parameter types are declared in the
 
 ```bash
 #!/bin/bash
-osascript -e 'tell application "NTS Radio" to tune to "episode:anz/anz-25th-june-2026"' >/dev/null
+state=$(osascript -e 'tell application "NTS Radio" to tune to "episode:anz/anz-25th-june-2026" until rendering true')
 
-for _ in $(seq 30); do
-  state=$(osascript -e 'tell application "NTS Radio" to get state')
-  loading=$(printf '%s' "$state" | jq -r .episodeLoading)
-  err=$(printf '%s' "$state" | jq -r .episodeError)
-  [ -n "$err" ] && { echo "failed: $err"; exit 1; }
-  [ "$loading" = "false" ] && break
-  sleep 1
-done
+err=$(printf '%s' "$state" | jq -r .episodeError)
+[ -n "$err" ] && { echo "failed: $err"; exit 1; }
+[ "$(printf '%s' "$state" | jq -r .rendering)" = "true" ] || { echo "no audio after 10s"; exit 1; }
 
-printf '%s' "$state" | jq -r '"\(.sourceName) — \(.duration)s, rendering=\(.rendering)"'
+printf '%s' "$state" | jq -r '"\(.sourceName), rendering=\(.rendering)"'
 ```
 
-An episode resolves through two network hops — its page, then a signed playlist — either of which can fail, so poll `episodeLoading` and check `episodeError` rather than assuming success.
+An episode resolves through two network hops — its page, then a signed playlist — either of which can fail, so check `episodeError` and `rendering` in the reply rather than assuming success.
 
 ## What a script cannot do
 
@@ -241,12 +256,14 @@ A clone of this repository carries `mac/drive.sh`, which maps short verbs onto t
 ```bash
 mac/drive.sh state
 mac/drive.sh tune mixtape:slow-focus
+mac/drive.sh tune channel:1 --wait
 mac/drive.sh skip -1
+mac/drive.sh stop
 mac/drive.sh filter mood sedative genre ambientnewage music-only
 mac/drive.sh set volume-curve linear
 ```
 
-A setter answers nothing, so `set` prints `get state` after it. An error from the app prints its message verbatim and exits non-zero.
+`--wait` on `tune` and `skip` adds `until rendering true`. A setter answers nothing, so `set` prints `get state` after it. An error from the app prints its message verbatim and exits non-zero.
 
 ## Adding a command
 

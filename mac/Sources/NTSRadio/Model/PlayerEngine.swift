@@ -15,6 +15,10 @@ final class PlayerEngine: ObservableObject {
     /// while `isPlaying` stays true. Anything that reports live playback back to
     /// the user reads this instead — the play/pause button still reads `isPlaying`,
     /// because a button should reflect what you pressed.
+    ///
+    /// It also needs the current item to be ready: right after
+    /// `replaceCurrentItem` the player can still report `.playing` for a moment,
+    /// which read as the new source rendering when it was the old one's audio.
     @Published private(set) var isRendering = false
 
     /// How far into the current item playback has reached, in seconds.
@@ -40,6 +44,7 @@ final class PlayerEngine: ObservableObject {
 
     private var currentURL: URL?
     private var ticker: Any?
+    private var renderingWatch: AnyCancellable?
 
     /// Which seek is the one that matters. AVPlayer's periodic time observer
     /// keeps firing with the pre-seek time while a seek is still landing — with
@@ -60,10 +65,21 @@ final class PlayerEngine: ObservableObject {
 
     init() {
         player.automaticallyWaitsToMinimizeStalling = true
-        player.publisher(for: \.timeControlStatus)
-            .map { $0 == .playing }
+        // AVPlayerItem doesn't promise which thread its status KVO fires on, so
+        // an off-main value hops over. An on-main one lands inline, not via
+        // `receive(on:)`: `replaceCurrentItem` must read false before the same
+        // call returns, or a script's reply still reports the old stream.
+        renderingWatch = player.publisher(for: \.timeControlStatus)
+            .combineLatest(player.publisher(for: \.currentItem?.status))
+            .map { $0 == .playing && $1 == .readyToPlay }
             .removeDuplicates()
-            .assign(to: &$isRendering)
+            .sink { [weak self] rendering in
+                guard Thread.isMainThread else {
+                    DispatchQueue.main.async { self?.isRendering = rendering }
+                    return
+                }
+                MainActor.assumeIsolated { self?.isRendering = rendering }
+            }
 
         // Twice a second: fast enough that a scrubber tracks the audio, slow
         // enough to be nothing. The observer outlives each item, so it is added
@@ -109,8 +125,23 @@ final class PlayerEngine: ObservableObject {
             isSeeking = false
             seekEpoch += 1
             player.replaceCurrentItem(with: AVPlayerItem(url: url))
+            Log.player.info("load \(url.absoluteString, privacy: .public) autoplay=\(autoplay)")
         }
         if autoplay { play() }
+    }
+
+    /// Drop the current item entirely — the state the engine is in at launch,
+    /// before anything has been tuned. Pausing alone keeps the stream open.
+    func unload() {
+        player.pause()
+        player.replaceCurrentItem(with: nil)
+        currentURL = nil
+        position = 0
+        duration = 0
+        isSeeking = false
+        seekEpoch += 1
+        isPlaying = false
+        Log.player.info("unload")
     }
 
     /// Move the playhead. A no-op on an endless stream: there is nowhere to move

@@ -6,6 +6,7 @@
 #   drive.sh state                      get state
 #   drive.sh tune mixtape:slow-focus    tune to "mixtape:slow-focus"
 #   drive.sh skip -1                    skip by -1
+#   drive.sh tune channel:1 --wait      tune to "channel:1" with until rendering true
 #   drive.sh set volume-curve linear    set its volume curve to "linear"
 #
 # `quit` and `launch` are the two ends of `admin deploy`: quit asks the app to
@@ -25,9 +26,11 @@ usage: admin drive <verb> [args]
   state                          the whole state blob
   get <property>                 one property, e.g. get source-name
   set <property> <value>         e.g. set volume 30, set track-lead artist
-  tune <source>                  mixtape:<alias> | channel:<n> | episode:<show>/<episode>
+  tune <source> [--wait]         mixtape:<alias> | channel:<n> | episode:<show>/<episode> | idle
   play | pause
-  skip [n]                       default 1; negative goes back
+  stop                           untune, back to idle
+  skip [n] [--wait]              default 1; negative goes back
+                                 --wait answers once audio is coming out (10s cap)
   seek <seconds>
   window open|close
   pane live|catalog|tracks|none
@@ -80,14 +83,22 @@ act() { tell "$1" | pretty; }
 verb=$1
 shift
 
+# `--wait` on tune and skip: hold the reply until the new source is audible.
+wait=""
+if [[ $verb == tune || $verb == skip ]] && [[ $# -ge 1 && ${!#} == --wait ]]; then
+  wait=" until rendering true"
+  set -- "${@:1:$#-1}"
+fi
+
 case $verb in
   state)    act "get state" ;;
   get)      [[ $# -eq 1 ]] || usage; tell "get its ${1//-/ }" ;;
   set)      [[ $# -eq 2 ]] || usage; tell "set its ${1//-/ } to $(value "$1" "$2")" >/dev/null; act "get state" ;;
-  tune)     [[ $# -eq 1 ]] || usage; act "tune to $(q "$1")" ;;
+  tune)     [[ $# -eq 1 ]] || usage; act "tune to $(q "$1")$wait" ;;
   play)     [[ $# -eq 0 ]] || usage; act "play" ;;
   pause)    [[ $# -eq 0 ]] || usage; act "pause" ;;
-  skip)     [[ $# -le 1 ]] || usage; number "${1:-1}"; act "skip by ${1:-1}" ;;
+  stop)     [[ $# -eq 0 ]] || usage; act "stop" ;;
+  skip)     [[ $# -le 1 ]] || usage; number "${1:-1}"; act "skip by ${1:-1}$wait" ;;
   seek)     [[ $# -eq 1 ]] || usage; number "$1"; act "seek to $1" ;;
   window)
     case ${1:-} in

@@ -104,7 +104,9 @@ never draws one: it is the only place a key equivalent can live, and without it
   admin state
   admin drive tune mixtape:slow-focus
   admin drive tune episode:lung-dart/lung-dart-10th-august-2026
+  admin drive tune channel:1 --wait     # answers once audio is coming out (10s cap)
   admin drive skip 1
+  admin drive stop                      # back to idle, the launch state
   admin drive pane live
   admin drive pane tracks
   admin drive settings

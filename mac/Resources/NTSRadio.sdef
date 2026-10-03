@@ -43,7 +43,7 @@
             </property>
 
             <property name="source" code="pSRC" type="text" access="r"
-                      description="What is tuned in, as an identifier: mixtape:&lt;alias&gt;, channel:&lt;number&gt;, or idle.">
+                      description="What is tuned in, as an identifier: mixtape:&lt;alias&gt;, channel:&lt;number&gt;, episode:&lt;show&gt;/&lt;episode&gt;, or idle.">
                 <cocoa key="ntsSource"/>
             </property>
 
@@ -99,11 +99,21 @@
         </class-extension>
 
         <command name="tune to" code="NTSrTUNE"
-                 description="Tune to a mixtape or a channel and start playing it, the same as clicking it.">
+                 description="Tune to a mixtape, a channel or an episode and start playing it, the same as clicking it. Tuning to idle is the same as stop.">
             <cocoa class="NTSTuneCommand"/>
             <direct-parameter type="text"
-                              description="mixtape:&lt;alias&gt;, channel:&lt;number&gt;, or episode:&lt;show&gt;/&lt;episode&gt; — for example mixtape:rap-house, channel:1, or episode:lung-dart/lung-dart-10th-august-2026."/>
+                              description="mixtape:&lt;alias&gt;, channel:&lt;number&gt;, episode:&lt;show&gt;/&lt;episode&gt;, or idle — for example mixtape:rap-house, channel:1, or episode:lung-dart/lung-dart-10th-august-2026."/>
+            <parameter name="until rendering" code="pUNR" type="boolean" optional="yes"
+                       description="When true, wait to answer until audio is coming out, the episode fetch has failed, or 10 seconds have passed. Without it the reply comes back at once, before the new stream has started.">
+                <cocoa key="untilRendering"/>
+            </parameter>
             <result type="text" description="The state after tuning, as JSON."/>
+        </command>
+
+        <command name="stop" code="NTSrSTOP"
+                 description="Stop playing and untune, back to idle — the state the app launches in. Unlike pause, nothing stays loaded.">
+            <cocoa class="NTSStopCommand"/>
+            <result type="text" description="The state after stopping, as JSON."/>
         </command>
 
         <command name="play" code="NTSrPLAY"
@@ -118,11 +128,15 @@
         </command>
 
         <command name="skip" code="NTSrSKIP"
-                 description="Move to a neighbouring source within the current group, as the next/previous-track keys do. Playing state carries over.">
+                 description="Move to a neighbouring source within the current group, as the next/previous-track keys do. Mixtapes walk the dial and the two channels toggle, both wrapping at the ends. Playing state carries over. Fails on an episode or when idle, which have no neighbours.">
             <cocoa class="NTSSkipCommand"/>
             <parameter name="by" code="pBY_" type="integer" optional="yes"
-                       description="How many positions to move, negative for backwards. Defaults to 1.">
+                       description="How many positions to move, negative for backwards. Defaults to 1. Counts past either end wrap around, so with 16 mixtapes skip by 16 lands where it started.">
                 <cocoa key="by"/>
+            </parameter>
+            <parameter name="until rendering" code="pUNR" type="boolean" optional="yes"
+                       description="When true, wait to answer until audio is coming out, or 10 seconds have passed. A skip while paused answers at once.">
+                <cocoa key="untilRendering"/>
             </parameter>
             <result type="text" description="The state after skipping, as JSON."/>
         </command>

@@ -507,6 +507,23 @@ final class AppModel: ObservableObject {
     func select(_ s: Selection, autoplay: Bool = true) {
         cacheCurrentSource()
         selection = s
+        // An episode's fetch, detail and failure belong to that episode; carried
+        // onto a channel or a mixtape, a stale `episodeError` reads as this
+        // source having failed.
+        if case .episode = s {} else {
+            episodeLoad?.cancel()
+            episode = nil
+            episodeError = nil
+            episodeLoading = false
+        }
+        // Back to idle is back to how launch left things: nothing loaded, no
+        // drawer over a tracklist that no longer exists, and the dial's index
+        // mark (hidden while idle) back at the top.
+        if s == .idle {
+            tracksOpen = false
+            knobAngle = 0
+            engine.unload()
+        }
         loadCurrent(autoplay: autoplay)
         updateTracklist()
         updateMixtapeTitle()

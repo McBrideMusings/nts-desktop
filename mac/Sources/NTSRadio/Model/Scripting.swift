@@ -68,6 +68,7 @@ enum ScriptState {
     static func selection(from text: String) -> Selection? {
         let m = AppModel.shared
         let raw = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if raw == "idle" { return .idle }
         let parts = raw.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
         guard parts.count == 2 else { return nil }
         let value = String(parts[1])
@@ -198,10 +199,18 @@ extension NSApplication {
 /// Shared plumbing: every command reports the state it produced, and fails with
 /// a real message rather than a silent no-op when the app isn't up yet.
 class NTSCommand: NSScriptCommand {
+    /// How long `until rendering` holds a reply before answering anyway.
+    static let settleTimeout: Duration = .seconds(10)
+
     /// Run `body` on the main actor and answer with the resulting state.
-    /// Returning nil from `body` means the command refused; it has already set
+    /// Returning false from `body` means the command refused; it has already set
     /// the error, and the reply is that error rather than a state blob.
-    func run(_ body: @MainActor () -> Bool) -> Any? {
+    ///
+    /// A command whose sdef entry has an `until rendering` parameter passes
+    /// `settles: true`; when the script sets it, the reply waits until the
+    /// source the command chose is audible (or has failed, or was never asked to
+    /// play), up to `settleTimeout`, instead of reporting a half-applied state.
+    func run(settles: Bool = false, _ body: @MainActor () -> Bool) -> Any? {
         MainActor.assumeIsolated {
             guard AppModel.scriptingReady else {
                 scriptErrorNumber = -1728   // errAENoSuchObject
@@ -209,21 +218,53 @@ class NTSCommand: NSScriptCommand {
                 return nil
             }
             guard body() else { return nil }
-            return ScriptState.json()
+            guard settles, (evaluatedArguments?["untilRendering"] as? Bool) == true else {
+                return ScriptState.json()
+            }
+            // The Apple Event stays open while the main thread keeps running, so
+            // the player can make the progress being waited for.
+            suspendExecution()
+            nonisolated(unsafe) let command = self
+            let started = ContinuousClock.now
+            Task { @MainActor in
+                let m = AppModel.shared
+                while !m.isSettled, ContinuousClock.now - started < Self.settleTimeout {
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+                Log.app.info("""
+                    script \(command.commandDescription.commandName, privacy: .public) settled \
+                    after \(String(describing: ContinuousClock.now - started), privacy: .public) \
+                    source=\(ScriptState.sourceID(m.selection), privacy: .public) \
+                    rendering=\(m.engine.isRendering) error=\(m.episodeError ?? "", privacy: .public)
+                    """)
+                command.resumeExecution(withResult: ScriptState.json())
+            }
+            return nil
         }
+    }
+}
+
+extension AppModel {
+    /// Whether there is nothing left to wait for after tuning: the audio is
+    /// coming out, the episode fetch failed, or playback was never asked for
+    /// (a skip while paused stays paused, so it would never render).
+    var isSettled: Bool {
+        if episodeError != nil { return true }
+        if episodeLoading { return false }
+        return engine.isRendering || !engine.isPlaying
     }
 }
 
 @objc(NTSTuneCommand)
 final class NTSTuneCommand: NTSCommand {
     override func performDefaultImplementation() -> Any? {
-        run {
+        run(settles: true) {
             let text = (self.directParameter as? String) ?? ""
             guard let selection = ScriptState.selection(from: text) else {
                 self.scriptErrorNumber = -1703   // errAETypeError
                 self.scriptErrorString = """
-                    \"\(text)\" is not a source. Use mixtape:<alias> or channel:<number> \
-                    — for example mixtape:rap-house or channel:1.
+                    \"\(text)\" is not a source. Use mixtape:<alias>, channel:<number>, \
+                    episode:<show>/<episode> or idle — for example mixtape:rap-house or channel:1.
                     """
                 return false
             }
@@ -256,9 +297,37 @@ final class NTSPauseCommand: NTSCommand {
 @objc(NTSSkipCommand)
 final class NTSSkipCommand: NTSCommand {
     override func performDefaultImplementation() -> Any? {
-        run {
+        run(settles: true) {
+            let m = AppModel.shared
+            // The media keys hold an episode or idle where it is; a script gets
+            // told so, rather than a reply it can't tell from a skip that worked.
+            switch m.selection {
+            case .idle, .episode:
+                self.scriptErrorNumber = -1708   // errAEEventNotHandled
+                self.scriptErrorString = m.isIdle
+                    ? "Nothing is tuned, so there is nothing to skip from. Tune a mixtape or a channel first."
+                    : """
+                      An episode is not part of a group, so there is no neighbour to skip to. \
+                      Tune a mixtape or a channel first.
+                      """
+                return false
+            case .mixtape, .channel:
+                break
+            }
             let by = (self.evaluatedArguments?["by"] as? Int) ?? 1
-            AppModel.shared.step(by: by)
+            m.step(by: by)
+            return true
+        }
+    }
+}
+
+/// `stop` — back to idle, the state the app launches in: nothing tuned and no
+/// stream open. `pause` keeps the source; this lets a script put things back.
+@objc(NTSStopCommand)
+final class NTSStopCommand: NTSCommand {
+    override func performDefaultImplementation() -> Any? {
+        run {
+            AppModel.shared.select(.idle)
             return true
         }
     }
