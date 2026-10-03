@@ -1,0 +1,29 @@
+# ID	steps	check	note — see run.py for the step vocabulary
+PLAY-01	tune channel:1 --wait ; tune mixtape:slow-focus --wait ; tune episode:anz/anz-25th-june-2026 --wait ; sleep 3 ; state	.[0].duration == 0 and (.[0].seekable | not) and .[1].duration == 0 and (.[1].seekable | not) and .[4].duration > 0 and .[4].seekable
+PLAY-02	tune channel:1 ; sleep 6 ; state	(.[0] | has("playing") and has("rendering")) and .[2].playing and .[2].rendering
+PLAY-05	tune mixtape:slow-focus --wait ; skip 1 ; skip -1	(.[1].source | startswith("mixtape:")) and .[1].source != "mixtape:slow-focus" and .[2].source == "mixtape:slow-focus"
+PLAY-06	tune episode:anz/anz-25th-june-2026 --wait ; skip 1 ; state	.[1].code == -1708 and .[2].source == .[0].source
+PLAY-07	skip 1 ; state	.[0].code == -1708 and .[1].source == "idle"
+PLAY-08	tune mixtape:slow-focus --wait ; pause ; skip 1 ; state	.[3].source != "mixtape:slow-focus" and (.[3].playing | not)
+PLAY-09	tune channel:1 --wait ; sleep 8 ; state ; tune mixtape:slow-focus --wait ; sleep 8 ; state ; tune episode:anz/anz-25th-june-2026 --wait ; sleep 8 ; state	(.[2].bufferSeconds | . > 0 and . < 15) and (.[5].bufferSeconds | . >= 15 and . < 60) and .[8].bufferSeconds >= 600
+PLAY-10	tune channel:1 --wait ; relaunch	.[1].source == "idle" and (.[1].playing | not)
+PLAY-12	manual	no field records a stream (re)connect — `play` on a playing source could be told from a reconnect by a `streamStarts` count in StateSnapshot
+CAT-01	state	.[0].showIndex | has("shows") and has("named") and has("remaining") and has("running")
+CAT-03	state	any(.[0].channels[]; .slots != .slotsWithEpisode)
+CAT-04	state	.[0] | .mixtapeCount == 16 and .genreCount == 20 and .moodCount == 10 and .channelCount == 2
+WIN-08	frontmost ; window open ; frontmost	.[1].windowVisible and .[2].frontmost == .[0].frontmost and .[2].frontmost != "NTS Radio"	frontmost app compared, no keystrokes typed
+WIN-11	tune channel:1 ; pane catalog ; pane tracks ; window close ; window open	.[4].pane == "catalog" and .[4].tracksOpen
+PANE-01	tune channel:1 ; pane live ; pane tracks ; pane none ; pane catalog ; pane tracks	[.[1:][] | [.pane, .tracksOpen]] | unique | length == 4
+PANE-03	search veronica ; show anz ; close-catalog ; pane catalog	.[1].catalogDetail == "show:anz" and .[3].catalogQuery == "" and .[3].catalogDetail == ""
+PANE-04	catalog saved ; close-catalog ; pane catalog	.[2].catalogTab == "saved"
+PANE-05	tune channel:1 ; pane catalog ; pane tracks ; pane none	.[2].tracksOpen and .[3].pane == "catalog" and (.[3].tracksOpen | not)
+PANE-06	pane tracks	.[0].code == -1728 and (.[0].error | contains("Nothing is playing, so there is no tracklist to show."))	script half; the button needs a mouse
+PANE-09	tune channel:1 ; pane tracklist ; dictionary	.[1].tracksOpen and (.[2].sdef | match("<command name=\"show pane\"[\\s\\S]*?</command>").string | gsub("tracklist drawer"; "") | test("tracklist") | not)
+DICT-03	osa set volume to 30 ; osa set its volume to 30 ; get volume	.[0].code == -2741 and (.[1] | has("error") | not) and .[2].value == "30"
+DICT-04	state ; tune channel:1 ; pane live ; catalog	[.[] | keys] | unique | length == 1
+DICT-05	catalog search ; filter genre nonsense ; tune channel:1 --wait ; seek 1800	.[0].code == -1703 and (.[0].error | test("explore") and test("schedule") and test("saved")) and .[1].code == -1703 and (.[1].error | contains("browse genre \"Kosmische\"")) and .[3].code == -1708
+DICT-06	tune episode:anz/anz-25th-june-2026 --wait ; seek 600 ; osa seek to "half" ; osa seek to true ; state	.[2].code == -1700 and .[3].code == -1700 and .[4].position >= 595
+DICT-07	catalog explore ; show anz ; until 10 .detailTags | length > 0	.[1].catalogDetail == "show:anz" and .[2].catalogRows == .[2].exploreLoaded	confirms B-01
+DICT-08	tune channel:1 ; get playing ; get rendering ; get source ; get source-name ; get current-track ; get volume ; get volume-curve ; get volume-steepness ; get muted ; get track-lead ; get window-visible ; get knob-angle ; get auto-checks-for-updates	.[1:] | length == 13 and all(has("error") | not)
+DICT-09	quit ; state	.[1] | has("source") and (has("error") | not)
+DICT-10	set muted true ; set auto-checks-for-updates true ; set playing true ; set source channel:1	.[0].muted and .[1].autoChecksForUpdates and .[2].code != null and .[3].code != null

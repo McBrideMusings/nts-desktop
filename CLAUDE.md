@@ -18,6 +18,7 @@ admin distribute # build a distributable NTS Radio.dmg
 
 admin state      # the installed app's state JSON, pretty-printed (pipes into jq)
 admin drive <verb> [args]  # run one scripting command and print the state it returns; bare `admin drive` lists the verbs
+admin verify [P1|P2|P3] [ID…]  # run docs/verification's scripted rows (checks in mac/verify/*.tsv) and write each Result
 
 admin setup      # swift package resolve (one-time, after a fresh clone)
 admin snapshot   # render each popover state to PNG for visual verification

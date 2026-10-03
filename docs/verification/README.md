@@ -2,7 +2,7 @@
 
 **264 claims about how this app behaves**, one per row, precise enough to tell pass from fail. Use them as a lookup while verifying a change, or as a regression sweep when a change is broad enough to warrant one.
 
-They came out of a product-description pass over the whole app in August 2026: 27 documents written from the code, then driven against the installed build. Roughly 60 rows carry a result from that scripted pass; the rest are unrun and marked `—`.
+They came out of a product-description pass over the whole app in August 2026: 27 documents written from the code, then driven against the installed build. The 65 rows whose Device includes `script` carry a machine-readable check, and `admin verify` runs them and writes their Result (see **Running the scripted rows**). The rest need a person and are marked `—` until someone runs them.
 
 The machine-specific side of verification — how to build, install and get a handle on the app — is `.claude/skills/verify-project/SKILL.md`, which is deliberately untracked. This directory is the part that is true on any machine.
 
@@ -27,9 +27,9 @@ Each file has one table per document. Each row is an item with a stable ID, a pr
 1. **Bring up the surface.** Run `admin deploy`. It quits any running instance, installs a clean build, relaunches it, and returns only once the app answers `get state`. Note what that gives you — see **What the local build is not** below.
 2. **Confirm the commit.** Every document ends `Verified against nts-desktop commit 05e3b3f`. Run `git -C <repo> rev-parse --short HEAD`; if it differs, the documents describe a different build and some failures will be drift rather than defects. Say so in the note rather than filing them.
 3. **Keep the documents open beside the app.** Read the linked section before each item — the item is a summary, the section is the claim.
-4. **Work through P1 first across all five files, then P2, then P3.**
+4. **Run the scripted rows first:** `admin verify P1`, then `P2`, then `P3`. Then work the remaining rows by hand in the same order.
 5. **Record `pass`, `fail`, or `blocked`** in the Result column, with a note for anything other than a clean pass. A fail is something the document says that the app does not do. A blocked item could not be run — no second account, no clean machine, a prior failure in the way.
-6. **File every fail** in `bug-triage.md`. If the entry exists, add a Status line quoting the item ID; if not, add an entry with the item ID under "Raised by". **A fail is not automatically a product bug** — sometimes the document is wrong, and the fix is to the document. Say which in the Status line.
+6. **File every fail** as a [GitHub issue](https://github.com/McBrideMusings/nts-desktop/issues), quoting the item ID in its body; if an issue already covers it, comment there with the ID instead. **A fail is not automatically a product bug** — sometimes the document is wrong, and the fix is to the document. Say which.
 7. **When every P1 and P2 item for a document has passed or been filed**, change its row in the coverage table from `drafted` to `verified`.
 
 ## Conditions the Device column uses
@@ -65,6 +65,22 @@ What the script surface cannot do:
 - **It launches the app.** Addressing a quit app starts it, so there is no way to observe a not-running app.
 - **`set volume to N` does not work** — write `set its volume to N` (B-03).
 
+## Running the scripted rows
+
+```
+admin verify                  # every check, P1 first
+admin verify P1               # one priority
+admin verify PLAY-05 EXP-01   # named rows
+```
+
+Every row whose Device includes `script` has a line in `mac/verify/<file>.tsv`, keyed by its ID: a list of `admin drive` verbs to run, and a `jq` predicate over the array of their replies that must come out true. `mac/verify/run.py`'s header documents the step vocabulary — besides the drive verbs, raw AppleScript, `sleep`, `until` (poll `get state` until a predicate holds), `await` (the same, but a timeout blocks the row rather than failing it), `relaunch`, `frontmost`, `dictionary` and `require`.
+
+Before each row the runner returns the app to idle with the catalog and the radio window closed. After the run it restores every preference a row can change — volume, mute, update checks, track lead, Explore's filters, the catalog tab and the schedule channel. It rewrites each Result cell it ran as `pass (scripted <date>)`, `fail (scripted <date>)` or `blocked (scripted <date>) — <requirement>`, and keeps the replies from each row's last run in `tmp/claude/verify/checklist.json`, so a fail can be read without rerunning it. It exits 1 when any row fails or a preference could not be restored.
+
+**What the runner never does:** drive `star`, which writes to the NTS account, or anything that brings the app to the front — `open settings` and `check for updates` both do. A run never takes focus from whoever is typing. A row in the TSV whose steps read `manual` names, in its check column, what the state would have to report for a script to decide it. Rows whose Device does not include `script` have no line at all.
+
+**`tune to` plays real audio**, at whatever volume the app is set to.
+
 ## What the local build is not
 
 The machine these documents were verified against runs an `admin deploy` build, and that differs from what a user has in ways that matter to a pass:
@@ -75,17 +91,20 @@ The machine these documents were verified against runs an `admin deploy` build, 
 
 ## Results so far
 
-**One scripted pass, 2026-08-27, against `nts-desktop` commit `05e3b3f`**, driving the installed `admin deploy` build entirely through `osascript`.
+**`admin verify`, 2026-10-03, against the installed `admin deploy` build**, over all 65 rows with a check:
 
-It confirmed the facts the documents' "Confirmed against the running app" tables record: the playback state model, buffer figures on all three source kinds, the whole pane and drawer model including all four combinations, every argument error message, the catalog's counts and shape, the seek bar's clamping and its refusal on an endless source, and the writability of the three settable properties.
+- **56 pass.**
+- **3 fail.** EXP-07 and CACHE-05: Explore's mood and genres do not survive a relaunch, because nothing saves them. KEY-04: on a launch where the radio window has not yet been shown, `filter explore` leaves the window unable to open — `open window` answers `windowVisible: false` from then on.
+- **1 blocked.** OFF-09 needs an outage to be showing.
+- **5 manual.** SAVE-01 and SAVE-02 drive `star`; SET-05 and UPD-03 would bring the app to the front; PLAY-12 has no field that records a reconnect.
 
-It also produced five corrections to the documents themselves, and eight of the seventeen triage entries carry a Status line from it.
+The first pass, 2026-08-27 against commit `05e3b3f`, drove the same build entirely through `osascript` by hand and produced five corrections to the documents.
 
-**What that pass did not cover, and no scripted pass can:**
+**What no scripted pass can cover:**
 
 - **Anything a pointer does.** Every drag, hover, click target, tooltip and cursor claim.
 - **Anything visible.** Layout, colour, animation, the three window-width degradation steps, the menu-bar icon in any state, whether any error text is legible or truncated.
-- **Anything timed.** The 0.2s seek-bar reveal, the 0.4s slot advance, the 25fps waterline, and the held-track delay — which was looked for at 20-second sampling and needs about 1-second sampling to catch.
+- **Anything timed below a second.** The 0.2s seek-bar reveal, the 0.4s slot advance and the 25fps waterline. The held-track delay is within reach: TRK-01 polls once a second and caught it.
 - **Every keyboard claim**, including the four shortcuts and whether Escape does anything in the settings window.
 - **The signed-out surface**, which is what the documents describe as the default.
 - **The free-account surface**, which is where B-02 lives.

@@ -12,8 +12,8 @@ How to run this file: install and launch a clean build per the protocol, volume 
 | SEEK-04 | P1 | mouse | During the drag the bar follows the pointer and the audio does not (during the drag). | An episode playing. | 1. Press on the track and hold for 30s without releasing.<br>2. Listen throughout.<br>3. Release at the same point. | Audio plays on from the old position throughout. The seek lands where the pointer was, not 30s later. | — |
 | SEEK-05 | P2 | mouse | Vertical movement is ignored and the pointer may leave the window (during the drag). | An episode playing. | 1. Press on the track.<br>2. Drag 300px down and out of the window, moving horizontally.<br>3. Release. | The scrub tracks horizontally throughout and commits on release. | — |
 | SEEK-06 | P1 | mouse | The thumb does not snap back after a seek (release after dragging). | An episode playing. | 1. Drag to 75% and release.<br>2. Watch the thumb closely for 2s. | It stays at 75%. No visible snap back and forward. | — |
-| SEEK-07 | P1 | script | `seek to` moves the playhead exactly and clamps at both ends (driven by script). | An episode tuned, duration known. | 1. `seek to 1800`, read `position`.<br>2. `seek to -50`, read.<br>3. `seek to 99999`, read. | 1800; 0; the duration. | pass |
-| SEEK-08 | P1 | script | Seeking a live source fails rather than doing nothing (driven by script). | NTS 1 tuned. | 1. `seek to 1800`. | Error `-1708` with the documented message. | pass |
+| SEEK-07 | P1 | script | `seek to` moves the playhead exactly and clamps at both ends (driven by script). | An episode tuned, duration known. | 1. `seek to 1800`, read `position`.<br>2. `seek to -50`, read.<br>3. `seek to 99999`, read. | 1800; 0; the duration. | pass (scripted 2026-10-03) |
+| SEEK-08 | P1 | script | Seeking a live source fails rather than doing nothing (driven by script). | NTS 1 tuned. | 1. `seek to 1800`. | Error `-1708` with the documented message. | pass (scripted 2026-10-03) |
 | SEEK-09 | P2 | mouse | The labels switch format at an hour (edge cases). | — | 1. Tune an episode under an hour; read both labels.<br>2. Tune one over an hour; read both. | `m:ss` then `h:mm:ss`. | — |
 | SEEK-10 | P3 | mouse | The hit area is taller than the track (edge cases). | An episode playing. | 1. Click 5px above the visible 3pt track. | The seek registers. | — |
 | SEEK-11 | P2 | mouse | Dismissing the window mid-drag commits nothing (cancel and interrupt). | An episode playing, window open. | 1. Press on the track at 75%.<br>2. Without releasing, click the menu-bar icon to dismiss.<br>3. Reopen and read `position`. | The playhead is where it was, not at 75%. | — |
@@ -46,8 +46,8 @@ Not checkable by hand:
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | VOL-01 | P1 | mouse | Volume applies continuously during the drag (during the drag). | Something playing, window ≥495pt. | 1. Drag the slider slowly from 80 to 20.<br>2. Listen throughout. | Loudness changes as the thumb moves, not on release. | — |
 | VOL-02 | P1 | mouse | Muting does not move the slider (the simple case). | Volume at 60. | 1. Press mute.<br>2. Look at the slider.<br>3. Unmute. | The slider stays at 60, dimmed; audio returns at 60. | pass (script) |
-| VOL-03 | P1 | script | `set volume to N` fails, `set its volume to N` works (driven by script) — **B-03**. | App running. | 1. `set volume to 30`.<br>2. `set its volume to 30`.<br>3. `set (volume) to 30`. | Step 1 errors `-2741`; steps 2 and 3 succeed. | pass |
-| VOL-04 | P2 | script | Out-of-range values are clamped, not refused (edge cases). | App running. | 1. `set its volume to 150`, read.<br>2. `set its volume to -10`, read. | 100 and 0. | — |
+| VOL-03 | P1 | script | `set volume to N` fails, `set its volume to N` works (driven by script) — **B-03**. | App running. | 1. `set volume to 30`.<br>2. `set its volume to 30`.<br>3. `set (volume) to 30`. | Step 1 errors `-2741`; steps 2 and 3 succeed. | pass (scripted 2026-10-03) |
+| VOL-04 | P2 | script | Out-of-range values are clamped, not refused (edge cases). | App running. | 1. `set its volume to 150`, read.<br>2. `set its volume to -10`, read. | 100 and 0. | pass (scripted 2026-10-03) |
 | VOL-05 | P2 | mouse | Both persist across a relaunch (interactions). | Volume 33, muted. | 1. Quit and relaunch.<br>2. Read both. | 33 and muted. | — |
 | VOL-06 | P2 | mouse | Mute is in the status menu and has no command form (driven by script). | — | 1. Right-click the menu-bar icon.<br>2. Check the dictionary for a mute command. | Mute is in the menu; the dictionary has the property only. | pass |
 | VOL-07 | P3 | mouse | The slider dims to ~40% while muted but stays draggable (edge cases). | Muted. | 1. Drag the slider. | It moves; the value changes; audio stays silent. | — |
@@ -56,7 +56,7 @@ Not checkable by hand:
 
 | ID | P | Device | Claim | Setup | Steps | Expected | Result |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| TRK-01 | P1 | script+supporter | The held track is real and observable (the held track) — needs ~1s polling. | Signed in as a Supporter, NTS 1 playing, drawer open. | 1. Poll `get state` every second for 10 minutes, logging `pendingTrack` and `pendingSeconds`.<br>2. Find a track change. | At a change, `pendingTrack` is non-empty and `pendingSeconds` counts down from ≈5. | — (not caught at 20s sampling) |
+| TRK-01 | P1 | script+supporter | The held track is real and observable (the held track) — needs ~1s polling. | Signed in as a Supporter, NTS 1 playing, drawer open. | 1. Poll `get state` every second for 10 minutes, logging `pendingTrack` and `pendingSeconds`.<br>2. Find a track change. | At a change, `pendingTrack` is non-empty and `pendingSeconds` counts down from ≈5. | pass (scripted 2026-10-03; polled every 1s for up to 10 minutes) |
 | TRK-02 | P1 | mouse+supporter | The current track is the top row for a live source (which row is "now playing"). | NTS 1 playing, drawer open. | 1. Note which row is marked. | The topmost. | — |
 | TRK-03 | P1 | mouse | For an episode the marked row follows the playhead, backwards too (which row is "now playing"). | An episode with a tracklist playing, drawer open. | 1. Note the marked row.<br>2. Seek forward 20 minutes; note it.<br>3. Seek back to the start; note it. | The mark moves forward, then back to the first row. | — |
 | TRK-04 | P1 | mouse | Switching source republishes immediately with no hold (cancel and interrupt). | NTS 1 playing, drawer open with rows. | 1. Tune NTS 2.<br>2. Watch the drawer. | The list changes at once; it does not sit empty for ~5s. | — |
@@ -65,7 +65,7 @@ Not checkable by hand:
 | TRK-07 | P1 | offline+supporter | A dropped live connection is completely silent (cancel and interrupt) — **B-09**. | NTS 1 playing, drawer open with rows. | 1. Turn Wi-Fi off.<br>2. Wait 5 minutes.<br>3. Watch the drawer and the banner. | Record. Expected: rows freeze, no banner, no staleness marker. | — |
 | TRK-08 | P2 | mouse | Pausing publishes a held track at once (the held track). | NTS 1 playing, drawer open, a hold in progress (see TRK-01). | 1. Press pause during a hold.<br>2. Watch the top row. | It appears immediately. | — |
 | TRK-09 | P2 | mouse | An empty episode tracklist reads the same as every other empty case (edge cases) — related to **B-02**. | An older or spoken-word episode. | 1. Play it, open the drawer. | `No tracklist available`. | — |
-| TRK-10 | P2 | script | Only one track string is exposed, and no row list (driven by script). | Something playing with a tracklist. | 1. Read the whole blob. | `currentTrack` is one combined string; no row array. | pass |
+| TRK-10 | P2 | script | Only one track string is exposed, and no row list (driven by script). | Something playing with a tracklist. | 1. Read the whole blob. | `currentTrack` is one combined string; no row array. | pass (scripted 2026-10-03) |
 
 ## live/the-dial.md
 
@@ -75,7 +75,7 @@ Not checkable by hand:
 | DIAL-02 | P1 | mouse | Hovering previews on the knob face without committing (the knob face). | Live pane, a mixtape tuned. | 1. Move the cursor slowly across several wedges.<br>2. Watch the knob face.<br>3. Move off the dial. | The face reads out each mixtape in turn, then returns to the tuned one. Nothing changes what is playing. | — |
 | DIAL-03 | P1 | mouse | The knob is a dead zone (press). | Live pane. | 1. Click the centre of the knob. | Nothing happens — no selection, no play/pause. | — |
 | DIAL-04 | P1 | mouse | Clicking a wedge tunes and plays (release without dragging). | Live pane, idle. | 1. Click a wedge. | That mixtape plays; the index turns to it. | — |
-| DIAL-05 | P2 | script | `knobAngle` is 0 when idle and a multiple of 22.5 otherwise (edge cases). | Idle. | 1. Read `knobAngle`.<br>2. Tune a mixtape, read again. | 0, then a multiple of 22.5. | pass |
+| DIAL-05 | P2 | script | `knobAngle` is 0 when idle and a multiple of 22.5 otherwise (edge cases). | Idle. | 1. Read `knobAngle`.<br>2. Tune a mixtape, read again. | 0, then a multiple of 22.5. | pass (scripted 2026-10-03) |
 | DIAL-06 | P2 | mouse | The dial is capped in size (the layout follows the hardware). | Window open. | 1. Make the window full screen.<br>2. Look at the dial. | It stops growing; the extra space becomes margin. | — |
 | DIAL-07 | P2 | offline | The dial draws and is tunable from the disk cache (modifiers). | Warm machine. | 1. Quit, Wi-Fi off, launch.<br>2. Open the live pane. | All 16 wedges drawn with art. | — |
 | DIAL-08 | P3 | mouse | The accent colour follows the tuned mixtape (edge cases). | — | 1. Tune two different mixtapes.<br>2. Compare the seek bar fill and the level meter. | Different accent colours. | — |

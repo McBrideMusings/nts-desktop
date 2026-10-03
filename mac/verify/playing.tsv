@@ -1,0 +1,8 @@
+# ID	steps	check	note — see run.py for the step vocabulary
+SEEK-07	tune episode:anz/anz-25th-june-2026 --wait ; seek 1800 ; seek -50 ; seek 99999	(.[1].position | . >= 1800 and . < 1802) and .[2].position < 2 and .[3].position >= .[3].duration - 2
+SEEK-08	tune channel:1 --wait ; seek 1800	.[1].code == -1708
+VOL-03	osa set volume to 30 ; osa set its volume to 30 ; osa set (volume) to 30 ; get volume	.[0].code == -2741 and (.[1] | has("error") | not) and (.[2] | has("error") | not) and .[3].value == "30"
+VOL-04	set volume 150 ; set volume -10	.[0].volume == 100 and .[1].volume == 0
+TRK-01	require .signedIn ; tune channel:1 --wait ; pane tracks ; await 600 .pendingTrack != ""	.[3].pendingTrack != "" and .[3].pendingSeconds > 0 and .[3].pendingSeconds <= 6	polled every 1s for up to 10 minutes
+TRK-10	require .signedIn ; tune channel:1 --wait ; until 15 .currentTrack != ""	(.[2].currentTrack | type == "string" and . != "") and ([.[2] | to_entries[] | select((.key | test("track"; "i")) and (.value | type == "array"))] | length == 0)
+DIAL-05	state ; tune mixtape:slow-focus	.[0].knobAngle == 0 and (.[1].knobAngle / 22.5 | . == floor)

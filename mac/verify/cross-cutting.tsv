@@ -1,0 +1,5 @@
+# ID	steps	check	note — see run.py for the step vocabulary
+OFF-09	require .outage | length > 0 ; state	.[1].outage | length > 0 and all(has("detail") and (keys | length == 5))	script half; the banner needs eyes
+CACHE-04	tune channel:1 --wait ; relaunch	.[1].source == "idle"
+CACHE-05	filter mood sedative ; until 15 .exploreLoading | not ; more ; until 15 .exploreLoaded > 12 ; relaunch ; until 30 .exploreLoaded > 0 and (.exploreLoading | not)	.[3].exploreLoaded > 12 and .[5].exploreMood == "sedative" and .[5].exploreLoaded == 12
+KEY-04	frontmost ; window open ; tune channel:1 ; catalog ; frontmost	.[1].windowVisible and .[4].frontmost == .[0].frontmost and .[4].frontmost != "NTS Radio"	frontmost app compared, no keystrokes typed

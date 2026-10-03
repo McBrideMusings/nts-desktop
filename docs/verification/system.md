@@ -26,7 +26,7 @@ Not checkable by hand:
 | SET-02 | P1 | mouse | The tabs are a preference-style toolbar, not a segmented picker (four rules). | Settings open. | 1. Look at the top of the window. | Icon-and-label toolbar items, as in System Settings — not a small segmented control. | — |
 | SET-03 | P1 | keyboard | ⌘, opens Settings (modifiers). | App running, radio window key. | 1. Press ⌘,. | Settings opens. | — |
 | SET-04 | P1 | keyboard | What Escape does here (cancel and interrupt) — the one open Escape question. | Settings open. | 1. Press Escape. | Record. This is the only place in the app where Escape plausibly does something. | — |
-| SET-05 | P1 | script | The window's state is reported (driven by script). | Settings closed. | 1. Read `settingsVisible`, `settingsPane`.<br>2. `open settings "account"`, read both again. | `false`/`general`, then `true`/`account`. | pass |
+| SET-05 | P1 | script | The window's state is reported (driven by script). | Settings closed. | 1. Read `settingsVisible`, `settingsPane`.<br>2. `open settings "account"`, read both again. | `false`/`general`, then `true`/`account`. | pass (scripted 2026-10-03) |
 | SET-06 | P2 | mouse | Every route lands on the last-shown pane (press). | Settings open on Account, then closed. | 1. Reopen via the gear.<br>2. Close, reopen via the status menu. | Account both times, not General. | — |
 | SET-07 | P2 | mouse | Settings follows the system appearance while the radio window does not (edge cases). | Both windows open. | 1. Switch macOS between light and dark. | Settings changes; the radio window stays dark. | — |
 | SET-08 | P2 | mouse | Clicking outside does not close it (cancel and interrupt). | Settings open. | 1. Click the Desktop. | It stays open. | — |
@@ -46,7 +46,7 @@ Not checkable by hand:
 | MK-07 | P2 | mouse | Four tile controls are absent, not inert (what each control does). | Something playing, Control Center open. | 1. Look for seek-forward, seek-backward, skip-forward, skip-backward and stop. | None offered. | — |
 | MK-08 | P2 | keyboard | Volume keys change the system volume, not the app's (edge cases). | Something playing, app volume at 41. | 1. Press the volume-down key twice.<br>2. Read `volume`. | Still 41; the Mac's own volume changed. | — |
 | MK-09 | P2 | keyboard | Another media app takes the keys (cancel and interrupt). | NTS 1 playing. | 1. Start playback in another media app.<br>2. Press play/pause. | It reaches the other app. | — |
-| MK-10 | P1 | script | `skip by` shares the media keys' path (driven by script). | A mixtape playing. | 1. `skip by 1`, note the source.<br>2. Press the next-track key from the same state. | Both reach the same next mixtape. | pass (script half) |
+| MK-10 | P1 | script | `skip by` shares the media keys' path (driven by script). | A mixtape playing. | 1. `skip by 1`, note the source.<br>2. Press the next-track key from the same state. | Both reach the same next mixtape. | pass (scripted 2026-10-03; script half; the media key needs a keyboard) |
 
 Not checkable by hand:
 
@@ -60,9 +60,9 @@ Not checkable by hand:
 | UPD-02 | P1 | — | A local build suppresses automatic checks by design (development builds never check). | An `admin deploy` build. | 1. `defaults read "/Applications/NTS Radio.app/Contents/Info.plist" CFBundleVersion`.<br>2. Read `autoChecksForUpdates`. | `1` and `false`. Not a defect. | pass |
 | UPD-03 | P1 | script | `check for updates` returns before the check completes (driven by script) — **B-12**. | App running. | 1. `check for updates` and time the reply.<br>2. Read the blob for any result field. | Returns immediately; nothing reports found, downloading or failed. | — |
 | UPD-04 | P2 | release | An update relaunches the app and playback stops (interactions). | A release copy with an update available. **Do not run on a machine you rely on.** | 1. Start playback.<br>2. Check for updates and accept.<br>3. After the relaunch, read `source`. | The app relaunches; `source: "idle"`; nothing playing. | — |
-| UPD-05 | P2 | script | `auto checks for updates` is writable (driven by script). | App running. | 1. `set auto checks for updates to true`, read.<br>2. Set it back. | The value changes both ways. | — |
+| UPD-05 | P2 | script | `auto checks for updates` is writable (driven by script). | App running. | 1. `set auto checks for updates to true`, read.<br>2. Set it back. | The value changes both ways. | pass (scripted 2026-10-03) |
 | UPD-06 | P2 | offline | A check fails cleanly when offline (modifiers). | Wi-Fi off. | 1. Settings ▸ General → Check for Updates…. | Sparkle reports a failure; the app's own outage banner does not appear. | — |
-| UPD-07 | P3 | script | No version field is reported (driven by script) — **B-12**. | — | 1. Read the whole blob. | No `version`. | pass |
+| UPD-07 | P3 | script | No version field is reported (driven by script) — **B-12**. | — | 1. Read the whole blob. | No `version`. | pass (scripted 2026-10-03) |
 
 Not checkable by hand:
 
@@ -77,6 +77,6 @@ Not checkable by hand:
 | DOCK-03 | P2 | mouse | Clicking the Dock icon raises the radio window (edge cases). | Dock icon on, window dismissed. | 1. Click the Dock icon. | The radio window appears. | — |
 | DOCK-04 | P1 | mouse | Open at login reports off when approval is withdrawn (Open at login). | Open at login ticked. | 1. Switch it off in System Settings ▸ General ▸ Login Items.<br>2. Return to the app's Settings and read the checkbox. | Unticked. Note whether it needed a relaunch. | — |
 | DOCK-05 | P2 | mouse | The app actually starts at login (Open at login). | Open at login ticked, app quit. | 1. Log out and back in.<br>2. Check the menu bar. | The icon is there. | — |
-| DOCK-06 | P1 | script | Neither setting is scriptable or reported (driven by script) — **B-12**. | — | 1. Read the whole blob.<br>2. Read the dictionary. | No `showInDock`, no `startOnLogin`, no command for either. | pass |
+| DOCK-06 | P1 | script | Neither setting is scriptable or reported (driven by script) — **B-12**. | — | 1. Read the whole blob.<br>2. Read the dictionary. | No `showInDock`, no `startOnLogin`, no command for either. | pass (scripted 2026-10-03) |
 | DOCK-07 | P2 | mouse | Both settings appear in the status menu too (interactions). | — | 1. Right-click the menu-bar icon. | Open at Login and Show in Dock, reflecting the current state. | — |
 | DOCK-08 | P3 | mouse | The menu-bar icon cannot be hidden (edge cases). | Settings ▸ General. | 1. Read the pane for any hide-icon control. | None. | — |

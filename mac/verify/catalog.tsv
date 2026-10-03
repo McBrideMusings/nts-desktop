@@ -1,0 +1,21 @@
+# ID	steps	check	note — see run.py for the step vocabulary
+EXP-01	catalog explore ; filter ; until 15 .exploreLoading | not ; more ; until 15 .exploreLoaded > 12 ; filter mood sedative ; until 15 .exploreLoading | not	.[4].exploreLoaded > 12 and .[6].exploreLoaded == 12
+EXP-03	catalog explore ; filter genre nonsense ; state	.[1].code == -1703 and (.[1].error | contains("browse genre \"Kosmische\"")) and .[2].exploreGenres == .[0].exploreGenres
+EXP-04	filter mood sedative genre ambientnewage genre ambientnewage-kosmiche ; genre Kosmische	(.[0].exploreGenres | length == 2) and .[1].exploreMood == "" and (.[1].exploreGenres | length == 1)
+EXP-07	filter mood sedative genre ambientnewage ; relaunch	.[1].exploreMood == "sedative" and .[1].exploreGenres == ["ambientnewage"]
+EXP-10	filter mood sedative ; until 15 .exploreLoading | not ; filter ; until 15 .exploreLoading | not	.[3].exploreLoaded == 12 and .[3].exploreTotal >= 1000
+GEN-04	filter genre ambientnewage genre ambientnewage-kosmiche	.[0].exploreGenres | contains(["ambientnewage", "ambientnewage-kosmiche"])	one search versus two is not reported
+GEN-06	state	(.[0] | has("source")) and ([.[0] | keys[] | test("drawer|expanded"; "i")] | any | not)
+SRCH-01	catalog saved ; search veronica	.[1].catalogTab == "saved" and .[1].catalogFirstRows != .[0].catalogFirstRows	script half; the chip on screen needs eyes
+SRCH-04	search kosmische ; catalog	.[0].catalogQuery == "kosmische" and .[1].catalogQuery == ""
+SRCH-11	search veronica	.[0].catalogFirstRows | length > 0 and all(type == "string")
+SAVE-01	manual	`star` writes to the NTS account, so the runner never drives it
+SAVE-02	manual	`star` writes to the NTS account, so the runner never drives it
+SAVE-08	dictionary	(.[0].sdef | test("<command name=\"star\"")) and (.[0].sdef | test("<command name=\"[^\"]*(unstar|list|saved)"; "i") | not)
+SCHD-09	catalog schedule 3	.[0].code == -1703 and (.[0].error | contains("NTS 3 is not a channel. Use 1 or 2."))
+SCHD-10	state	.[0].scheduleDays | length >= 8 and all(split(" · ")[1] | tonumber | . >= 1 and . <= 17)
+SHOW-01	catalog explore ; show anz ; until 10 .detailTags | length > 0	.[1].catalogDetail == "show:anz" and (.[2].detailTags | length > 0) and .[2].catalogRows == .[2].exploreLoaded
+EP-01	tune episode:anz/anz-25th-june-2026 --wait	(.[0].episodeStream | test("sndcdn\\.com|mixcloud")) and (.[0].episodeLoading | not) and .[0].episodeError == ""
+EP-04	tune episode:anz/anz-25th-june-2026 ; tune channel:1 ; sleep 10 ; state	.[3].source == "channel:1" and .[3].playing and (.[3].episodeStream | test("sndcdn|mixcloud") | not)
+EP-05	tune episode:anz/not-a-real-episode ; until 10 .episodeError != ""	(.[0] | has("error") | not) and .[1].episodeError == "nts.live answered HTTP 404."
+EP-10	tune episode:anz/anz-25th-june-2026 --wait ; sleep 20 ; state	.[2].bufferSeconds >= 200

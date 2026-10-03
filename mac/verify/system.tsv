@@ -1,0 +1,7 @@
+# ID	steps	check	note — see run.py for the step vocabulary
+SET-05	manual	`open settings` activates the app (SettingsWindowController.show calls NSApp.activate), so the runner never drives it; the fields to read, `settingsVisible` and `settingsPane`, exist
+MK-10	tune mixtape:slow-focus --wait ; skip 1	(.[1].source | startswith("mixtape:")) and .[1].source != "mixtape:slow-focus"	script half; the media key needs a keyboard
+UPD-03	manual	`check for updates` opens Sparkle's dialog, which takes focus, and nothing reports how the check ended — needs an `updateCheck` field (found, downloading, failed) in StateSnapshot
+UPD-05	set auto-checks-for-updates true ; set auto-checks-for-updates false	.[0].autoChecksForUpdates and (.[1].autoChecksForUpdates | not)
+UPD-07	state	.[0] | has("source") and (has("version") | not)
+DOCK-06	state ; dictionary	(.[0] | has("source") and (has("showInDock") or has("startOnLogin") | not)) and (.[1].sdef | length > 0 and (test("dock|login"; "i") | not))
