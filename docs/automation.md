@@ -234,8 +234,22 @@ An episode resolves through two network hops — its page, then a signed playlis
 - **Learn what a `check for updates` found** — same issue.
 - **Reach the account.** Reported, never changed. This one is deliberate.
 
+## From a checkout: `mac/drive.sh`
+
+A clone of this repository carries `mac/drive.sh`, which maps short verbs onto the commands above, does the AppleScript quoting, and pretty-prints the state each one answers with. Run with no arguments, it lists the verbs.
+
+```bash
+mac/drive.sh state
+mac/drive.sh tune mixtape:slow-focus
+mac/drive.sh skip -1
+mac/drive.sh filter mood sedative genre ambientnewage music-only
+mac/drive.sh set volume-curve linear
+```
+
+A setter answers nothing, so `set` prints `get state` after it. An error from the app prints its message verbatim and exits non-zero.
+
 ## Adding a command
 
-Both halves or nothing: the terminology in `mac/Resources/NTSRadio.sdef`, the implementation in `mac/Sources/NTSRadio/Model/Scripting.swift`. Add the field to `StateSnapshot.swift` if the command should be observable — the struct fails the build if a field is added without being populated.
+Three places: the terminology in `mac/Resources/NTSRadio.sdef`, the implementation in `mac/Sources/NTSRadio/Model/Scripting.swift`, and a verb in `mac/drive.sh`. Add the field to `StateSnapshot.swift` if the command should be observable — the struct fails the build if a field is added without being populated.
 
 Only the installed `.app` carries the dictionary. `admin dev`'s bare binary answers nothing.

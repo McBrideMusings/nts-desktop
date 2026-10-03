@@ -13,8 +13,11 @@ Prefer `admin <task>` (this repo has `admin.toml`); the underlying `make` target
 ```
 admin build      # compile the release binary (swift build -c release)
 admin dev        # run from source; press R to rebuild & relaunch, Q to quit — do not run a second instance
-admin deploy     # assemble "NTS Radio.app" and install it to /Applications on this machine
+admin deploy     # quit the running app, install a fresh "NTS Radio.app" to /Applications, relaunch it, and return once it answers
 admin distribute # build a distributable NTS Radio.dmg
+
+admin state      # the installed app's state JSON, pretty-printed (pipes into jq)
+admin drive <verb> [args]  # run one scripting command and print the state it returns; bare `admin drive` lists the verbs
 
 admin setup      # swift package resolve (one-time, after a fresh clone)
 admin snapshot   # render each popover state to PNG for visual verification
@@ -75,6 +78,7 @@ never draws one: it is the only place a key equivalent can live, and without it
 - `mixtapes/<slug>/` — per-mixtape assets checked into the repo (cover art, icons, animation `.mp4`s); the `animation_*.mp4` files are gitignored (kept locally, not tracked — the dial doesn't use them yet)
 - `mac/codesign-local.sh` — local ad-hoc/keychain code signing so rebuilt dev binaries retain macOS permission grants
 - `mac/dev.sh` — the `admin dev` / `make dev` rebuild-and-relaunch loop (R to reload, Q to quit)
+- `mac/drive.sh` — `admin state` / `admin drive`'s verb-to-AppleScript map, plus the graceful `quit` and wait-for-state `launch` that bracket `admin deploy`
 
 ## Notes
 
@@ -90,32 +94,35 @@ never draws one: it is the only place a key equivalent can live, and without it
 - `CLAUDE.local.md` documents the dev-loop convention in more detail: after code changes, press **R** in the already-running `admin dev` session rather than starting a second one.
 - `mac/Sources/NTSFirestore/Generated/` is generated protobuf/gRPC code, not hand-written — regenerate via `mac/Proto/regenerate.sh` rather than editing directly.
 - `tmp/` at the repo root is gitignored and used for scratch/design output. `admin snapshot` renders views off screen to `tmp/claude/design/swift-shots`; `admin snapshot-windows` (`mac/snapshot-windows.sh`) drives the *installed* app and captures the real windows to `tmp/claude/design/window-shots` — the only way to see AppKit's own chrome, since nothing rendered off screen contains a title bar or a toolbar.
-- **Control surface — drive the app with `osascript`, never the mouse.** The
+- **Control surface — drive the app with `admin drive`, never the mouse.** The
   scripting dictionary is `mac/Resources/NTSRadio.sdef`; its implementation is
-  `mac/Sources/NTSRadio/Model/Scripting.swift`. Every command answers with the
-  same JSON blob `state` returns, so one call both acts and reports:
+  `mac/Sources/NTSRadio/Model/Scripting.swift`. `mac/drive.sh` maps short verbs
+  onto it and does the AppleScript quoting. Every command answers with the same
+  JSON blob `state` returns, so one call both acts and reports:
 
   ```
-  osascript -e 'tell application "NTS Radio" to get state'
-  osascript -e 'tell application "NTS Radio" to tune to "mixtape:slow-focus"'
-  osascript -e 'tell application "NTS Radio" to tune to "episode:lung-dart/lung-dart-10th-august-2026"'
-  osascript -e 'tell application "NTS Radio" to skip by 1'
-  osascript -e 'tell application "NTS Radio" to show pane "live"'
-  osascript -e 'tell application "NTS Radio" to show pane "tracks"'
-  osascript -e 'tell application "NTS Radio" to open settings'
-  osascript -e 'tell application "NTS Radio" to open settings "account"'
-  osascript -e 'tell application "NTS Radio" to open catalog showing "schedule"'
-  osascript -e 'tell application "NTS Radio" to filter explore mood "sedative" genres {"ambientnewage"}'
-  osascript -e 'tell application "NTS Radio" to explore more'
-  osascript -e 'tell application "NTS Radio" to browse genre "Kosmische"'
-  osascript -e 'tell application "NTS Radio" to open show "veronica-vasicka"'
-  osascript -e 'tell application "NTS Radio" to seek to 1800'
-  osascript -e 'tell application "NTS Radio" to open catalog searching for "veronica"'
-  osascript -e 'tell application "NTS Radio" to close catalog'
-  osascript -e 'tell application "NTS Radio" to check for updates'
+  admin state
+  admin drive tune mixtape:slow-focus
+  admin drive tune episode:lung-dart/lung-dart-10th-august-2026
+  admin drive skip 1
+  admin drive pane live
+  admin drive pane tracks
+  admin drive settings
+  admin drive settings account
+  admin drive catalog schedule
+  admin drive filter mood sedative genre ambientnewage
+  admin drive more
+  admin drive genre Kosmische
+  admin drive show veronica-vasicka
+  admin drive seek 1800
+  admin drive search veronica
+  admin drive close-catalog
+  admin drive updates
+  admin drive set track-lead artist     # a setter prints `get state` afterwards
   ```
 
   `tune to` is the code path a click takes; `skip by` is the one the media keys
-  take. Adding a command means editing both halves. Only the installed `.app`
-  carries the dictionary — `admin dev`'s bare binary answers nothing.
+  take. Adding a command means editing both halves, plus a verb in
+  `mac/drive.sh`. Only the installed `.app` carries the dictionary — `admin
+  dev`'s bare binary answers nothing.
 - **Verifying a change: `.claude/skills/verify-project/SKILL.md`** shadows the bundled `verify` skill, which is marked `disable-model-invocation` and so only runs when the user types `/verify` — stalling any unattended `implement` / `iterate` / `orchestrate` pass. The project version carries this app's build-install-drive-observe recipe: the scripting calls above, the pixel-scan technique for the menu-bar status item (it owns no enumerable window, and no scripted surface either), and the locked-display check that otherwise yields an all-black screenshot at exit 0.

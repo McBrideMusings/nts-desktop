@@ -24,13 +24,7 @@ Each file has one table per document. Each row is an item with a stable ID, a pr
 
 ## How to run a pass
 
-1. **Bring up the surface.** Quit any running instance first, then install and launch a clean build:
-   ```
-   osascript -e 'tell application "NTS Radio" to quit'
-   admin deploy
-   open "/Applications/NTS Radio.app"
-   ```
-   `admin deploy` is the standing convention in this project's `CLAUDE.local.md`. Note what that gives you — see **What the local build is not** below.
+1. **Bring up the surface.** Run `admin deploy`. It quits any running instance, installs a clean build, relaunches it, and returns only once the app answers `get state`. Note what that gives you — see **What the local build is not** below.
 2. **Confirm the commit.** Every document ends `Verified against nts-desktop commit 05e3b3f`. Run `git -C <repo> rev-parse --short HEAD`; if it differs, the documents describe a different build and some failures will be drift rather than defects. Say so in the note rather than filing them.
 3. **Keep the documents open beside the app.** Read the linked section before each item — the item is a summary, the section is the claim.
 4. **Work through P1 first across all five files, then P2, then P3.**
@@ -42,7 +36,7 @@ Each file has one table per document. Each row is an item with a stable ID, a pr
 
 - **`mouse`** — a real pointer. Required for every drag, hover and click claim; none of these can be driven by script, which is the point of them.
 - **`keyboard`** — real keystrokes. The app has four shortcuts and two text fields; nothing else has a keyboard target.
-- **`script`** — `osascript`. See below.
+- **`script`** — `admin state` / `admin drive`, which wrap `osascript`. See below.
 - **`offline`** — Wi-Fi off at the menu bar, not a proxy or a devtools toggle. A proxy can leave an in-flight connection alive; the app's buffer figures mean a live source keeps playing for about 5 seconds and an episode for about 14 minutes after a real disconnect, so **wait long enough**.
 - **`supporter`** — the paid NTS Supporters account. The machine these documents were written against has one.
 - **`free-account`** — a signed-in NTS account **without** a subscription. This does not exist on the verification machine and is the single most valuable condition to obtain: B-02 cannot be checked without it, and three documents' account rows are unverified for the same reason.
@@ -56,8 +50,10 @@ Each file has one table per document. Each row is an item with a stable ID, a pr
 The app has an AppleScript dictionary that both acts and reports, and one call returns everything:
 
 ```
-osascript -e 'tell application "NTS Radio" to get state'
+admin state
 ```
+
+`admin drive <verb> [args]` runs any other command in the dictionary and prints the state it answers with — `admin drive tune channel:1`, `admin drive pane tracks`. Bare `admin drive` lists the verbs. Both wrap `osascript`; [`docs/automation.md`](../automation.md) has the raw form.
 
 **Use it to set up a state exactly and to read state back after a real interaction. Do not use it to perform an interaction the item is about.** An item marked `mouse` is a claim about what a pointer does; driving it with `tune to` proves the command works and says nothing about the click.
 
