@@ -40,10 +40,15 @@ struct StateSnapshot: Codable {
     var volumeSteepness: Double
     var muted: Bool
     var signedIn: Bool
+    var savedCount: Int
+    /// Every saved item's id in the Saved tab's order — `show:<alias>`,
+    /// `mixtape:<alias>` or `episode:<show>/<episode>` — so a script can tell
+    /// which item `save` added (it goes first) or removed, not only that the
+    /// count moved.
+    var savedKeys: [String]
     /// Whether the account's own follows and saved episodes have actually
     /// been read. Without this, "nothing on the account" and "never asked"
     /// are the same empty list.
-    var savedCount: Int
     var syncedWithAccount: Bool
 
     /// An episode takes two requests before any audio exists, either of
@@ -255,6 +260,7 @@ extension AppModel {
             muted: muted,
             signedIn: auth.isAuthenticated,
             savedCount: saved.items.count,
+            savedKeys: saved.items.map(\.id),
             syncedWithAccount: saved.syncedWithAccount,
             episodeLoading: episodeLoading,
             episodeError: episodeError ?? "",

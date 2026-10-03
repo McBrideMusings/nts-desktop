@@ -9,9 +9,9 @@ GEN-06	state	(.[0] | has("source")) and ([.[0] | keys[] | test("drawer|expanded"
 SRCH-01	catalog saved ; search veronica	.[1].catalogTab == "saved" and .[1].catalogFirstRows != .[0].catalogFirstRows	script half; the chip on screen needs eyes
 SRCH-04	search kosmische ; catalog	.[0].catalogQuery == "kosmische" and .[1].catalogQuery == ""
 SRCH-11	search veronica	.[0].catalogFirstRows | length > 0 and all(type == "string")
-SAVE-01	manual	`star` writes to the NTS account, so the runner never drives it
-SAVE-02	manual	`star` writes to the NTS account, so the runner never drives it
-SAVE-08	dictionary	(.[0].sdef | test("<command name=\"star\"")) and (.[0].sdef | test("<command name=\"[^\"]*(unstar|list|saved)"; "i") | not)
+SAVE-01	manual	`save` writes to the NTS account, so the runner never drives it
+SAVE-02	manual	`save` writes to the NTS account, so the runner never drives it
+SAVE-08	dictionary	(.[0].sdef | test("<command name=\"save\"")) and (.[0].sdef | test("<command name=\"[^\"]*(star|unsave|list|saved)"; "i") | not)
 SCHD-09	catalog schedule 3	.[0].code == -1703 and (.[0].error | contains("NTS 3 is not a channel. Use 1 or 2."))
 SCHD-10	state	.[0].scheduleDays | length >= 8 and all(split(" · ")[1] | tonumber | . >= 1 and . <= 17)
 SHOW-01	catalog explore ; show anz ; until 10 .detailTags | length > 0	.[1].catalogDetail == "show:anz" and (.[2].detailTags | length > 0) and .[2].catalogRows == .[2].exploreLoaded

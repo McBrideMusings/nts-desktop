@@ -111,7 +111,7 @@ final class Saved: ObservableObject {
     private var remote: [String: NTSFavourites.Favourite] = [:]
     /// How the token is obtained. Set by `AppModel` at launch — `Saved` is a
     /// singleton built before auth exists, and passing the whole auth object in
-    /// would tie a bookmark list to sign-in machinery it otherwise ignores.
+    /// would tie the saved list to sign-in machinery it otherwise ignores.
     var token: (() async throws -> String)?
 
     /// True once a sync has actually read the account, so the UI can tell "no
@@ -232,7 +232,7 @@ final class Saved: ObservableObject {
     }
 
     private func starOnAccount(_ item: Item) {
-        // Mixtapes are this app's own idea of a bookmark; NTS files favourites
+        // Saving a mixtape exists only in this app; NTS files favourites
         // against shows and episodes only, so there is nowhere to put one.
         guard item.kind != .mixtape, let token else { return }
         let key = Self.key(item)

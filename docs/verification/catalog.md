@@ -53,14 +53,14 @@ Not checkable by hand:
 
 | ID | P | Device | Claim | Setup | Steps | Expected | Result |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| SAVE-01 | P1 | script | `star` is a toggle, so twice unsaves (driven by script) — **B-08**. | App running. | 1. Read `savedCount`.<br>2. `star "anz"`, read.<br>3. `star "anz"`, read. | Up by one, then back to the original. Record. | — |
-| SAVE-02 | P1 | script | `star` does not validate its alias (driven by script) — **B-11**. | App running. | 1. `star "not-a-real-show-xyz"`.<br>2. Open the Saved tab. | No error; a row appears titled from the alias. Record. **Unstar it afterwards.** | — |
+| SAVE-01 | P1 | script | `save` is a toggle, so twice unsaves (driven by script) — **B-08**. | App running. | 1. Read `savedCount` and `savedKeys`.<br>2. `save "anz"`, read.<br>3. `save "anz"`, read. | Up by one with `show:anz` first in `savedKeys`, then back to the original. Record. | — |
+| SAVE-02 | P1 | script | `save` does not validate its alias (driven by script) — **B-11**. | App running. | 1. `save "not-a-real-show-xyz"`.<br>2. Open the Saved tab. | No error; a row appears titled from the alias. Record. **Unsave it afterwards.** | — |
 | SAVE-03 | P1 | mouse | New items go to the top (the simple case). | Saved tab with items. | 1. Star a new show.<br>2. Open Saved. | It is the first row. | — |
 | SAVE-04 | P1 | mouse | A show and an episode of it are separate saved things (the three kinds). | A schedule row with both glyphs. | 1. Star the show.<br>2. Star the episode.<br>3. Open Saved. | Two rows, one labelled SHOW and one EPISODE. | — |
 | SAVE-05 | P1 | mouse | A row with no aliases cannot be saved (what can and cannot be saved). | Schedule scrolled to the furthest-out day. | 1. Find a row with no show alias (compare `slotsWithShow` against `slots`).<br>2. Look for its stars. | No star, rather than a star that fails. | — |
 | SAVE-06 | P2 | offline | A star made offline is kept and pushed later (modifiers). | Signed in, Wi-Fi off. | 1. Star a show.<br>2. Turn Wi-Fi on, wait for a sync.<br>3. Check nts.live in a browser. | The follow appears on the website. | — |
 | SAVE-07 | P2 | mouse | Signing out does not delete local saved items (edge cases). | Signed in with saved items. | 1. Note `savedCount`.<br>2. Sign out.<br>3. Read it again. | Unchanged. | — |
-| SAVE-08 | P2 | script | No command lists or unstars (driven by script). | — | 1. Read the dictionary. | `star` only; no list, no unstar. | pass (scripted 2026-10-03) |
+| SAVE-08 | P2 | script | No command lists or unsaves (driven by script). | — | 1. Read the dictionary. | `save` only; no list, no unsave. | pass (scripted 2026-10-03) |
 | SAVE-09 | P3 | mouse | A schedule-saved show keeps the broadcast subtitle it had then (edge cases). | — | 1. Star a show from a schedule row.<br>2. Open Saved and read its subtitle. | `NTS 1 · 09:00 – 11:00` — a broadcast time, not a property of the show. | — |
 
 ## catalog/the-schedule-timeline.md

@@ -104,6 +104,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The scripting command `star` is now `save`, matching the Saved tab; `star`
+  is gone. `get state` also lists every saved item's id in `savedKeys`, beside
+  `savedCount`, so a script can see which item a `save` added or removed.
 - Catalog tab switches now crossfade instead of cutting — switching between
   Schedule, Saved, and Explore uses the same `.easeOut(duration: 0.2)` curve as
   pane switches, and rapid presses remain interruptible.

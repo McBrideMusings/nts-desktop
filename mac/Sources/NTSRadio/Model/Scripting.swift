@@ -416,8 +416,8 @@ final class NTSExploreMoreCommand: NTSCommand {
     }
 }
 
-@objc(NTSStarCommand)
-final class NTSStarCommand: NTSCommand {
+@objc(NTSSaveCommand)
+final class NTSSaveCommand: NTSCommand {
     override func performDefaultImplementation() -> Any? {
         run {
             let m = AppModel.shared
@@ -427,7 +427,7 @@ final class NTSStarCommand: NTSCommand {
                 self.scriptErrorNumber = -1703   // errAETypeError
                 self.scriptErrorString = """
                     Give a show alias or episode:<show>/<episode>, e.g. \
-                    star "lung-dart" or star "episode:lung-dart/lung-dart-10th-august-2026".
+                    save "lung-dart" or save "episode:lung-dart/lung-dart-10th-august-2026".
                     """
                 return false
             }

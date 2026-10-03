@@ -44,7 +44,7 @@ Grouped by what they answer:
 - **Playback** — `source`, `sourceName`, `playing`, `rendering`, `position`, `duration`, `seekable`, `bufferSeconds`, `volume`, `volumeSlider`, `volumeCurve`, `volumeSteepness`, `muted`, `episodeStream`, `episodeLoading`, `episodeError`, `episodeURL`
 - **Tracklist** — `trackLead` (`"title"` or `"artist"`: which line leads a row; `currentTrack` and `pendingTrack` stay "artist — title" either way), `currentTrack`, `trackCount`, `pendingTrack`, `pendingSeconds`
 - **Window** — `pane`, `tracksOpen`, `windowVisible`, `catalogOpen`, `catalogTab`, `catalogQuery`, `catalogDetail`, `detailTags`, `settingsVisible`, `settingsPane`, `knobAngle`
-- **Catalog** — `catalogRows`, `catalogFirstRows`, `savedCount`, `mixtapeCount`, `genreCount`, `moodCount`, `channels`, `onAir`, `nextUp`, `scheduleChannel`, `scheduleDays`, `showIndex`
+- **Catalog** — `catalogRows`, `catalogFirstRows`, `savedCount`, `savedKeys` (every saved item's id in the Saved tab's order — `show:<alias>`, `mixtape:<alias>`, `episode:<show>/<episode>`; a `save` puts its item first), `mixtapeCount`, `genreCount`, `moodCount`, `channels`, `onAir`, `nextUp`, `scheduleChannel`, `scheduleDays`, `showIndex`
 - **Explore** — `exploreMood`, `exploreGenres`, `exploreMusicOnly`, `exploreFocused`, `exploreLoaded`, `exploreTotal`
 - **App** — `signedIn`, `syncedWithAccount`, `outage`, `running`, `autoChecksForUpdates`, `canCheckForUpdates`
 - **Logs** — `logDirectory`, `recordedSources`
@@ -136,13 +136,13 @@ osascript -e 'tell application "NTS Radio" to open show "veronica-vasicka"'
 osascript -e 'tell application "NTS Radio" to browse genre "Kosmische"'
 osascript -e 'tell application "NTS Radio" to filter explore mood "sedative" genres {"ambientnewage"}'
 osascript -e 'tell application "NTS Radio" to explore more'
-osascript -e 'tell application "NTS Radio" to star "veronica-vasicka"'
+osascript -e 'tell application "NTS Radio" to save "veronica-vasicka"'
 osascript -e 'tell application "NTS Radio" to close catalog'
 ```
 
 **`browse genre` takes a display name; `filter explore` takes an id.** `Kosmische` versus `ambientnewage-kosmiche`. The error message for an unknown genre explains the difference.
 
-**`star` is a toggle.** Running the same script twice saves then unsaves. There is no `unstar`. Tracked as [#95](https://github.com/McBrideMusings/nts-desktop/issues/95).
+**`save` is a toggle.** Running the same script twice saves then unsaves. There is no `unsave`; read `savedKeys` to see which way it went. Tracked as [#95](https://github.com/McBrideMusings/nts-desktop/issues/95).
 
 **`open catalog` with no `searching for` clears the current query.** Pass `searching for ""` if you mean to clear it; omitting it clears it too, which is [#97](https://github.com/McBrideMusings/nts-desktop/issues/97).
 

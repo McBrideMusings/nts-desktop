@@ -39,7 +39,7 @@ usage: admin drive <verb> [args]
   close-catalog
   filter [mood <id>] [genre <id>]... [music-only] [focused]
   more                           explore more
-  star <alias | episode:<show>/<episode>>
+  save <alias | episode:<show>/<episode>>
   genre <name>                   browse genre
   show <alias>                   open show
   settings [general|account]
@@ -133,7 +133,7 @@ case $verb in
     fi
     act "$cmd" ;;
   more)     act "explore more" ;;
-  star)     [[ $# -eq 1 ]] || usage; act "star $(q "$1")" ;;
+  save)     [[ $# -eq 1 ]] || usage; act "save $(q "$1")" ;;
   genre)    [[ $# -eq 1 ]] || usage; act "browse genre $(q "$1")" ;;
   show)     [[ $# -eq 1 ]] || usage; act "open show $(q "$1")" ;;
   settings)

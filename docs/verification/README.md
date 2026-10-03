@@ -77,7 +77,7 @@ Every row whose Device includes `script` has a line in `mac/verify/<file>.tsv`, 
 
 Before each row the runner returns the app to idle with the catalog and the radio window closed. After the run it restores every preference a row can change — volume, mute, update checks, track lead, Explore's filters, the catalog tab and the schedule channel. It rewrites each Result cell it ran as `pass (scripted <date>)`, `fail (scripted <date>)` or `blocked (scripted <date>) — <requirement>`, and keeps the replies from each row's last run in `tmp/claude/verify/checklist.json`, so a fail can be read without rerunning it. It exits 1 when any row fails or a preference could not be restored.
 
-**What the runner never does:** drive `star`, which writes to the NTS account, or anything that brings the app to the front — `open settings` and `check for updates` both do. A run never takes focus from whoever is typing. A row in the TSV whose steps read `manual` names, in its check column, what the state would have to report for a script to decide it. Rows whose Device does not include `script` have no line at all.
+**What the runner never does:** drive `save`, which writes to the NTS account, or anything that brings the app to the front — `open settings` and `check for updates` both do. A run never takes focus from whoever is typing. A row in the TSV whose steps read `manual` names, in its check column, what the state would have to report for a script to decide it. Rows whose Device does not include `script` have no line at all.
 
 **`tune to` plays real audio**, at whatever volume the app is set to.
 
@@ -96,7 +96,7 @@ The machine these documents were verified against runs an `admin deploy` build, 
 - **56 pass.**
 - **3 fail.** EXP-07 and CACHE-05: Explore's mood and genres do not survive a relaunch, because nothing saves them. KEY-04: on a launch where the radio window has not yet been shown, `filter explore` leaves the window unable to open — `open window` answers `windowVisible: false` from then on.
 - **1 blocked.** OFF-09 needs an outage to be showing.
-- **5 manual.** SAVE-01 and SAVE-02 drive `star`; SET-05 and UPD-03 would bring the app to the front; PLAY-12 has no field that records a reconnect.
+- **5 manual.** SAVE-01 and SAVE-02 drive `save`; SET-05 and UPD-03 would bring the app to the front; PLAY-12 has no field that records a reconnect.
 
 The first pass, 2026-08-27 against commit `05e3b3f`, drove the same build entirely through `osascript` by hand and produced five corrections to the documents.
 

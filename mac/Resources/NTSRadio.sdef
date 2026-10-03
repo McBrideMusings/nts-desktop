@@ -205,11 +205,11 @@
             <result type="text" description="The state after asking, as JSON. The page arrives asynchronously — read state again to see it."/>
         </command>
 
-        <command name="star" code="NTSrSTAR"
-                 description="Star or unstar a show or an episode, the same as clicking the star on its tile. Signed in, this also writes to (or deletes from) your NTS account's favourites.">
-            <cocoa class="NTSStarCommand"/>
+        <command name="save" code="NTSrSAVE"
+                 description="Save or unsave a show or an episode, the same as clicking the star on its tile. Signed in, this also writes to (or deletes from) your NTS account's favourites. get state lists what is saved in savedKeys.">
+            <cocoa class="NTSSaveCommand"/>
             <direct-parameter type="text" description="A show alias, e.g. lung-dart, or episode:&lt;show&gt;/&lt;episode&gt;, e.g. episode:lung-dart/lung-dart-10th-august-2026."/>
-            <result type="text" description="The state after starring, as JSON."/>
+            <result type="text" description="The state after saving, as JSON."/>
         </command>
 
         <command name="browse genre" code="NTSrBRWS"
