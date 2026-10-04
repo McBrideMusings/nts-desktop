@@ -45,6 +45,7 @@ usage: admin drive <verb> [args]
   settings [general|account]     open settings, without taking focus
   close-settings
   updates                        check for updates
+  window-id radio|<title>        the window number screencapture -l takes
   quit | launch                  graceful quit / open and wait for state
 EOF
   exit "${1:-2}"
@@ -141,6 +142,23 @@ case $verb in
     if [[ $# -eq 1 ]]; then act "open settings $(q "$1")"; else act "open settings"; fi ;;
   close-settings) act "close settings" ;;
   updates)  act "check for updates" ;;
+  window-id)
+    # The radio window has no title; the Settings window's title is its pane's name.
+    [[ $# -eq 1 ]] || usage
+    python3 - "$1" <<'PY'
+import sys, Quartz
+want = sys.argv[1]
+for w in Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionAll, Quartz.kCGNullWindowID):
+    if "NTS" not in str(w.get("kCGWindowOwnerName", "")):
+        continue
+    name = w.get("kCGWindowName") or ""
+    if (want == "radio" and not name) or (want and name == want):
+        print(w.get("kCGWindowNumber"))
+        sys.exit(0)
+print(f"no window {want!r}", file=sys.stderr)
+sys.exit(1)
+PY
+    ;;
   quit)
     if ! running; then
       echo "$APP is not running"

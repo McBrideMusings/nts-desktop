@@ -27,21 +27,8 @@ fi
 
 drive() { "$MAC/drive.sh" "$@" >/dev/null; }
 
-# The radio window has no title; the Settings window's title is its pane's name.
-# Ask for a window by title, or for the untitled one.
-window_id() {
-  python3 - "$1" <<'PY'
-import sys, Quartz
-want = sys.argv[1]
-for w in Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionAll, Quartz.kCGNullWindowID):
-    if "NTS" not in str(w.get("kCGWindowOwnerName", "")):
-        continue
-    name = w.get("kCGWindowName") or ""
-    if (want == "radio" and not name) or (want and name == want):
-        print(w.get("kCGWindowNumber"))
-        break
-PY
-}
+# A missing window prints nothing, and capture() reports it.
+window_id() { "$MAC/drive.sh" window-id "$1" || true; }
 
 # -T 1 lets a pane switch or an overlay finish before the shutter; -o drops the
 # window shadow so the PNG is the window itself.
