@@ -91,10 +91,9 @@ The machine these documents were verified against runs an `admin deploy` build, 
 
 ## Results so far
 
-**`admin verify`, 2026-10-03, against the installed `admin deploy` build**, over all 65 rows with a check:
+**`admin verify`, 2026-10-03, against the installed `admin deploy` build**, over all 65 rows with a check, with EXP-07, CACHE-05 and KEY-04 re-run on 2026-10-04:
 
-- **56 pass.**
-- **3 fail.** EXP-07 and CACHE-05: Explore's mood and genres do not survive a relaunch, because nothing saves them. KEY-04: on a launch where the radio window has not yet been shown, `filter explore` leaves the window unable to open — `open window` answers `windowVisible: false` from then on.
+- **59 pass.** KEY-04 failed once on 2026-10-03 (`open window` answered `windowVisible: false` after `filter explore`) and has not failed since, on that day's build or a later one; `app.log` now records the window's state either side of every scripted open and close, so a repeat says why.
 - **1 blocked.** OFF-09 needs an outage to be showing.
 - **5 manual.** SAVE-01 and SAVE-02 drive `save`; SET-05 and UPD-03 would bring the app to the front; PLAY-12 has no field that records a reconnect.
 

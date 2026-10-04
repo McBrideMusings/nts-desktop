@@ -140,12 +140,30 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
     /// not take keyboard focus from whatever the person at the machine is typing
     /// into, so this is `show` minus the activation.
     func showWithoutActivating() {
+        let before = windowState
         placeFrame(relativeTo: nil)
         window.orderFrontRegardless()
+        Log.app.info("script open window: \(before, privacy: .public) -> \(self.windowState, privacy: .public)")
     }
 
     /// Take the window off screen. The app lives on in the menu bar.
-    func hide() { window.orderOut(nil) }
+    func hide() {
+        let before = windowState
+        window.orderOut(nil)
+        Log.app.info("script close window: \(before, privacy: .public) -> \(self.windowState, privacy: .public)")
+    }
+
+    /// Everything that decides whether the window is on screen, for the log —
+    /// so a scripted open that leaves `window visible` false says why.
+    private var windowState: String {
+        let occluded = !window.occlusionState.contains(.visible)
+        return """
+            visible=\(window.isVisible) miniaturized=\(window.isMiniaturized) \
+            onActiveSpace=\(window.isOnActiveSpace) occluded=\(occluded) \
+            frame=\(NSStringFromRect(window.frame)) screen=\(window.screen?.localizedName ?? "none") \
+            appActive=\(NSApp.isActive) policy=\(NSApp.activationPolicy().rawValue)
+            """
+    }
 
     private func placeFrame(relativeTo statusButton: NSStatusBarButton?) {
         if !window.isVisible, !window.setFrameUsingName(Self.frameName) {
