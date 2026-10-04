@@ -12,7 +12,7 @@
 # `quit` and `launch` are the two ends of `admin deploy`: quit asks the app to
 # quit (so applicationWillTerminate flushes its caches and logs, which a SIGTERM
 # skips) and waits for the process to go; launch opens the bundle in the
-# background and returns once `get state` answers.
+# background, unless it is already running, and returns once `get state` answers.
 set -euo pipefail
 
 APP="NTS Radio"
@@ -157,7 +157,9 @@ case $verb in
     echo "$APP did not quit within 10s" >&2
     exit 1 ;;
   launch)
-    open -g "$BUNDLE"
+    # Opening a running app sends it a reopen event, and the app answers that
+    # the way it answers a Dock click: it shows the window and activates.
+    running || open -g "$BUNDLE"
     for _ in $(seq 60); do
       if out=$(osascript -e "with timeout of 5 seconds" -e "tell application \"$APP\" to get state" -e "end timeout" 2>/dev/null) && jq -e . >/dev/null <<<"$out"; then
         echo "$APP is answering"

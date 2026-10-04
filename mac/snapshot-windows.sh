@@ -7,13 +7,17 @@
 # between panes are AppKit's, and those are exactly the parts that took several
 # attempts to get right. Nothing off screen can show them.
 #
-# So this drives the installed app through its scripting dictionary and captures
+# So this drives the installed app through drive.sh (`admin drive`) and captures
 # each real window by id. It needs `admin deploy` first (only the .app carries the
-# dictionary), it brings the app to the front, and it leaves it running.
+# dictionary). Every command it sends shows windows without activating the app,
+# so nothing takes focus. On exit it puts back the source (an episode restarts
+# from its beginning), whether it was playing, the pane, and whether each window
+# was showing; it leaves the app running.
 set -euo pipefail
 
 APP="NTS Radio"
-OUT="$(cd "$(dirname "$0")/.." && pwd)/tmp/claude/design/window-shots"
+MAC="$(cd "$(dirname "$0")" && pwd)"
+OUT="$(dirname "$MAC")/tmp/claude/design/window-shots"
 mkdir -p "$OUT"
 
 if [[ ! -d "/Applications/$APP.app" ]]; then
@@ -21,7 +25,7 @@ if [[ ! -d "/Applications/$APP.app" ]]; then
   exit 1
 fi
 
-tell() { osascript -e "tell application \"$APP\" to $1" >/dev/null; }
+drive() { "$MAC/drive.sh" "$@" >/dev/null; }
 
 # The radio window has no title; the Settings window's title is its pane's name.
 # Ask for a window by title, or for the untitled one.
@@ -48,27 +52,45 @@ capture() {
   echo "wrote $name.png"
 }
 
-open -a "/Applications/$APP.app"
-sleep 2
-tell "open window"
+"$MAC/drive.sh" launch
+before="$("$MAC/drive.sh" state)"
 
-tell 'show pane "live"'
+# Put back what the run changed, on success or failure, so a capture that fails
+# halfway does not leave channel 1 playing and both windows up. Each step runs
+# even if the one before it fails.
+restore() {
+  set +e
+  drive pane "$(jq -r .pane <<<"$before")"
+  local source
+  source="$(jq -r .source <<<"$before")"
+  if [[ $source == idle ]]; then
+    drive stop
+  else
+    drive tune "$source"
+    [[ $(jq -r .playing <<<"$before") == true ]] || drive pause
+  fi
+  [[ $(jq -r .settingsVisible <<<"$before") == true ]] || drive close-settings
+  [[ $(jq -r .windowVisible <<<"$before") == true ]] || drive window close
+}
+trap restore EXIT
+
+drive window open
+
+drive pane live
 RADIO="$(window_id radio)"
 capture "$RADIO" "radio-live"
 
 # The drawer refuses to open over silence — there is no tracklist for nothing —
-# so tune a channel first. `tune to` does not start playback on its own.
-tell 'tune to "channel:1"'
-tell 'show pane "tracks"'
+# so tune a channel first. `tune to` starts playback; restore undoes it.
+drive tune channel:1
+drive pane tracks
 capture "$RADIO" "radio-tracklist-drawer"
 
-tell 'show pane "catalog"'
+drive pane catalog
 capture "$RADIO" "radio-explore"
 
-tell 'show pane "live"'
-
 for pane in general account; do
-  tell "open settings \"$pane\""
+  drive settings "$pane"
   capture "$(window_id "$(python3 -c "print('$pane'.capitalize())")")" "settings-$pane"
 done
 
