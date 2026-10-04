@@ -93,7 +93,7 @@ The machine these documents were verified against runs an `admin deploy` build, 
 
 **`admin verify`, 2026-10-03, against the installed `admin deploy` build**, over all 65 rows with a check, with EXP-07, CACHE-05 and KEY-04 re-run, and SET-05 scripted, on 2026-10-04:
 
-- **60 pass.** KEY-04 failed once on 2026-10-03 (`open window` answered `windowVisible: false` after `filter explore`) and has not failed since, on that day's build or a later one; `app.log` now records the window's state either side of every scripted open and close, so a repeat says why.
+- **60 pass.** KEY-04's one failure, on 2026-10-03 (`open window` answered `windowVisible: false`), ran behind the lock screen: macOS's own log has the idle screensaver locking it at 15:00 UTC (11:00am EDT) and an unlock at 17:17 UTC (1:17pm EDT), with the rest of that run in between. That is inferred from the system log, since `app.log` did not record lock state then. A run holds the display awake, stops when the screen is locked before a row, and marks a row blocked when a lock lands during it; `app.log` records `screenLocked` either side of every scripted window open and close.
 - **1 blocked.** OFF-09 needs an outage to be showing.
 - **4 manual.** SAVE-01 and SAVE-02 drive `save`; UPD-03 would bring the app to the front; PLAY-12 has no field that records a reconnect.
 

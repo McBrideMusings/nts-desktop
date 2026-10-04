@@ -197,14 +197,20 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
 extension NSWindow {
     /// Everything that decides whether a window is on screen, for the log — so
     /// a scripted open that leaves `window visible` or `settingsVisible` false
-    /// says why.
+    /// says why. `screenLocked` is the login session's lock-screen flag; the
+    /// session omits the key while unlocked, and `unknown` means there was no
+    /// session dictionary to read.
     var scriptLogState: String {
         let occluded = !occlusionState.contains(.visible)
+        let locked = (CGSessionCopyCurrentDictionary() as? [String: Any]).map {
+            String($0["CGSSessionScreenIsLocked"] as? Bool ?? false)
+        } ?? "unknown"
         return """
             visible=\(isVisible) key=\(isKeyWindow) miniaturized=\(isMiniaturized) \
             onActiveSpace=\(isOnActiveSpace) occluded=\(occluded) \
             frame=\(NSStringFromRect(frame)) screen=\(screen?.localizedName ?? "none") \
-            appActive=\(NSApp.isActive) policy=\(NSApp.activationPolicy().rawValue)
+            appActive=\(NSApp.isActive) policy=\(NSApp.activationPolicy().rawValue) \
+            screenLocked=\(locked)
             """
     }
 }

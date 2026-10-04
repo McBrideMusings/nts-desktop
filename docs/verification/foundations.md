@@ -50,10 +50,10 @@ Not checkable by hand:
 | WIN-05 | P1 | mouse | Pausing keeps the badge and stops only the motion (the menu-bar icon). | NTS 2 playing. | 1. Pause.<br>2. Screenshot the menu bar and zoom. | The badge still reads `2`; no NTS wordmark. | — |
 | WIN-06 | P2 | mouse | The badge follows a source change made while paused (edge cases). | NTS 2 tuned, paused. | 1. `skip by 1` (moves to NTS 1).<br>2. Screenshot the menu bar. | The badge reads `1`, not `2`. | — |
 | WIN-07 | P2 | mouse | The right-click menu carries the eight documented items (the right-click menu). | App running. | 1. Right-click the icon. | Play/Pause, Mute, Live 1, Live 2, Open at Login, Show in Dock, Check for Updates…, Settings…, Quit. | — |
-| WIN-08 | P1 | script | `open window` does not take keyboard focus (driven by script). | Window closed, a text editor frontmost with the caret in a document. | 1. Type continuously in the editor.<br>2. From another terminal, run `open window`.<br>3. Keep typing. | The window appears; every keystroke still lands in the editor. | pass (scripted 2026-10-03; frontmost app compared, no keystrokes typed) |
+| WIN-08 | P1 | script | `open window` does not take keyboard focus (driven by script). | Window closed, a text editor frontmost with the caret in a document. | 1. Type continuously in the editor.<br>2. From another terminal, run `open window`.<br>3. Keep typing. | The window appears; every keystroke still lands in the editor. | pass (scripted 2026-10-04; frontmost app compared, no keystrokes typed) |
 | WIN-09 | P2 | mouse | The window's minimum size follows the two-part rule (during the drag). | Window open. | 1. Drag the corner to make it as small as possible, first wide-and-short, then narrow-and-tall. | Stops at 520×230 and at 340×520. Dragging diagonally through the corner does not stick or jump. | — |
 | WIN-10 | P2 | keyboard | ⌘W closes the window but does not quit (edge cases). | Window open and key. | 1. Press ⌘W.<br>2. Check the menu bar. | Window closes; the icon remains. | — |
-| WIN-11 | P2 | script | Window state survives a close and reopen (confirmed). | Catalog pane, drawer open. | 1. `close window`, `open window`, read `pane` and `tracksOpen`. | Both unchanged. | pass (scripted 2026-10-03) |
+| WIN-11 | P2 | script | Window state survives a close and reopen (confirmed). | Catalog pane, drawer open. | 1. `close window`, `open window`, read `pane` and `tracksOpen`. | Both unchanged. | pass (scripted 2026-10-04) |
 
 Not checkable by hand:
 

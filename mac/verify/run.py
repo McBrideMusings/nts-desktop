@@ -37,7 +37,14 @@ window and Settings closed; after the run, every preference a row can change
 is restored to what it was when the run started. The Result cell of each row run is rewritten
 in place, and its replies replace that row's entry in
 tmp/claude/verify/checklist.json, which keeps the last run of every row. The
-exit status is 1 when a row fails or a preference could not be restored.
+exit status is 1 when a row fails, the screen locked, or a preference could
+not be restored.
+
+The run holds a display assertion (`caffeinate -d`) for its whole life, because
+the idle screensaver locks the screen, and behind the lock screen a scripted
+`open window` answers `windowVisible: false`. A screen locked before a row
+stops the run there; a lock that lands during a row turns that row's pass into
+blocked.
 
 Never add a step that checks for updates: Sparkle's dialog brings the app to
 the front, and the runner must never take focus from whoever is typing.
@@ -46,6 +53,8 @@ the front, and the runner must never take focus from whoever is typing.
 
 import datetime
 import json
+import os
+import plistlib
 import re
 import subprocess
 import sys
@@ -95,6 +104,13 @@ def jq(expr, data):
     proc = subprocess.run(["jq", "-e", expr], input=json.dumps(data),
                           capture_output=True, text=True)
     return proc.returncode == 0, proc.stderr.strip()
+
+
+def screen_locked():
+    """True while the console shows the lock screen, read from IOKit's root
+    entry so the answer does not depend on the app."""
+    proc = subprocess.run(["ioreg", "-n", "Root", "-d1", "-a"], capture_output=True, check=True)
+    return plistlib.loads(proc.stdout)["IOConsoleLocked"]
 
 
 class Blocked(Exception):
@@ -271,16 +287,23 @@ def main(argv):
     base = drive("state")
     if "error" in base:
         sys.exit(f"the app does not answer get state: {base['error']}")
+    # Exits with this process, so the assertion lasts exactly as long as the run.
+    subprocess.Popen(["caffeinate", "-d", "-w", str(os.getpid())])
 
     today = datetime.date.today().isoformat()
-    report, tally = [], {}
+    report, tally, locked = [], {}, False
     try:
-        for row_id in ids:
+        for n, row_id in enumerate(ids):
             area, steps, check, note = checks[row_id]
             if steps == "manual":
                 log(f"{row_id:9} manual   {check}")
                 tally["manual"] = tally.get("manual", 0) + 1
                 continue
+            if screen_locked():
+                locked = True
+                log(f"the screen is locked; stopping before {row_id}")
+                tally["not run"] = len(ids) - n
+                break
             reset()
             replies, detail = [], ""
             try:
@@ -290,6 +313,10 @@ def main(argv):
                 detail = err
             except Blocked as e:
                 verdict, detail = "blocked", str(e)
+            # A pass behind the lock screen proves nothing; a fail keeps its own reason.
+            if verdict == "pass" and screen_locked():
+                locked = True
+                verdict, detail = "blocked", "the screen locked during the row"
             tally[verdict] = tally.get(verdict, 0) + 1
             result = f"{verdict} (scripted {today}"
             result += f"; {note})" if note else ")"
@@ -306,7 +333,7 @@ def main(argv):
         unrestored = restore(base)
 
     log(", ".join(f"{n} {k}" for k, n in sorted(tally.items())) + f" — replies in {REPORT}")
-    return 1 if tally.get("fail") or unrestored else 0
+    return 1 if tally.get("fail") or locked or unrestored else 0
 
 
 if __name__ == "__main__":
