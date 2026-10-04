@@ -36,7 +36,10 @@ Before each row the app is put back to idle with the catalog, the radio
 window and Settings closed; after the run, every preference a row can change
 is restored to what it was when the run started. The Result cell of each row run is rewritten
 in place, and its replies replace that row's entry in
-tmp/claude/verify/checklist.json, which keeps the last run of every row. The
+tmp/claude/verify/checklist.json, which keeps the last run of every row. A row
+that fails or is blocked also carries `log`: every app.log line stamped between
+the start of its reset and the end of its check, so a failure that will not
+reproduce arrives with what the app wrote while it happened. The
 exit status is 1 when a row fails, the screen locked, or a preference could
 not be restored.
 
@@ -67,6 +70,9 @@ HERE = Path(__file__).resolve().parent
 DRIVE = ROOT / "mac" / "drive.sh"
 REPORT = ROOT / "tmp" / "claude" / "verify" / "checklist.json"
 APP = "NTS Radio"
+APP_LOG = Path.home() / "Library" / "Logs" / APP / "app.log"
+# AppLogMirror copies the unified log into app.log every 2 s.
+MIRROR_LAG = 3
 ERROR = re.compile(r"error: (?:NTS Radio got an error: )?(.*?) \((-?\d+)\)\s*$", re.S)
 
 
@@ -111,6 +117,30 @@ def screen_locked():
     entry so the answer does not depend on the app."""
     proc = subprocess.run(["ioreg", "-n", "Root", "-d1", "-a"], capture_output=True, check=True)
     return plistlib.loads(proc.stdout)["IOConsoleLocked"]
+
+
+def now():
+    return datetime.datetime.now().astimezone()
+
+
+def app_log(windows):
+    """{key: the app.log lines stamped inside that key's (start, end)}, oldest
+    first, reading the rotated app.log.1 too in case the log rolled mid-run."""
+    found = {key: [] for key in windows}
+    for path in (APP_LOG.with_name("app.log.1"), APP_LOG):
+        try:
+            text = path.read_text(errors="replace")
+        except FileNotFoundError:
+            continue
+        for line in text.splitlines():
+            try:
+                at = datetime.datetime.fromisoformat(line.partition("\t")[0])
+            except ValueError:
+                continue
+            for key, (start, end) in windows.items():
+                if start <= at <= end:
+                    found[key].append(line)
+    return found
 
 
 class Blocked(Exception):
@@ -292,6 +322,7 @@ def main(argv):
 
     today = datetime.date.today().isoformat()
     report, tally, locked = [], {}, False
+    windows = {}  # row id: (start, end) of each failed or blocked row
     try:
         for n, row_id in enumerate(ids):
             area, steps, check, note = checks[row_id]
@@ -304,6 +335,7 @@ def main(argv):
                 log(f"the screen is locked; stopping before {row_id}")
                 tally["not run"] = len(ids) - n
                 break
+            start = now()
             reset()
             replies, detail = [], ""
             try:
@@ -317,6 +349,8 @@ def main(argv):
             if verdict == "pass" and screen_locked():
                 locked = True
                 verdict, detail = "blocked", "the screen locked during the row"
+            if verdict != "pass":
+                windows[row_id] = (start, now())
             tally[verdict] = tally.get(verdict, 0) + 1
             result = f"{verdict} (scripted {today}"
             result += f"; {note})" if note else ")"
@@ -329,6 +363,12 @@ def main(argv):
                            "steps": steps, "check": check, "detail": detail,
                            "replies": replies})
     finally:
+        if windows:
+            time.sleep(MIRROR_LAG)
+            lines = app_log(windows)
+            for entry in report:
+                if entry["id"] in lines:
+                    entry["log"] = lines[entry["id"]]
         write_report(report)
         unrestored = restore(base)
 
