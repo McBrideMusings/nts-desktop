@@ -151,8 +151,11 @@ osascript -e 'tell application "NTS Radio" to close catalog'
 ```bash
 osascript -e 'tell application "NTS Radio" to open settings'
 osascript -e 'tell application "NTS Radio" to open settings "account"'
+osascript -e 'tell application "NTS Radio" to close settings'
 osascript -e 'tell application "NTS Radio" to check for updates'
 ```
+
+**`open settings` puts the window up without activating the app**, the same as `open window`, so the window comes up in front but whatever you were typing into keeps the keyboard. `check for updates` is the one command that can take focus: Sparkle's own dialog activates the app.
 
 ## Properties
 

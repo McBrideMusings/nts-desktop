@@ -13,8 +13,9 @@
   act and observe what the act did in one round trip.
 
   Deliberately absent: anything that activates the app or takes keyboard focus.
-  `open window` uses orderFrontRegardless, so a scripted open puts the window on
-  screen without stealing what the person at the keyboard is typing into.
+  `open window` and `open settings` use orderFrontRegardless, so a scripted open
+  puts a window on screen without stealing what the person at the keyboard is
+  typing into.
 -->
 
 <dictionary title="NTS Radio Terminology" xmlns:xi="http://www.w3.org/2003/XInclude">
@@ -227,10 +228,15 @@
         </command>
 
         <command name="open settings" code="NTSrSETT"
-                 description="Open the Settings window — the same window ⌘, opens, not a panel inside the radio window.">
+                 description="Put the Settings window on screen — the same window ⌘, opens, not a panel inside the radio window — without activating the app or taking keyboard focus.">
             <cocoa class="NTSOpenSettingsCommand"/>
             <direct-parameter type="text" optional="yes" description="Which pane to show: general or account. Defaults to whichever is already showing."/>
             <result type="text" description="The state after opening, as JSON."/>
+        </command>
+
+        <command name="close settings" code="NTSrCLST" description="Take the Settings window off screen, the same as its close button.">
+            <cocoa class="NTSCloseSettingsCommand"/>
+            <result type="text" description="The state after closing, as JSON."/>
         </command>
 
         <command name="show pane" code="NTSrPANE"

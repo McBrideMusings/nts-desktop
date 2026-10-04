@@ -42,7 +42,8 @@ usage: admin drive <verb> [args]
   save <alias | episode:<show>/<episode>>
   genre <name>                   browse genre
   show <alias>                   open show
-  settings [general|account]
+  settings [general|account]     open settings, without taking focus
+  close-settings
   updates                        check for updates
   quit | launch                  graceful quit / open and wait for state
 EOF
@@ -138,6 +139,7 @@ case $verb in
   show)     [[ $# -eq 1 ]] || usage; act "open show $(q "$1")" ;;
   settings)
     if [[ $# -eq 1 ]]; then act "open settings $(q "$1")"; else act "open settings"; fi ;;
+  close-settings) act "close settings" ;;
   updates)  act "check for updates" ;;
   quit)
     if ! running; then

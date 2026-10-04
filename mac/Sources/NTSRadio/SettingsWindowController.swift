@@ -32,24 +32,49 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSToolbarDeleg
     private let selection = SettingsSelection()
     private var pane: SettingsPane { selection.pane }
 
-    /// Bring the Settings window up, making it on first use. Activating first is
-    /// what an agent app has to do to put any window in front — without it the
-    /// window is ordered in behind whatever the user is looking at.
-    /// Bring the window up on a named pane — the scripted equivalent of clicking
-    /// one of its toolbar tabs, so the panes are reachable without a mouse.
-    func show(_ pane: SettingsPane) {
-        show()
-        select(pane)
-    }
-
+    /// Bring the Settings window up and make it key — the gear and ⌘, route.
+    /// Activating first is what an agent app has to do to put any window in
+    /// front — without it the window is ordered in behind whatever the user is
+    /// looking at.
     func show() {
         NSApp.activate(ignoringOtherApps: true)
-        if window == nil { window = make() }
+        prepare().makeKeyAndOrderFront(nil)
+    }
+
+    /// Put the window on screen, optionally on a named pane, without activating
+    /// the app. A scripted open must not take keyboard focus from whatever the
+    /// person at the machine is typing into, so this is `show` minus the
+    /// activation, the same as `RadioWindowController.showWithoutActivating`.
+    func showWithoutActivating(_ pane: SettingsPane?) {
+        let before = windowState
+        let window = prepare()
+        if let pane { select(pane) }
+        window.orderFrontRegardless()
+        Log.app.info("script open settings: \(before, privacy: .public) -> \(self.windowState, privacy: .public)")
+    }
+
+    /// Take the window off screen — the same as its close button.
+    func hide() {
+        let before = windowState
+        window?.close()
+        Log.app.info("script close settings: \(before, privacy: .public) -> \(self.windowState, privacy: .public)")
+    }
+
+    /// The window, made on first use, with its contents brought up to date.
+    private func prepare() -> NSWindow {
+        let window = self.window ?? make()
+        self.window = window
         // The login item can be switched off in System Settings ▸ General ▸ Login
         // Items while this app is running, so the toggle re-reads the real state
         // every time the window comes up rather than showing what it last set.
         AppModel.shared.refreshStartOnLogin()
-        window?.makeKeyAndOrderFront(nil)
+        return window
+    }
+
+    /// Everything that decides whether the window is on screen, for the log.
+    private var windowState: String {
+        guard let window else { return "pane=\(pane.rawValue) window=none appActive=\(NSApp.isActive)" }
+        return "pane=\(pane.rawValue) " + window.scriptLogState
     }
 
     /// Whether the window is up, and which pane it is on — read by the scripting

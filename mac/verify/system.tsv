@@ -1,5 +1,5 @@
 # ID	steps	check	note — see run.py for the step vocabulary
-SET-05	manual	`open settings` activates the app (SettingsWindowController.show calls NSApp.activate), so the runner never drives it; the fields to read, `settingsVisible` and `settingsPane`, exist
+SET-05	settings general ; close-settings ; frontmost ; settings account ; frontmost	(.[1].settingsVisible | not) and .[1].settingsPane == "general" and .[3].settingsVisible and .[3].settingsPane == "account" and .[2].frontmost == .[4].frontmost and .[4].frontmost != "NTS Radio"	also proves the open leaves the frontmost app unchanged
 MK-10	tune mixtape:slow-focus --wait ; skip 1	(.[1].source | startswith("mixtape:")) and .[1].source != "mixtape:slow-focus"	script half; the media key needs a keyboard
 UPD-03	manual	`check for updates` opens Sparkle's dialog, which takes focus, and nothing reports how the check ended — needs an `updateCheck` field (found, downloading, failed) in StateSnapshot
 UPD-05	set auto-checks-for-updates true ; set auto-checks-for-updates false	.[0].autoChecksForUpdates and (.[1].autoChecksForUpdates | not)

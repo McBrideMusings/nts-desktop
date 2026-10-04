@@ -32,15 +32,16 @@ No expression inside a step may contain ` ; `, which separates steps.
 A row whose steps column reads `manual` is not run: its check column names what
 the state would have to report for a script to decide it.
 
-Before each row the app is put back to idle with the catalog and the radio
-window closed; after the run, every preference a row can change is restored to
-what it was when the run started. The Result cell of each row run is rewritten
+Before each row the app is put back to idle with the catalog, the radio
+window and Settings closed; after the run, every preference a row can change
+is restored to what it was when the run started. The Result cell of each row run is rewritten
 in place, and its replies replace that row's entry in
 tmp/claude/verify/checklist.json, which keeps the last run of every row. The
 exit status is 1 when a row fails or a preference could not be restored.
 
-Never add a step that opens Settings or checks for updates: both bring the app
-to the front, and the runner must never take focus from whoever is typing.
+Never add a step that checks for updates: Sparkle's dialog brings the app to
+the front, and the runner must never take focus from whoever is typing.
+`settings` is safe — a scripted open does not activate the app.
 """
 
 import datetime
@@ -151,10 +152,12 @@ def run_row(steps):
 
 
 def reset():
-    """Idle, catalog closed, radio window closed — the state every row starts from."""
+    """Idle, catalog closed, radio window and Settings closed — the state every
+    row starts from."""
     drive("stop")
     drive("close-catalog")
     drive("window", "close")
+    drive("close-settings")
 
 
 def restore(base):
@@ -184,6 +187,8 @@ def restore(base):
     ]
     if base["windowVisible"]:
         calls.append(("window", "open"))
+    if base["settingsVisible"]:
+        calls.append(("settings", base["settingsPane"]))
     failed = []
     for call in calls:
         r = drive(*call)

@@ -566,22 +566,33 @@ final class NTSOpenCatalogCommand: NTSCommand {
 
 /// `open settings` — the same window the gear in the title bar and the status
 /// item's Settings… item open. It exists so the window can be raised and looked
-/// at without a mouse; every other route into it is a click.
+/// at without a mouse; every other route into it is a click. Unlike those, it
+/// does not activate the app, so a script never takes keyboard focus.
 @objc(NTSOpenSettingsCommand)
 final class NTSOpenSettingsCommand: NTSCommand {
     override func performDefaultImplementation() -> Any? {
         run {
             let name = (self.directParameter as? String)?.lowercased() ?? ""
+            var pane: SettingsPane?
             if !name.isEmpty {
-                guard let pane = SettingsPane(rawValue: name) else {
+                guard let named = SettingsPane(rawValue: name) else {
                     self.scriptErrorNumber = -1703   // errAETypeError
                     self.scriptErrorString = "\"\(name)\" is not a settings pane. Use general or account."
                     return false
                 }
-                SettingsWindowController.shared.show(pane)
-            } else {
-                SettingsWindowController.shared.show()
+                pane = named
             }
+            SettingsWindowController.shared.showWithoutActivating(pane)
+            return true
+        }
+    }
+}
+
+@objc(NTSCloseSettingsCommand)
+final class NTSCloseSettingsCommand: NTSCommand {
+    override func performDefaultImplementation() -> Any? {
+        run {
+            SettingsWindowController.shared.hide()
             return true
         }
     }
