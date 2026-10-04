@@ -71,8 +71,9 @@ DRIVE = ROOT / "mac" / "drive.sh"
 REPORT = ROOT / "tmp" / "claude" / "verify" / "checklist.json"
 APP = "NTS Radio"
 APP_LOG = Path.home() / "Library" / "Logs" / APP / "app.log"
-# AppLogMirror copies the unified log into app.log every 2 s.
-MIRROR_LAG = 3
+# How long to wait for AppLogMirror, which copies the unified log into app.log
+# every 2 s, to reach the end of the run.
+MIRROR_WAIT = 10
 ERROR = re.compile(r"error: (?:NTS Radio got an error: )?(.*?) \((-?\d+)\)\s*$", re.S)
 
 
@@ -123,24 +124,35 @@ def now():
     return datetime.datetime.now().astimezone()
 
 
-def app_log(windows):
-    """{key: the app.log lines stamped inside that key's (start, end)}, oldest
-    first, reading the rotated app.log.1 too in case the log rolled mid-run."""
-    found = {key: [] for key in windows}
+def stamped_lines():
+    """(timestamp, line) for every app.log line, oldest first, reading the
+    rotated app.log.1 too in case the log rolled mid-run."""
+    lines = []
     for path in (APP_LOG.with_name("app.log.1"), APP_LOG):
         try:
             text = path.read_text(errors="replace")
-        except FileNotFoundError:
+        except OSError:
             continue
         for line in text.splitlines():
             try:
-                at = datetime.datetime.fromisoformat(line.partition("\t")[0])
+                lines.append((datetime.datetime.fromisoformat(line.partition("\t")[0]), line))
             except ValueError:
                 continue
-            for key, (start, end) in windows.items():
-                if start <= at <= end:
-                    found[key].append(line)
-    return found
+    return lines
+
+
+def app_log(spans):
+    """{row id: the app.log lines stamped inside its (start, end)}. The mirror
+    writes in time order, so once app.log holds a line stamped after the last
+    span — restore()'s window close logs one — it holds every line before it."""
+    last = max(end for _, end in spans.values())
+    deadline = time.monotonic() + MIRROR_WAIT
+    lines = stamped_lines()
+    while not any(at > last for at, _ in lines) and time.monotonic() < deadline:
+        time.sleep(0.5)
+        lines = stamped_lines()
+    return {row: [line for at, line in lines if start <= at <= end]
+            for row, (start, end) in spans.items()}
 
 
 class Blocked(Exception):
@@ -322,7 +334,7 @@ def main(argv):
 
     today = datetime.date.today().isoformat()
     report, tally, locked = [], {}, False
-    windows = {}  # row id: (start, end) of each failed or blocked row
+    spans = {}  # row id: (start, end) of each failed or blocked row
     try:
         for n, row_id in enumerate(ids):
             area, steps, check, note = checks[row_id]
@@ -350,7 +362,7 @@ def main(argv):
                 locked = True
                 verdict, detail = "blocked", "the screen locked during the row"
             if verdict != "pass":
-                windows[row_id] = (start, now())
+                spans[row_id] = (start, now())
             tally[verdict] = tally.get(verdict, 0) + 1
             result = f"{verdict} (scripted {today}"
             result += f"; {note})" if note else ")"
@@ -363,14 +375,13 @@ def main(argv):
                            "steps": steps, "check": check, "detail": detail,
                            "replies": replies})
     finally:
-        if windows:
-            time.sleep(MIRROR_LAG)
-            lines = app_log(windows)
+        unrestored = restore(base)
+        if spans:
+            lines = app_log(spans)
             for entry in report:
                 if entry["id"] in lines:
                     entry["log"] = lines[entry["id"]]
         write_report(report)
-        unrestored = restore(base)
 
     log(", ".join(f"{n} {k}" for k, n in sorted(tally.items())) + f" — replies in {REPORT}")
     return 1 if tally.get("fail") or locked or unrestored else 0
