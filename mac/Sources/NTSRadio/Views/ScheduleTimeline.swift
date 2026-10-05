@@ -29,8 +29,8 @@ struct ScheduleTimeline: View {
     private var controls: some View {
         HStack(spacing: 8) {
             ForEach(ChannelNumber.allCases, id: \.self) { channel in
-                let on = model.scheduleChannel == channel
-                Button { model.scheduleChannel = channel } label: {
+                let on = model.timeline.channel == channel
+                Button { model.timeline.channel = channel } label: {
                     Text("NTS \(channel.rawValue)")
                         .font(Theme.mono(9, .bold))
                         .tracking(1.2)
@@ -44,7 +44,7 @@ struct ScheduleTimeline: View {
 
             Spacer(minLength: 8)
 
-            Button { scrollTarget = model.timelineAnchor } label: {
+            Button { scrollTarget = model.timeline.anchor } label: {
                 Text("NOW")
                     .font(Theme.mono(9, .bold))
                     .tracking(1.2)
@@ -65,7 +65,7 @@ struct ScheduleTimeline: View {
     // MARK: Timeline
 
     @ViewBuilder private var timeline: some View {
-        if model.scheduleDays.isEmpty {
+        if model.timeline.days.isEmpty {
             Text("The schedule hasn’t loaded yet.")
                 .font(Theme.ui(13))
                 .foregroundStyle(Theme.inkMuted)
@@ -79,7 +79,7 @@ struct ScheduleTimeline: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
-                    ForEach(model.scheduleDays) { day in
+                    ForEach(model.timeline.days) { day in
                         Section {
                             ForEach(day.slots) { slot in
                                 SlotRow(slot: slot)
@@ -91,8 +91,8 @@ struct ScheduleTimeline: View {
                     }
                 }
             }
-            .onAppear { scrollTarget = model.timelineAnchor }
-            .onChange(of: model.scheduleChannel) { scrollTarget = model.timelineAnchor }
+            .onAppear { scrollTarget = model.timeline.anchor }
+            .onChange(of: model.timeline.channel) { scrollTarget = model.timeline.anchor }
             .onChange(of: scrollTarget) {
                 guard let target = scrollTarget else { return }
                 // Not `.top`: the day header is pinned, so a row scrolled to the
@@ -111,7 +111,7 @@ struct ScheduleTimeline: View {
 // MARK: - Day header
 
 private struct DayHeader: View {
-    let day: AppModel.ScheduleDay
+    let day: ScheduleController.Day
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -149,7 +149,7 @@ private struct SlotRow: View {
     private var indexed: NTSAPI.ShowRef? { model.showIndex.ref(slot.showAlias) }
     /// This broadcast's own photograph, city and genres, once fetched.
     private var detail: SlotDetail? { model.slotArt.detail(for: slot) }
-    private var onAir: Bool { model.onAirSlot?.id == slot.id }
+    private var onAir: Bool { model.timeline.onAir?.id == slot.id }
     private var past: Bool { (slot.end ?? .distantFuture) <= Date() }
 
     private var meta: String {

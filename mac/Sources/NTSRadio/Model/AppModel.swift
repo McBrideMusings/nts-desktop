@@ -92,6 +92,9 @@ final class AppModel: ObservableObject {
     let backfill = ShowDetailBackfill.shared
     let slotArt = SlotArtLoader()
     let explore: ExploreLoader
+    /// The schedule tab's channel and its grid against the clock — see
+    /// `ScheduleController`.
+    let timeline: ScheduleController
     /// Every setting kept across a relaunch — see `Preferences`.
     let preferences: Preferences
 
@@ -217,6 +220,7 @@ final class AppModel: ObservableObject {
     init(preferences: Preferences) {
         self.preferences = preferences
         explore = ExploreLoader(preferences: preferences)
+        timeline = ScheduleController(catalog: catalog)
         // Each is an observable object of its own; republish its changes as ours
         // so a view watching the model repaints when the dial's contents move.
         // engine.objectWillChange is deliberately NOT republished here: the
@@ -227,6 +231,7 @@ final class AppModel: ObservableObject {
         for upstream in [catalog.objectWillChange,
                          saved.objectWillChange, showIndex.objectWillChange,
                          slotArt.objectWillChange, explore.objectWillChange,
+                         timeline.objectWillChange,
                          backfill.objectWillChange, preferences.objectWillChange] {
             upstream
                 .sink { [weak self] in self?.objectWillChange.send() }
@@ -831,76 +836,6 @@ final class AppModel: ObservableObject {
 
     // MARK: Timeline
 
-    /// Which channel's grid the schedule tab is showing. One at a time: at the
-    /// window's 340pt floor, two columns of programme titles leave about fifteen
-    /// characters each.
-    @Published var scheduleChannel: ChannelNumber = .one
-
-    /// One day of one channel's grid — the unit the timeline scrolls through.
-    struct ScheduleDay: Identifiable {
-        let id: String
-        /// "TUE 11 AUG", the sticky header's text.
-        let label: String
-        /// "TODAY"/"TOMORROW" where it applies, so the top of the list doesn't
-        /// have to be read as a date to be understood.
-        let relative: String?
-        let slots: [NTSAPI.Broadcast]
-    }
-
-    /// The selected channel's grid, grouped into days in air order.
-    var scheduleDays: [ScheduleDay] {
-        let slots = catalog[scheduleChannel].upcoming
-        let cal = Calendar.current
-        let today = cal.startOfDay(for: Date())
-
-        var days: [(Date, [NTSAPI.Broadcast])] = []
-        for slot in slots {
-            guard let start = slot.start else { continue }
-            let day = cal.startOfDay(for: start)
-            if days.last?.0 == day { days[days.count - 1].1.append(slot) }
-            else { days.append((day, [slot])) }
-        }
-
-        return days.map { day, slots in
-            let offset = cal.dateComponents([.day], from: today, to: day).day ?? 0
-            let relative: String? = switch offset {
-            case 0: "TODAY"
-            case 1: "TOMORROW"
-            case -1: "YESTERDAY"
-            default: nil
-            }
-            return ScheduleDay(id: Self.dayKey.string(from: day),
-                               label: Self.dayLabel.string(from: day).uppercased(),
-                               relative: relative,
-                               slots: slots)
-        }
-    }
-
-    /// The slot the clock is inside on the selected channel, if any — the row the
-    /// timeline scrolls to and marks ON AIR.
-    var onAirSlot: NTSAPI.Broadcast? {
-        let now = Date()
-        return catalog[scheduleChannel].upcoming.first {
-            ($0.start ?? .distantFuture) <= now && now < ($0.end ?? .distantPast)
-        }
-    }
-
-    /// The first slot that has not started on the selected channel. The grid has
-    /// real gaps — roughly thirty a fortnight per channel — so when the clock is
-    /// in one of them this is what the NOW rule sits above.
-    var nextSlot: NTSAPI.Broadcast? {
-        let now = Date()
-        return catalog[scheduleChannel].upcoming.first {
-            ($0.start ?? .distantPast) > now
-        }
-    }
-
-    /// What the timeline scrolls to when it opens: the programme on air, or the
-    /// next one to start when the clock is in a gap, or the top of the grid.
-    var timelineAnchor: String? {
-        onAirSlot?.id ?? nextSlot?.id ?? scheduleDays.first?.slots.first?.id
-    }
-
     /// Open a schedule slot's show, the same as clicking its tile in the grid.
     func openSlot(_ slot: NTSAPI.Broadcast) {
         open(row(for: slot))
@@ -916,13 +851,6 @@ final class AppModel: ObservableObject {
         let live = Set(catalog.channels.flatMap { $0.upcoming }.map(SlotArtLoader.slotKey))
         slotArt.flush(keeping: live, sync: true)
     }
-
-    private static let dayKey: DateFormatter = {
-        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; return f
-    }()
-    private static let dayLabel: DateFormatter = {
-        let f = DateFormatter(); f.dateFormat = "EEE d MMM"; return f
-    }()
 
     private func searchRows(_ q: String) -> [CatalogRow] {
         var rows: [CatalogRow] = []

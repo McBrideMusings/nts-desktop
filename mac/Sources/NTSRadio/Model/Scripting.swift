@@ -554,7 +554,7 @@ final class NTSOpenCatalogCommand: NTSCommand {
                     self.scriptErrorString = "NTS \(channel) is not a channel. Use 1 or 2."
                     return false
                 }
-                m.scheduleChannel = number
+                m.timeline.channel = number
             }
             m.query = (self.evaluatedArguments?["searchingFor"] as? String) ?? ""
             m.detail = nil
