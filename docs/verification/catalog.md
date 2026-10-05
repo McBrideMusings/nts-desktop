@@ -75,8 +75,8 @@ Not checkable by hand:
 | SCHD-06 | P1 | mouse | A future row opens its show rather than playing (release without dragging). | Schedule tab. | 1. Click a row two days ahead. | The show's detail opens. Nothing plays. | — |
 | SCHD-07 | P2 | mouse | Rows fill with artwork as they scroll into view (slot artwork). | Schedule tab, a day never visited. | 1. Scroll to it quickly.<br>2. Watch the rows for 10s. | Rows arrive blank and fill in, a few at a time rather than all at once. | — |
 | SCHD-08 | P2 | offline | A row that failed retries on a second scroll past (slot artwork). | Wi-Fi off. | 1. Scroll to an unvisited day; rows stay blank.<br>2. Wi-Fi on.<br>3. Scroll away and back. | The rows fill in on the second pass. | — |
-| SCHD-09 | P1 | script | An invalid channel is refused (driven by script). | — | 1. `open catalog showing "schedule" channel 3`. | Error `-1703`: `NTS 3 is not a channel. Use 1 or 2.` | pass (scripted 2026-10-03) |
-| SCHD-10 | P2 | script | The schedule spans 8 or more days at up to 17 slots each (confirmed). | — | 1. Read `scheduleDays`. | At least 8 entries, each with a count from 1 to 17; the first and last days are partial. | pass (scripted 2026-10-03) |
+| SCHD-09 | P1 | script | An invalid channel is refused (driven by script). | — | 1. `open catalog showing "schedule" channel 3`. | Error `-1703`: `NTS 3 is not a channel. Use 1 or 2.` | pass (scripted 2026-10-05) |
+| SCHD-10 | P2 | script | The schedule spans 8 or more days at up to 17 slots each (confirmed). | — | 1. Read `scheduleDays`. | At least 8 entries, each with a count from 1 to 17; the first and last days are partial. | pass (scripted 2026-10-05) |
 | SCHD-11 | P2 | mouse | Day headers pin as they pass under the top edge (summary). | Schedule tab. | 1. Scroll slowly through a day boundary. | The header sticks at the top until the next day pushes it up. | — |
 | SCHD-12 | P3 | mouse | `YESTERDAY` never appears (edge cases) — **B-17**. | Schedule tab. | 1. Scroll to the very top of the grid.<br>2. Read the first day header. | `TODAY`, not `YESTERDAY`. Record if it ever shows. | — |
 
