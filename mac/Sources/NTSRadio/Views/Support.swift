@@ -152,17 +152,31 @@ struct Sector: Shape {
 /// Plays a remote looping, muted mp4 — used to animate a dial wedge while it's
 /// hovered or actively playing. Instantiated only for the active wedge(s); the
 /// player is torn down on disappear so at most a couple ever exist at once.
-struct WedgeAnimation: NSViewRepresentable {
+struct WedgeAnimation: View {
     let url: URL
+
+    /// Whether the window is on screen. A hidden window still decodes every
+    /// frame of a playing video, so the loop pauses while nobody can see it.
+    @State private var onScreen = true
+
+    var body: some View {
+        LoopingVideo(url: url, playing: onScreen)
+            .windowOnScreen($onScreen)
+    }
+}
+
+private struct LoopingVideo: NSViewRepresentable {
+    let url: URL
+    let playing: Bool
 
     func makeNSView(context: Context) -> LoopingPlayerView {
         let v = LoopingPlayerView()
-        v.configure(url: url)
+        v.configure(url: url, playing: playing)
         return v
     }
 
     func updateNSView(_ nsView: LoopingPlayerView, context: Context) {
-        nsView.configure(url: url)
+        nsView.configure(url: url, playing: playing)
     }
 
     static func dismantleNSView(_ nsView: LoopingPlayerView, coordinator: ()) {
@@ -170,7 +184,7 @@ struct WedgeAnimation: NSViewRepresentable {
     }
 }
 
-/// Layer-hosting NSView backing `WedgeAnimation`. Uses AVPlayerLooper for a
+/// Layer-hosting NSView behind `WedgeAnimation`. Uses AVPlayerLooper for a
 /// seamless gapless loop.
 final class LoopingPlayerView: NSView {
     private let playerLayer = AVPlayerLayer()
@@ -194,16 +208,19 @@ final class LoopingPlayerView: NSView {
         playerLayer.frame = bounds
     }
 
-    func configure(url: URL) {
-        guard url != currentURL else { return }
-        teardown()
-        currentURL = url
-        let q = AVQueuePlayer()
-        q.isMuted = true
-        looper = AVPlayerLooper(player: q, templateItem: AVPlayerItem(url: url))
-        playerLayer.player = q
-        queuePlayer = q
-        q.play()
+    func configure(url: URL, playing: Bool) {
+        if url != currentURL {
+            teardown()
+            currentURL = url
+            let q = AVQueuePlayer()
+            q.isMuted = true
+            looper = AVPlayerLooper(player: q, templateItem: AVPlayerItem(url: url))
+            playerLayer.player = q
+            queuePlayer = q
+        }
+        guard let q = queuePlayer, (q.rate != 0) != playing else { return }
+        if playing { q.play() } else { q.pause() }
+        Log.app.info("wedge video \(playing ? "playing" : "paused", privacy: .public) url=\(url.lastPathComponent, privacy: .public)")
     }
 
     func teardown() {
