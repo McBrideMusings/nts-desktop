@@ -253,11 +253,11 @@ extension AppModel {
             bufferSeconds: (engine.bufferedAhead * 10).rounded() / 10,
             pendingTrack: pendingTrack?.name ?? "",
             pendingSeconds: pendingTrack?.seconds ?? 0,
-            volume: Int(volume.rounded()),
-            volumeSlider: Int(volumeSlider.rounded()),
-            volumeCurve: volumeKind.rawValue,
-            volumeSteepness: volumeExponent,
-            muted: muted,
+            volume: Int(preferences.gain.rounded()),
+            volumeSlider: Int(preferences.slider.rounded()),
+            volumeCurve: preferences.curve.kind.rawValue,
+            volumeSteepness: preferences.curve.exponent,
+            muted: preferences.muted,
             signedIn: auth.isAuthenticated,
             savedCount: saved.items.count,
             savedKeys: saved.items.map(\.id),
@@ -331,11 +331,11 @@ extension AppModel {
                 )
             },
             knobAngle: (knobAngle * 100).rounded() / 100,
-            autoChecksForUpdates: autoChecksForUpdates,
-            canCheckForUpdates: canCheckForUpdates,
+            autoChecksForUpdates: preferences.autoChecksForUpdates,
+            canCheckForUpdates: preferences.canCheckForUpdates,
             logDirectory: LogFiles.directory.path,
             recordedSources: recording.sources,
-            trackLead: trackLead.rawValue
+            trackLead: preferences.trackLead.rawValue
         )
     }
 }

@@ -67,18 +67,9 @@ struct SettingsView: View {
 }
 
 private struct GeneralSettings: View {
-    @ObservedObject private var model = AppModel.shared
+    @ObservedObject private var prefs = AppModel.shared.preferences
 
-    /// Bridges `AppModel`'s plain `Bool` property (not `@Published` — it wraps
-    /// Sparkle's own state) into a SwiftUI `Toggle`.
-    private var autoChecksForUpdates: Binding<Bool> {
-        Binding(
-            get: { model.autoChecksForUpdates },
-            set: { model.autoChecksForUpdates = $0 }
-        )
-    }
-
-    private var isPerceptual: Bool { model.volumeKind == .perceptual }
+    private var isPerceptual: Bool { prefs.curve.kind == .perceptual }
 
     private var version: String {
         let info = Bundle.main.infoDictionary
@@ -91,8 +82,8 @@ private struct GeneralSettings: View {
         Form {
             LabeledContent("Startup:") {
                 VStack(alignment: .leading, spacing: 6) {
-                    Toggle("Open NTS Radio at login", isOn: $model.startOnLogin)
-                    Toggle("Show in Dock", isOn: $model.showInDock)
+                    Toggle("Open NTS Radio at login", isOn: $prefs.startOnLogin)
+                    Toggle("Show in Dock", isOn: $prefs.showInDock)
                     Text("With the Dock icon hidden, NTS Radio lives in the menu bar only.")
                         .settingsNote()
                 }
@@ -102,7 +93,7 @@ private struct GeneralSettings: View {
 
             LabeledContent("Volume:") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Picker("Volume", selection: $model.volumeKind) {
+                    Picker("Volume", selection: $prefs.curve.kind) {
                         Text("Linear").tag(VolumeCurve.Kind.linear)
                         Text("Perceptual").tag(VolumeCurve.Kind.perceptual)
                     }
@@ -111,14 +102,14 @@ private struct GeneralSettings: View {
 
                     HStack(spacing: 8) {
                         Text("Gentle").font(.callout).foregroundStyle(.secondary)
-                        Slider(value: $model.volumeExponent, in: VolumeCurve.exponentRange, step: 0.25)
+                        Slider(value: $prefs.curve.exponent, in: VolumeCurve.exponentRange, step: 0.25)
                             .frame(width: 160)
                             .accessibilityLabel("Steepness")
                         Text("Steep").font(.callout).foregroundStyle(.secondary)
                     }
                     .disabled(!isPerceptual)
 
-                    VolumeCurveChart(curve: model.volumeCurve, slider: model.volumeSlider)
+                    VolumeCurveChart(curve: prefs.curve, slider: prefs.slider)
                         .frame(width: 330, height: 130)
                         .opacity(isPerceptual ? 1 : 0.45)
 
@@ -129,7 +120,7 @@ private struct GeneralSettings: View {
 
             Divider().padding(.vertical, 6)
 
-            Picker("Tracklist rows lead with:", selection: $model.trackLead) {
+            Picker("Tracklist rows lead with:", selection: $prefs.trackLead) {
                 ForEach(TrackLead.allCases, id: \.self) { Text($0.label).tag($0) }
             }
             .pickerStyle(.radioGroup)
@@ -139,9 +130,9 @@ private struct GeneralSettings: View {
             LabeledContent("Version:", value: version)
             LabeledContent("Updates:") {
                 VStack(alignment: .leading, spacing: 6) {
-                    Toggle("Automatically check for updates", isOn: autoChecksForUpdates)
+                    Toggle("Automatically check for updates", isOn: $prefs.autoChecksForUpdates)
                     Button("Check for Updates…") {
-                        model.checkForUpdates()
+                        prefs.checkForUpdates()
                     }
                 }
             }

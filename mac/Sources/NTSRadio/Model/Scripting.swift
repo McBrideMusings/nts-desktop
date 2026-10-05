@@ -129,12 +129,12 @@ extension NSApplication {
     }
 
     @objc var ntsVolume: Int {
-        get { MainActor.assumeIsolated { Int((AppModel.shared.volume).rounded()) } }
-        set { MainActor.assumeIsolated { AppModel.shared.volume = Double(newValue) } }
+        get { MainActor.assumeIsolated { Int((AppModel.shared.preferences.gain).rounded()) } }
+        set { MainActor.assumeIsolated { AppModel.shared.preferences.gain = Double(newValue) } }
     }
 
     @objc var ntsVolumeCurve: String {
-        get { MainActor.assumeIsolated { AppModel.shared.volumeKind.rawValue } }
+        get { MainActor.assumeIsolated { AppModel.shared.preferences.curve.kind.rawValue } }
         set {
             MainActor.assumeIsolated {
                 guard let kind = VolumeCurve.Kind(rawValue: newValue) else {
@@ -145,23 +145,23 @@ extension NSApplication {
                         """
                     return
                 }
-                AppModel.shared.volumeKind = kind
+                AppModel.shared.preferences.curve.kind = kind
             }
         }
     }
 
     @objc var ntsVolumeSteepness: Double {
-        get { MainActor.assumeIsolated { AppModel.shared.volumeExponent } }
-        set { MainActor.assumeIsolated { AppModel.shared.volumeExponent = newValue } }
+        get { MainActor.assumeIsolated { AppModel.shared.preferences.curve.exponent } }
+        set { MainActor.assumeIsolated { AppModel.shared.preferences.curve.exponent = newValue } }
     }
 
     @objc var ntsMuted: Bool {
-        get { MainActor.assumeIsolated { AppModel.shared.muted } }
-        set { MainActor.assumeIsolated { AppModel.shared.muted = newValue } }
+        get { MainActor.assumeIsolated { AppModel.shared.preferences.muted } }
+        set { MainActor.assumeIsolated { AppModel.shared.preferences.muted = newValue } }
     }
 
     @objc var ntsTrackLead: String {
-        get { MainActor.assumeIsolated { AppModel.shared.trackLead.rawValue } }
+        get { MainActor.assumeIsolated { AppModel.shared.preferences.trackLead.rawValue } }
         set {
             MainActor.assumeIsolated {
                 guard let lead = TrackLead(rawValue: newValue.lowercased()) else {
@@ -170,7 +170,7 @@ extension NSApplication {
                     command?.scriptErrorString = "\"\(newValue)\" is not a tracklist order. Use \"title\" or \"artist\"."
                     return
                 }
-                AppModel.shared.trackLead = lead
+                AppModel.shared.preferences.trackLead = lead
             }
         }
     }
@@ -184,8 +184,8 @@ extension NSApplication {
     }
 
     @objc var ntsAutoChecksForUpdates: Bool {
-        get { MainActor.assumeIsolated { AppModel.shared.autoChecksForUpdates } }
-        set { MainActor.assumeIsolated { AppModel.shared.autoChecksForUpdates = newValue } }
+        get { MainActor.assumeIsolated { AppModel.shared.preferences.autoChecksForUpdates } }
+        set { MainActor.assumeIsolated { AppModel.shared.preferences.autoChecksForUpdates = newValue } }
     }
 }
 
@@ -649,7 +649,7 @@ final class NTSCloseCatalogCommand: NTSCommand {
 final class NTSCheckForUpdatesCommand: NTSCommand {
     override func performDefaultImplementation() -> Any? {
         run {
-            AppModel.shared.checkForUpdates()
+            AppModel.shared.preferences.checkForUpdates()
             return true
         }
     }

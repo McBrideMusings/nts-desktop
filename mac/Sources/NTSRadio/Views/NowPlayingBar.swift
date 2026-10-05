@@ -98,7 +98,7 @@ struct NowPlayingBar: View {
                 // stalled stream leaves the button showing pause while the
                 // speakers are silent, and a meter that keeps moving through
                 // that is telling the user something untrue.
-                LevelLamps(running: engine.isRendering && !model.muted,
+                LevelLamps(running: engine.isRendering && !model.preferences.muted,
                            accent: model.accent)
 
                 Rectangle().fill(Theme.hairline(0.12)).frame(width: 1, height: 22)
@@ -113,8 +113,8 @@ struct NowPlayingBar: View {
 
             PaneSwitch()
 
-            Button { model.muted.toggle() } label: {
-                Image(systemName: model.muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+            Button { model.preferences.muted.toggle() } label: {
+                Image(systemName: model.preferences.muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                     .font(.system(size: 14))
                     .foregroundStyle(Theme.ink)
                     .frame(width: 22, height: 22)
@@ -122,8 +122,8 @@ struct NowPlayingBar: View {
             .buttonStyle(.hit)
 
             if !compact {
-                VolumeMeter(volume: Binding(get: { model.volumeSlider }, set: { model.volumeSlider = $0 }),
-                            muted: model.muted)
+                VolumeMeter(volume: Binding(get: { model.preferences.slider }, set: { model.preferences.slider = $0 }),
+                            muted: model.preferences.muted)
             }
         }
         .padding(.horizontal, 16)

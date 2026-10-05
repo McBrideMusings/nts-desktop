@@ -1,8 +1,6 @@
 import SwiftUI
 import Combine
-import ServiceManagement
 import NTSFirestore
-import Sparkle
 import EpisodeMatch
 
 enum Selection: Equatable {
@@ -83,7 +81,7 @@ final class AppModel: ObservableObject {
     /// environment and with nothing to hand it the model. Naming the instance
     /// here is what lets both windows reach the same object, and matches
     /// `Catalog.shared` / `Saved.shared` / `ShowIndex.shared` beside it.
-    static let shared = AppModel()
+    static let shared = AppModel(preferences: .live())
 
     let catalog = Catalog.shared
     let engine = PlayerEngine()
@@ -93,7 +91,9 @@ final class AppModel: ObservableObject {
     let episodeIndex = EpisodeIndex.shared
     let backfill = ShowDetailBackfill.shared
     let slotArt = SlotArtLoader()
-    let explore = ExploreLoader()
+    let explore: ExploreLoader
+    /// Every setting kept across a relaunch — see `Preferences`.
+    let preferences: Preferences
 
     // MARK: Catalog surface
 
@@ -136,54 +136,6 @@ final class AppModel: ObservableObject {
     @Published private(set) var showEpisodesLoading = false
 
     @Published var selection: Selection = .idle
-    @Published var muted = UserDefaults.standard.bool(forKey: "muted") {
-        didSet {
-            engine.apply(volume: volume, muted: muted)
-            UserDefaults.standard.set(muted, forKey: "muted")
-        }
-    }
-    /// Dragging the volume slider fires this on every frame; only the disk write
-    /// is debounced (`engine.apply` below stays live so audio tracks the drag).
-    private var volumePersist: Task<Void, Never>?
-    /// The gain, always within `VolumeCurve.gainRange`. The setter clamps before
-    /// anything is stored or published, so no writer needs its own clamp.
-    var volume: Double {
-        get { storedVolume }
-        set { storedVolume = VolumeCurve.gainRange.clamp(newValue) }
-    }
-    @Published private var storedVolume: Double = VolumeCurve.gainRange.clamp(
-        UserDefaults.standard.object(forKey: "volume") as? Double ?? 72) {
-        didSet {
-            engine.apply(volume: storedVolume, muted: muted)
-            let volume = storedVolume
-            volumePersist?.cancel()
-            volumePersist = Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 300_000_000)
-                guard !Task.isCancelled else { return }
-                UserDefaults.standard.set(volume, forKey: "volume")
-            }
-        }
-    }
-    @Published var volumeKind: VolumeCurve.Kind = UserDefaults.standard.string(forKey: "volumeCurve")
-        .flatMap(VolumeCurve.Kind.init(rawValue:)) ?? .perceptual {
-        didSet { UserDefaults.standard.set(volumeKind.rawValue, forKey: "volumeCurve") }
-    }
-    /// Always within `VolumeCurve.exponentRange`, clamped before it is stored.
-    var volumeExponent: Double {
-        get { storedVolumeExponent }
-        set { storedVolumeExponent = VolumeCurve.exponentRange.clamp(newValue) }
-    }
-    @Published private var storedVolumeExponent: Double = VolumeCurve.exponentRange.clamp(
-        UserDefaults.standard.object(forKey: "volumeExponent") as? Double ?? VolumeCurve.defaultExponent) {
-        didSet { UserDefaults.standard.set(storedVolumeExponent, forKey: "volumeExponent") }
-    }
-    var volumeCurve: VolumeCurve { VolumeCurve(kind: volumeKind, exponent: volumeExponent) }
-    /// The knob's position, 0–100. `volume` (the gain) is what is stored, so
-    /// changing the curve keeps the loudness and moves the knob.
-    var volumeSlider: Double {
-        get { volumeCurve.slider(forGain: volume) }
-        set { volume = volumeCurve.gain(forSlider: newValue) }
-    }
     @Published var hoverIndex: Int? = nil
     /// Where the dial's index mark is pointing, in degrees, accumulated across
     /// turns rather than wrapped into 0..<360 — so it is free to wind past a full
@@ -214,73 +166,6 @@ final class AppModel: ObservableObject {
     /// audio is pulled from), or nil for live channels / before the first push /
     /// when signed out. Drives the now-playing bar's secondary line + its link.
     @Published var mixtapeEpisode: MixtapeTitle?
-
-    /// Whether the app is registered to launch when the user logs in.
-    ///
-    /// Read straight from `SMAppService` rather than from a saved preference, and
-    /// written by registering or unregistering the service — the login item is
-    /// the fact, and a stored copy of it can only be a second answer that goes
-    /// stale. It goes stale the moment the switch is thrown in System Settings ▸
-    /// General ▸ Login Items, which is the same list this writes to. Before this,
-    /// the toggle was a `Bool` that remembered itself and registered nothing: it
-    /// moved, it stayed where it was put, and the app never launched at login.
-    ///
-    /// Registering needs a bundle, so under `admin dev` (a bare binary, no
-    /// `Info.plist`) `SMAppService` fails; the failure is logged and the toggle
-    /// snaps back to what the service actually reports.
-    @Published var startOnLogin: Bool = SMAppService.mainApp.status == .enabled {
-        didSet {
-            guard startOnLogin != (SMAppService.mainApp.status == .enabled) else { return }
-            do {
-                if startOnLogin { try SMAppService.mainApp.register() }
-                else { try SMAppService.mainApp.unregister() }
-            } catch {
-                let verb = startOnLogin ? "register" : "unregister"
-                Log.app.error("login item \(verb, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
-                // Say what is true, not what was asked for.
-                startOnLogin = SMAppService.mainApp.status == .enabled
-            }
-        }
-    }
-
-    /// Re-read the login item's real state — after the Settings window opens, say,
-    /// since it can be changed in System Settings while the app is running.
-    func refreshStartOnLogin() {
-        let enabled = SMAppService.mainApp.status == .enabled
-        if startOnLogin != enabled { startOnLogin = enabled }
-    }
-
-    /// Whether the app also shows a Dock icon (and app-switcher entry). Off by
-    /// default — the app lives primarily in the menu bar. Persisted here; the
-    /// AppDelegate observes it and owns applying the activation policy.
-    @Published var showInDock: Bool = UserDefaults.standard.bool(forKey: "showInDock") {
-        didSet { UserDefaults.standard.set(showInDock, forKey: "showInDock") }
-    }
-
-    /// Which of a track's two lines leads each tracklist row. Title first by
-    /// default; persisted here and read live by `TracklistOverlay`.
-    @Published var trackLead: TrackLead = TrackLead(
-        rawValue: UserDefaults.standard.string(forKey: "trackLead") ?? "") ?? .title {
-        didSet { UserDefaults.standard.set(trackLead.rawValue, forKey: "trackLead") }
-    }
-
-    /// Sparkle's own `Bool`, not `@Published` — read/written straight through so
-    /// Settings and the scripting layer go through the same model as every other
-    /// setting instead of reaching into `AppDelegate.updaterController` directly.
-    var autoChecksForUpdates: Bool {
-        get { AppDelegate.updaterController.updater.automaticallyChecksForUpdates }
-        set { AppDelegate.updaterController.updater.automaticallyChecksForUpdates = newValue }
-    }
-
-    var canCheckForUpdates: Bool {
-        AppDelegate.updaterController.updater.canCheckForUpdates
-    }
-
-    /// The same call the status menu's and the main menu's "Check for Updates…"
-    /// items make.
-    func checkForUpdates() {
-        AppDelegate.updaterController.checkForUpdates(nil)
-    }
 
     /// Live tracklist listener for the current source (nil when signed out).
     /// Recreated whenever the source or auth state changes.
@@ -329,7 +214,9 @@ final class AppModel: ObservableObject {
 
     private var bag = Set<AnyCancellable>()
 
-    init() {
+    init(preferences: Preferences) {
+        self.preferences = preferences
+        explore = ExploreLoader(preferences: preferences)
         // Each is an observable object of its own; republish its changes as ours
         // so a view watching the model repaints when the dial's contents move.
         // engine.objectWillChange is deliberately NOT republished here: the
@@ -340,7 +227,7 @@ final class AppModel: ObservableObject {
         for upstream in [catalog.objectWillChange,
                          saved.objectWillChange, showIndex.objectWillChange,
                          slotArt.objectWillChange, explore.objectWillChange,
-                         backfill.objectWillChange] {
+                         backfill.objectWillChange, preferences.objectWillChange] {
             upstream
                 .sink { [weak self] in self?.objectWillChange.send() }
                 .store(in: &bag)
@@ -356,7 +243,10 @@ final class AppModel: ObservableObject {
             let live = Set(self.catalog.channels.flatMap { $0.upcoming }.map(SlotArtLoader.slotKey))
             self.slotArt.flush(keeping: live)
         }
-        engine.apply(volume: volume, muted: muted)
+        // Fires now with the saved pair, then on every change to either.
+        preferences.output
+            .sink { [engine] in engine.apply(volume: $0.gain, muted: $0.muted) }
+            .store(in: &bag)
         catalog.mixtapes = Catalog.build(from: Cache.loadFeed())   // instant/offline seed
         loadCurrent(autoplay: false)
         // Re-open the tracklist + episode streams whenever sign-in state flips

@@ -14,12 +14,10 @@ final class ExploreLoader: ObservableObject {
     /// the search from the first page — a filter that left the old results
     /// underneath it would be showing episodes that no longer match. The
     /// results themselves are not kept: a relaunch starts again from page one.
-    @Published var filters = UserDefaults.standard.data(forKey: "exploreFilters")
-        .flatMap { try? JSONDecoder().decode(NTSAPI.ExploreFilters.self, from: $0) }
-        ?? NTSAPI.ExploreFilters() {
+    @Published var filters: NTSAPI.ExploreFilters {
         didSet {
             guard filters != oldValue else { return }
-            UserDefaults.standard.set(try? JSONEncoder().encode(filters), forKey: "exploreFilters")
+            preferences.exploreFilters = filters
             reload()
         }
     }
@@ -30,6 +28,12 @@ final class ExploreLoader: ObservableObject {
     @Published private(set) var loading = false
 
     private var load: Task<Void, Never>?
+    private let preferences: Preferences
+
+    init(preferences: Preferences) {
+        self.preferences = preferences
+        filters = preferences.exploreFilters
+    }
 
     /// Start Explore over from its first page.
     func reload() {

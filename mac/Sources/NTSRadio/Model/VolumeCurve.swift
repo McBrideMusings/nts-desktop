@@ -2,7 +2,7 @@ import Foundation
 
 /// How the volume slider's position maps to output gain.
 ///
-/// `AppModel.volume` is the gain (0–100, a linear amplitude multiplier). The
+/// `Preferences.gain` is the gain (0–100, a linear amplitude multiplier). The
 /// slider shows the *position*, and this curve converts between the two:
 /// `gain = position^exponent` on 0…1. Loudness is heard in dB, so a linear
 /// slider crams every quiet level into its first few percent; a perceptual one
@@ -19,6 +19,11 @@ struct VolumeCurve: Equatable {
 
     var kind: Kind
     var exponent: Double
+
+    /// The same curve with its exponent brought inside `exponentRange`.
+    var clamped: VolumeCurve {
+        VolumeCurve(kind: kind, exponent: Self.exponentRange.clamp(exponent))
+    }
 
     /// The exponent actually applied: 1 for linear.
     var effectiveExponent: Double { kind == .linear ? 1 : exponent }

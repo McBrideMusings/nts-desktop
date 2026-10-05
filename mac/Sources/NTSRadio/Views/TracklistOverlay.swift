@@ -61,7 +61,7 @@ struct TracklistOverlay: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         ForEach(Array(model.tracks.enumerated()), id: \.element.id) { idx, track in
-                            TrackRow(track: track, playing: idx == currentIndex, lead: model.trackLead)
+                            TrackRow(track: track, playing: idx == currentIndex, lead: model.preferences.trackLead)
                         }
                     }
                 }

@@ -1,8 +1,6 @@
 import SwiftUI
 import AppKit
 import Combine
-import ServiceManagement
-import Sparkle
 
 @main
 struct NTSRadioApp: App {
@@ -19,14 +17,7 @@ struct NTSRadioApp: App {
 }
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
-    /// One instance for the app's lifetime — shared with `SettingsView` for the
-    /// "Check for Updates" button, so it isn't created twice. `startingUpdater:
-    /// true` begins the scheduled background checks (`SUScheduledCheckInterval`
-    /// in Info.plist) as soon as anything first touches this property.
-    static let updaterController = SPUStandardUpdaterController(
-        startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
-
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var model: AppModel!
     private var statusItem: NSStatusItem!
     private var windowController: RadioWindowController!
@@ -52,11 +43,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         quitWhenParentExitsInDev()
-        suppressAutoUpdateChecksForDevBuilds()
-        _ = AppDelegate.updaterController   // start scheduled background checks
 
         // The same instance the Settings window reads, which is why it is named
-        // on the type rather than made here (see `AppModel.shared`).
+        // on the type rather than made here (see `AppModel.shared`). Making it
+        // starts Sparkle's scheduled background checks (`SparkleUpdates`).
         let model = AppModel.shared
         self.model = model
 
@@ -66,7 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // (Settings ▸ Show in Dock) and persisted. The AppDelegate owns the
         // activation policy — this sink fires immediately with the saved value
         // (initial apply) and again whenever the toggle flips.
-        model.$showInDock
+        model.preferences.$showInDock
             .sink { NSApp.setActivationPolicy($0 ? .regular : .accessory) }
             .store(in: &bag)
 
@@ -151,24 +141,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         waterlineTimer = timer
     }
 
-    /// CI only bumps `CFBundleVersion` past its committed placeholder `"1"` on a
-    /// tagged release build — `admin build`/`admin deploy` always ships the
-    /// placeholder, since they build straight from the committed `Info.plist`. If
-    /// Sparkle's automatic background check stayed on by default, every locally
-    /// installed dev copy would nag "update available" forever the moment the
-    /// appcast is reachable, comparing build "1" against whatever the last real
-    /// release published.
-    ///
-    /// `register(defaults:)` sets the *registration-domain* default — the lowest
-    /// priority in `UserDefaults` — so this only changes what a fresh install
-    /// starts at. An explicit choice already made through the Settings toggle
-    /// (which writes `automaticallyChecksForUpdates` directly) lives in a higher
-    /// domain and is never overwritten by this.
-    private func suppressAutoUpdateChecksForDevBuilds() {
-        guard Bundle.main.infoDictionary?["CFBundleVersion"] as? String == "1" else { return }
-        UserDefaults.standard.register(defaults: ["SUEnableAutomaticChecks": false])
-    }
-
     /// When run from source (`swift run` / `admin dev`) the app is a bare binary,
     /// not an installed `.app` launched by launchd. In that case tie its life to
     /// the parent process (the `swift run` / shell that started it): when the
@@ -215,7 +187,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(playPause)
         let mute = NSMenuItem(title: "Mute", action: #selector(toggleMute), keyEquivalent: "")
         mute.target = self
-        mute.state = model.muted ? .on : .off
+        mute.state = model.preferences.muted ? .on : .off
         mute.isEnabled = !model.isIdle
         menu.addItem(mute)
 
@@ -234,20 +206,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
         let login = NSMenuItem(title: "Open at Login", action: #selector(toggleLoginItem), keyEquivalent: "")
         login.target = self
-        login.state = LoginItem.isEnabled ? .on : .off
+        // Re-read first: System Settings can switch it off behind the app's back.
+        model.preferences.refreshStartOnLogin()
+        login.state = model.preferences.startOnLogin ? .on : .off
         // A bare binary under `admin dev` has no bundle for launchd to register,
         // so the item is shown dimmed there rather than failing on click.
-        login.isEnabled = LoginItem.isAvailable
+        login.isEnabled = model.preferences.canStartOnLogin
         menu.addItem(login)
         let dock = NSMenuItem(title: "Show in Dock", action: #selector(toggleDock), keyEquivalent: "")
         dock.target = self
-        dock.state = model.showInDock ? .on : .off
+        dock.state = model.preferences.showInDock ? .on : .off
         menu.addItem(dock)
         let checkUpdates = NSMenuItem(title: "Check for Updates…",
-                                      action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)),
-                                      keyEquivalent: "")
-        checkUpdates.target = AppDelegate.updaterController
-        checkUpdates.isEnabled = AppDelegate.updaterController.updater.canCheckForUpdates
+                                      action: #selector(checkForUpdates), keyEquivalent: "")
+        checkUpdates.target = self
+        checkUpdates.isEnabled = model.preferences.canCheckForUpdates
         menu.addItem(checkUpdates)
         let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settings.target = self
@@ -259,13 +232,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.maxY + 4), in: button)
     }
 
-    @objc private func toggleDock() { model.showInDock.toggle() }
+    @objc private func toggleDock() { model.preferences.showInDock.toggle() }
 
-    @objc private func toggleLoginItem() { LoginItem.toggle() }
+    @objc private func toggleLoginItem() { model.preferences.startOnLogin.toggle() }
+
+    @objc private func checkForUpdates() { model.preferences.checkForUpdates() }
+
+    /// The main menu autoenables its items, so this is where "Check for
+    /// Updates…" dims while Sparkle is already mid-check.
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        guard menuItem.action == #selector(checkForUpdates) else { return true }
+        return model.preferences.canCheckForUpdates
+    }
 
     @objc private func togglePlay() { model.togglePlay() }
 
-    @objc private func toggleMute() { model.muted.toggle() }
+    @objc private func toggleMute() { model.preferences.muted.toggle() }
 
     /// Tune to a live channel, exactly as clicking its card in the window does —
     /// the tag is the channel number the menu was built with.
@@ -288,9 +270,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func installMainMenu() {
         let appMenu = NSMenu()
         let checkUpdates = NSMenuItem(title: "Check for Updates…",
-                                      action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)),
-                                      keyEquivalent: "")
-        checkUpdates.target = AppDelegate.updaterController
+                                      action: #selector(checkForUpdates), keyEquivalent: "")
+        checkUpdates.target = self
         appMenu.addItem(checkUpdates)
         appMenu.addItem(.separator())
         let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
@@ -349,34 +330,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ShowIndex.shared.flush()
         LogFiles.tracks.flush()
         LogFiles.app.flush()
-    }
-}
-
-/// Launch-at-login, as launchd sees it. There is nothing to persist here: the
-/// registration *is* the state, and it can be turned off from System Settings ▸
-/// General ▸ Login Items behind the app's back, so the menu reads it back every
-/// time it opens instead of mirroring it into a `UserDefaults` flag that would
-/// then disagree.
-enum LoginItem {
-    /// Only a real bundle can be registered — `admin dev` runs a bare binary
-    /// launchd has no app to launch.
-    static var isAvailable: Bool { Bundle.main.bundleURL.pathExtension == "app" }
-
-    /// `.requiresApproval` means the registration exists but the user switched it
-    /// off in System Settings, so it is reported as off — the tick promises the
-    /// app will actually start, not merely that it asked to.
-    static var isEnabled: Bool { SMAppService.mainApp.status == .enabled }
-
-    static func toggle() {
-        guard isAvailable else { return }
-        do {
-            if SMAppService.mainApp.status == .enabled {
-                try SMAppService.mainApp.unregister()
-            } else {
-                try SMAppService.mainApp.register()
-            }
-        } catch {
-            print("login item: \(error.localizedDescription)")
-        }
     }
 }

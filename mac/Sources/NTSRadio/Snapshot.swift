@@ -29,7 +29,7 @@ enum Snapshot {
 
         func shot(_ name: String, size: CGSize = CGSize(width: 880, height: 720),
                   _ configure: (AppModel) -> Void) {
-            let model = AppModel()
+            let model = AppModel(preferences: AppModel.shared.preferences)
             configure(model)
             shotView(name, PopoverView()
                 .environmentObject(model)
@@ -114,12 +114,13 @@ enum Snapshot {
         // The General pane's volume row in each curve and each appearance. An
         // off-screen render has no window to take its appearance from, so the
         // colour scheme and a window-coloured ground are set by hand here.
-        let shotVolume = AppModel.shared.volume
-        let shotKind = AppModel.shared.volumeKind
-        AppModel.shared.volume = 12
+        let prefs = AppModel.shared.preferences
+        let shotGain = prefs.gain
+        let shotCurve = prefs.curve
+        prefs.gain = 12
         for kind in VolumeCurve.Kind.allCases {
             for dark in [false, true] {
-                AppModel.shared.volumeKind = kind
+                prefs.curve.kind = kind
                 let selection = SettingsSelection()
                 shotView("04-settings-general-\(kind.rawValue)-\(dark ? "dark" : "light").png",
                          SettingsView(selection: selection)
@@ -127,8 +128,8 @@ enum Snapshot {
                             .environment(\.colorScheme, dark ? .dark : .light))
             }
         }
-        AppModel.shared.volumeKind = shotKind
-        AppModel.shared.volume = shotVolume
+        prefs.curve = shotCurve
+        prefs.gain = shotGain
         // The knob face only carries a title once a mixtape is selected, and the
         // longest names are the ones that reach the circle's edge — this is the
         // shot that shows whether they fit.

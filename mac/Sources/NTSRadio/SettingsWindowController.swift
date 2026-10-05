@@ -67,7 +67,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSToolbarDeleg
         // The login item can be switched off in System Settings ▸ General ▸ Login
         // Items while this app is running, so the toggle re-reads the real state
         // every time the window comes up rather than showing what it last set.
-        AppModel.shared.refreshStartOnLogin()
+        AppModel.shared.preferences.refreshStartOnLogin()
         return window
     }
 
