@@ -200,8 +200,9 @@ private struct SlotRow: View {
         .background(onAir ? Theme.liveDot.opacity(0.07) : (hovering ? Theme.hairline(0.03) : .clear))
         // The clock is drawn once, as the fill on the programme that is on. At a
         // changeover the finished slot leaves the list and the fill moves down to
-        // its successor; `advanceSlots` animates that so the hand-over is
-        // something you see happen rather than a jump you have to notice.
+        // its successor; `ScheduleController.advanceSlots` animates that so the
+        // hand-over is something you see happen rather than a jump you have to
+        // notice.
         .animation(.easeInOut(duration: 0.4), value: onAir)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Theme.hairline(0.05)).frame(height: 1)

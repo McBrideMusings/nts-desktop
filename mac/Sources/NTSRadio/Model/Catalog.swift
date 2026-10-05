@@ -63,8 +63,9 @@ struct Channel: Identifiable, Hashable {
     /// This channel's published programme grid, earliest first, with finished
     /// slots dropped.
     ///
-    /// The single record of what is on: `refreshSchedule` fills it, `advanceSlots`
-    /// trims it, and everything below reads the current programme off its head.
+    /// The single record of what is on: `ScheduleController.refreshSchedule`
+    /// fills it, `advanceSlots` trims it, and everything below reads the current
+    /// programme off its head.
     /// Nothing else writes what is on air, so nothing else can disagree with the
     /// clock — which is what the now-playing poll used to do, handing back the
     /// finished programme for up to fifteen minutes after every changeover.
