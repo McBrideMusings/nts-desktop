@@ -357,10 +357,10 @@ private struct ShowDetailPane: View {
     let alias: String
     let fallbackTitle: String
 
-    private var detail: NTSAPI.ShowDetail? { model.showDetails[alias] }
-    private var episodes: [NTSAPI.Episode] { model.showEpisodes[alias] ?? [] }
+    private var detail: NTSAPI.ShowDetail? { model.showDetail.details[alias] }
+    private var episodes: [NTSAPI.Episode] { model.showDetail.episodes[alias] ?? [] }
     private var episodeCountLabel: String {
-        guard let total = model.showEpisodeTotals[alias], total > episodes.count else {
+        guard let total = model.showDetail.episodeTotals[alias], total > episodes.count else {
             return "\(episodes.count)"
         }
         return "\(episodes.count) OF \(total)"
@@ -429,7 +429,7 @@ private struct ShowDetailPane: View {
                                 // Paging is driven by the last row appearing, same
                                 // as Explore's grid — there's no fixed list height
                                 // to measure a scroll offset against.
-                                if ep.id == episodes.last?.id { model.loadMoreEpisodes(for: alias) }
+                                if ep.id == episodes.last?.id { model.showDetail.loadMore(for: alias) }
                             }
                     }
                 }
@@ -437,7 +437,7 @@ private struct ShowDetailPane: View {
             Spacer(minLength: 0)
         }
         .padding(22)
-        .task { await model.loadShow(alias) }
+        .task { await model.showDetail.load(alias) }
     }
 
     private var subline: String {
@@ -634,7 +634,7 @@ private struct CreditRow: View {
                 CreditChip(credit: c) {
                     guard !c.alias.isEmpty else { return }
                     model.detail = .show(alias: c.alias, fallbackTitle: c.name)
-                    Task { await model.loadShow(c.alias) }
+                    Task { await model.showDetail.load(c.alias) }
                 }
             }
         }

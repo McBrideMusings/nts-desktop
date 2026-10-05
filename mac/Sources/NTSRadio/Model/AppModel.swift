@@ -95,6 +95,9 @@ final class AppModel: ObservableObject {
     /// The channels' programme grids — fetching them, handing over at each
     /// changeover — and the schedule tab's view of them. See `ScheduleController`.
     let timeline: ScheduleController
+    /// A show page's fetched contents — its page and its episode list. See
+    /// `ShowDetailLoader`.
+    let showDetail: ShowDetailLoader
     /// Every setting kept across a relaunch — see `Preferences`.
     let preferences: Preferences
 
@@ -127,16 +130,6 @@ final class AppModel: ObservableObject {
     /// of `catalogTab`, across shows and mixtapes at once.
     @Published var query = ""
     @Published var detail: CatalogDetail? = nil
-
-    /// Fetched lazily when a show detail opens, keyed by alias so reopening the
-    /// same show is instant and a slow fetch can't land under a different show.
-    @Published var showDetails: [String: NTSAPI.ShowDetail] = [:]
-    /// Loaded a page at a time as the episode list scrolls — `/shows/<alias>/episodes`
-    /// clamps to 12 regardless of what's asked for, so a show with more than that
-    /// (Lung Dart has 102) needs one request per twelve.
-    @Published var showEpisodes: [String: [NTSAPI.Episode]] = [:]
-    @Published private(set) var showEpisodeTotals: [String: Int] = [:]
-    @Published private(set) var showEpisodesLoading = false
 
     @Published var selection: Selection = .idle
     @Published var hoverIndex: Int? = nil
@@ -217,6 +210,7 @@ final class AppModel: ObservableObject {
         self.preferences = preferences
         explore = ExploreLoader(preferences: preferences)
         timeline = ScheduleController(catalog: catalog, slotArt: slotArt, showIndex: showIndex)
+        showDetail = ShowDetailLoader(showIndex: showIndex)
         // Each is an observable object of its own; republish its changes as ours
         // so a view watching the model repaints when the dial's contents move.
         // engine.objectWillChange is deliberately NOT republished here: the
@@ -227,7 +221,7 @@ final class AppModel: ObservableObject {
         for upstream in [catalog.objectWillChange,
                          saved.objectWillChange, showIndex.objectWillChange,
                          slotArt.objectWillChange, explore.objectWillChange,
-                         timeline.objectWillChange,
+                         timeline.objectWillChange, showDetail.objectWillChange,
                          backfill.objectWillChange, preferences.objectWillChange] {
             upstream
                 .sink { [weak self] in self?.objectWillChange.send() }
@@ -909,43 +903,11 @@ final class AppModel: ObservableObject {
         switch row.target {
         case .show(let alias, let title):
             detail = .show(alias: alias, fallbackTitle: title)
-            Task { await loadShow(alias) }
+            Task { await showDetail.load(alias) }
         case .mixtape(let alias):
             detail = .mixtape(alias: alias)
         case .none:
             break
-        }
-    }
-
-    /// Fetch a show's page and its first page of episodes, once. Both are
-    /// best-effort: a failure leaves the detail view on what the schedule row
-    /// already knew.
-    func loadShow(_ alias: String) async {
-        if showDetails[alias] == nil, let d = try? await NTSAPI.show(alias: alias) {
-            showDetails[alias] = d
-            // The same fetch the backfill would otherwise make later —
-            // recording it here means this alias never re-queues for that.
-            showIndex.noteDetailed(alias: alias, name: d.name, location: d.location,
-                                   genres: d.genres, picture: d.image?.absoluteString,
-                                   description: d.description, detailed: Date())
-        }
-        if showEpisodes[alias] == nil { loadMoreEpisodes(for: alias) }
-    }
-
-    /// Fetch the next twelve episodes of a show, if there are more and nothing
-    /// is already in flight. The episode list calls this as its last row
-    /// appears, same as Explore's grid.
-    func loadMoreEpisodes(for alias: String) {
-        guard !showEpisodesLoading else { return }
-        let loaded = showEpisodes[alias]?.count ?? 0
-        if let total = showEpisodeTotals[alias], loaded >= total { return }
-        showEpisodesLoading = true
-        Task { [weak self] in
-            defer { Task { @MainActor in self?.showEpisodesLoading = false } }
-            guard let page = try? await NTSAPI.episodes(alias: alias, offset: loaded) else { return }
-            guard let self else { return }
-            self.showEpisodes[alias, default: []] += page.episodes
-            self.showEpisodeTotals[alias] = page.total
         }
     }
 

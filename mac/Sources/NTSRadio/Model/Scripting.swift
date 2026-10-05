@@ -477,7 +477,7 @@ final class NTSOpenShowCommand: NTSCommand {
             m.query = ""
             m.show(.catalog)
             m.detail = .show(alias: alias, fallbackTitle: ShowIndex.title(from: alias))
-            Task { await m.loadShow(alias) }
+            Task { await m.showDetail.load(alias) }
             return true
         }
     }

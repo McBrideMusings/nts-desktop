@@ -332,7 +332,7 @@ extension AppModel {
             }(),
             detailTags: {
                 guard case .show(let alias, _) = detail else { return [] }
-                let d = showDetails[alias]
+                let d = showDetail.details[alias]
                 return (d?.genres ?? []) + (d?.moods ?? [])
             }(),
             catalogQuery: query,
