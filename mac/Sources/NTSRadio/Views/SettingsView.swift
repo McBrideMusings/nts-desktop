@@ -266,10 +266,30 @@ private extension View {
     /// Shared padding, so both panes sit on the same margins and the window can
     /// size itself to whichever is showing.
     func settingsPane() -> some View {
-        formStyle(.columns)
-            .padding(.horizontal, 22)
-            .padding(.vertical, 20)
-            .frame(width: 520, alignment: .leading)
-            .fixedSize(horizontal: false, vertical: true)
+        WholePoints {
+            formStyle(.columns)
+                .padding(.horizontal, 22)
+                .padding(.vertical, 20)
+                .frame(width: 520, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+/// Reports its content's size rounded up to whole points.
+///
+/// The window takes its size from the pane, and a pane whose height came out
+/// fractional (595.5) never settled: AppKit snapped the window to 596, the
+/// hosting view read the spare half point as safe area and grew by it, and
+/// every pass repeated that until AppKit raised for running out of passes and
+/// the app died. A whole-point height is one the window can match exactly.
+private struct WholePoints: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let size = subviews.first?.sizeThatFits(proposal) ?? .zero
+        return CGSize(width: size.width.rounded(.up), height: size.height.rounded(.up))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
     }
 }
