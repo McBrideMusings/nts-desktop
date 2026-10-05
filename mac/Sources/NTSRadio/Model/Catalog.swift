@@ -41,12 +41,17 @@ struct SlotDetail: Hashable, Codable {
 /// A channel that exists. Where a value has to name a channel and nothing else,
 /// this is the type, so a 3 is turned away where it is parsed rather than
 /// leaving a view with an empty grid and no reason why.
-enum ChannelNumber: Int, CaseIterable {
+///
+/// It prints as its number, so `"NTS \(number)"` reads the same as it did when
+/// this was an `Int`.
+enum ChannelNumber: Int, CaseIterable, CustomStringConvertible {
     case one = 1, two = 2
+
+    var description: String { String(rawValue) }
 }
 
 struct Channel: Identifiable, Hashable {
-    let number: Int          // 1 or 2
+    let number: ChannelNumber
     let artHue: Double
     let accent: Color
     let accentText: Color
@@ -68,7 +73,7 @@ struct Channel: Identifiable, Hashable {
     /// Decoration for whatever is on now. Ignored unless it still matches.
     var detail: SlotDetail? = nil
 
-    var id: Int { number }
+    var id: ChannelNumber { number }
 
     /// The programme the clock is in.
     var onAir: NTSAPI.Broadcast? { upcoming.first }
@@ -109,9 +114,10 @@ struct Channel: Identifiable, Hashable {
     }
 
     var streamURL: URL {
-        URL(string: number == 1
-            ? "https://stream-relay-geo.ntslive.net/stream?client=NTSWebApp"
-            : "https://stream-relay-geo.ntslive.net/stream2?client=NTSWebApp")!
+        switch number {
+        case .one: URL(string: "https://stream-relay-geo.ntslive.net/stream?client=NTSWebApp")!
+        case .two: URL(string: "https://stream-relay-geo.ntslive.net/stream2?client=NTSWebApp")!
+        }
     }
 
     /// Procedural cover-art gradient, matching the prototype's `channelArt(h)`.
@@ -140,7 +146,9 @@ final class Catalog: ObservableObject {
     /// Populated dynamically from the NTS catalog endpoint (seeded from the
     /// on-disk cache for instant/offline first paint, then refreshed live).
     @Published var mixtapes: [Mixtape]
-    @Published var channels: [Channel]
+    /// One entry per `ChannelNumber`, in number order. Only `init` lays it out;
+    /// every later write goes through the subscript, which edits an entry in place.
+    @Published private(set) var channels: [Channel]
 
     static let shared = Catalog()
 
@@ -156,17 +164,25 @@ final class Catalog: ObservableObject {
 
     init() {
         self.mixtapes = []   // filled by AppModel: cache seed → live refresh
-        self.channels = [
-            Channel(number: 1, artHue: 235, accent: Theme.ch1, accentText: Theme.ch1Text, city: "LONDON"),
-            Channel(number: 2, artHue: 22,  accent: Theme.ch2, accentText: Theme.ch2Text, city: "LOS ANGELES"),
-        ]
+        self.channels = ChannelNumber.allCases.map { number in
+            switch number {
+            case .one: Channel(number: .one, artHue: 235, accent: Theme.ch1, accentText: Theme.ch1Text, city: "LONDON")
+            case .two: Channel(number: .two, artHue: 22,  accent: Theme.ch2, accentText: Theme.ch2Text, city: "LOS ANGELES")
+            }
+        }
     }
 
     /// The channel a `ChannelNumber` names. Never missing: `init` lays out one
-    /// entry per case in number order, and every later write edits an entry in
-    /// place.
+    /// entry per case in number order, and `channels` can be written nowhere else.
     subscript(_ number: ChannelNumber) -> Channel {
-        channels[number.rawValue - 1]
+        get { channels[Self.slot(number)] }
+        set { channels[Self.slot(number)] = newValue }
+    }
+
+    /// Where `init` put a channel: its position among the cases, which is the
+    /// order `channels` was built in.
+    private static func slot(_ number: ChannelNumber) -> Int {
+        ChannelNumber.allCases.firstIndex(of: number)!
     }
 
     /// Map a fetched (or cached) feed into the in-memory catalog. Entries with

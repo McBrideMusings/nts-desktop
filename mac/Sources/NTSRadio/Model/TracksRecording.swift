@@ -23,8 +23,8 @@ final class TracksRecording {
     func update(signedIn: Bool, mixtapes: [String], token: @escaping @Sendable () async throws -> String) {
         var wanted: [(label: String, filter: LiveTracksFilter)] = []
         if signedIn {
-            wanted += [1, 2].compactMap { n in
-                LiveTracksFilter.channel(n).map { ("channel-\(n)", $0) }
+            wanted += ChannelNumber.allCases.compactMap { n in
+                LiveTracksFilter.channel(n.rawValue).map { ("channel-\(n.rawValue)", $0) }
             }
             wanted += Set(mixtapes).sorted().map { ("mixtape:\($0)", LiveTracksFilter.mixtape($0)) }
         }

@@ -57,7 +57,7 @@ enum ScriptState {
         switch s {
         case .idle: return "idle"
         case .mixtape(let alias): return "mixtape:\(alias)"
-        case .channel(let n): return "channel:\(n)"
+        case .channel(let n): return "channel:\(n.rawValue)"
         case .episode(let show, let episode): return "episode:\(show)/\(episode)"
         }
     }
@@ -78,7 +78,7 @@ enum ScriptState {
             return .mixtape(value)
         case "channel":
             guard let n = Int(value).flatMap(ChannelNumber.init(rawValue:)) else { return nil }
-            return .channel(n.rawValue)
+            return .channel(n)
         // `episode:<show>/<episode>`. Unlike a mixtape or a channel there is
         // nothing local to check it against — the catalog holds no list of the
         // ~89,000 episodes — so both halves being present is the whole test, and

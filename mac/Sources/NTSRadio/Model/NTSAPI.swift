@@ -84,7 +84,7 @@ enum NTSAPI {
     /// episode filling it, because it comes from `/api/v2/radio/schedule/N`
     /// rather than being scraped out of the now-playing payload.
     struct Broadcast: Hashable, Identifiable {
-        let channel: Int
+        let channel: ChannelNumber
         let title: String
         let start: Date?
         let end: Date?
@@ -217,7 +217,7 @@ enum NTSAPI {
     /// two — so nothing here has to be matched back to a show by its title.
     /// Genres, location and artwork are not in this payload; they come from the
     /// show index, keyed by the alias each slot supplies.
-    static func schedule(channel: Int) async throws -> [Broadcast] {
+    static func schedule(channel: ChannelNumber) async throws -> [Broadcast] {
         let url = URL(string: "https://www.nts.live/api/v2/radio/schedule/\(channel)")!
         let decoded = try await fetch(ScheduleResponse.self, from: url, endpoint: "schedule")
 

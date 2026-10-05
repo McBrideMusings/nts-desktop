@@ -202,7 +202,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             let item = NSMenuItem(title: "Live \(channel.number)",
                                   action: #selector(tuneChannel(_:)), keyEquivalent: "")
             item.target = self
-            item.tag = channel.number
+            item.tag = channel.number.rawValue
             item.state = model.selection == .channel(channel.number) ? .on : .off
             menu.addItem(item)
         }
@@ -256,7 +256,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// Tune to a live channel, exactly as clicking its card in the window does —
     /// the tag is the channel number the menu was built with.
     @objc private func tuneChannel(_ sender: NSMenuItem) {
-        model.select(.channel(sender.tag))
+        guard let number = ChannelNumber(rawValue: sender.tag) else { return }
+        model.select(.channel(number))
     }
 
     /// The status item's route into the Settings window — the same one the gear

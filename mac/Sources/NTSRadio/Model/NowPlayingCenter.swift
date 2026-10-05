@@ -119,7 +119,7 @@ final class NowPlayingCenter {
     /// gradient we draw ourselves when a channel has no program art.
     private enum ArtworkKey: Equatable {
         case remote(URL)
-        case channelGradient(Int)
+        case channelGradient(ChannelNumber)
     }
 
     /// Rebuild the tile from the model's current state. Cheap and idempotent —
@@ -229,8 +229,7 @@ final class NowPlayingCenter {
         guard let key else { return }
         switch key {
         case .channelGradient(let number):
-            guard let channel = model.catalog.channels.first(where: { $0.number == number }) else { return }
-            artwork = Self.render(channel.art)
+            artwork = Self.render(model.catalog[number].art)
         case .remote(let url):
             // URLSession.shared reads the disk-backed URLCache the covers are
             // already in (see Cache.configureImageCache), so a source the user

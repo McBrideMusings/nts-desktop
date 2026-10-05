@@ -16,7 +16,7 @@ struct CatalogRow: Identifiable, Hashable {
     /// What tuning this row starts. A future schedule slot can't be played early,
     /// so it offers its channel — the live stream it will air on.
     enum Playable: Hashable {
-        case channel(Int)
+        case channel(ChannelNumber)
         case mixtape(String)
         case episode(show: String, episode: String)
     }

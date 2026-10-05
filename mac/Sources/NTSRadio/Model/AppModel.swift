@@ -6,7 +6,7 @@ import EpisodeMatch
 enum Selection: Equatable {
     case idle              // nothing selected — the default empty state on launch
     case mixtape(String)   // mixtape alias — stable across catalog rebuilds
-    case channel(Int)
+    case channel(ChannelNumber)
     /// A past episode, played on demand. Unlike the other two this has no stream
     /// URL of its own: the audio lives on SoundCloud or Mixcloud and has to be
     /// resolved through NTS before it can be played, so loading it is async.
@@ -19,7 +19,7 @@ enum Selection: Equatable {
 /// whole, not streamed).
 enum SourceKey: Hashable {
     case mixtape(String)
-    case channel(Int)
+    case channel(ChannelNumber)
 
     init?(_ selection: Selection) {
         switch selection {
@@ -323,7 +323,7 @@ final class AppModel: ObservableObject {
         return catalog.mixtapes.first { $0.alias == alias }
     }
     var currentChannel: Channel? {
-        if case .channel(let n) = selection { return catalog.channels.first { $0.number == n } }
+        if case .channel(let n) = selection { return catalog[n] }
         return nil
     }
 
@@ -660,9 +660,9 @@ final class AppModel: ObservableObject {
         case .episode:
             return
         case .channel(let number):
-            let all = catalog.channels
-            guard let i = all.firstIndex(where: { $0.number == number }) else { return }
-            select(.channel(all[wrap(i + delta, all.count)].number), autoplay: engine.isPlaying)
+            let all = ChannelNumber.allCases
+            guard let i = all.firstIndex(of: number) else { return }
+            select(.channel(all[wrap(i + delta, all.count)]), autoplay: engine.isPlaying)
         case .mixtape(let alias):
             let all = catalog.mixtapes
             guard let i = all.firstIndex(where: { $0.alias == alias }) else { return }
@@ -714,7 +714,7 @@ final class AppModel: ObservableObject {
 
     /// Whether this broadcast is the one currently on air for its channel.
     func isOnAir(_ b: NTSAPI.Broadcast) -> Bool {
-        catalog.channels.first { $0.number == b.channel }?.upcoming.first?.id == b.id
+        catalog[b.channel].onAir?.id == b.id
     }
 
     /// A schedule slot as a grid row, flagged if it's the one on air — the only
@@ -968,7 +968,7 @@ final class AppModel: ObservableObject {
 
     /// In-flight artwork fetches, one per channel, so a changeover cancels the
     /// previous programme's request instead of racing it.
-    private var detailTasks: [Int: Task<Void, Never>] = [:]
+    private var detailTasks: [ChannelNumber: Task<Void, Never>] = [:]
 
     /// Dress whatever is now at the head of a channel's grid.
     ///
@@ -976,15 +976,14 @@ final class AppModel: ObservableObject {
     /// goes on immediately so the tile never goes blank across a handover, then
     /// the episode's own photograph replaces it once NTS answers. Both writes
     /// name the slot they belong to, so neither can land on the next programme.
-    private func refreshDetail(channel idx: Int) {
-        let number = catalog.channels[idx].number
+    private func refreshDetail(_ number: ChannelNumber) {
         detailTasks[number]?.cancel()
-        guard let slot = catalog.channels[idx].onAir else {
-            catalog.channels[idx].detail = nil
+        guard let slot = catalog[number].onAir else {
+            catalog[number].detail = nil
             return
         }
         let indexed = showIndex.ref(slot.showAlias)
-        catalog.channels[idx].detail = SlotDetail(
+        catalog[number].detail = SlotDetail(
             slotID: slot.id,
             image: slot.image ?? indexed?.pictureURL,
             // Genres never fall back to the show-level index: that cache holds
@@ -1002,8 +1001,7 @@ final class AppModel: ObservableObject {
             guard let ep = try? await NTSAPI.episode(show: slot.showAlias, episode: slot.episodeAlias,
                                                      reportAs: "on-air-detail"),
                   !Task.isCancelled, let self,
-                  let i = self.catalog.channels.firstIndex(where: { $0.number == number }),
-                  self.catalog.channels[i].onAir?.id == slot.id
+                  self.catalog[number].onAir?.id == slot.id
             else { return }
             self.slotArt.adopt(slot, detail: SlotDetail(
                 slotID: slot.id,
@@ -1011,12 +1009,12 @@ final class AppModel: ObservableObject {
                 genres: ep.genres,
                 location: [ep.locationLong, ep.location].first { !$0.isEmpty } ?? ""))
             withAnimation(.easeInOut(duration: 0.3)) {
-                self.catalog.channels[i].detail = SlotDetail(
+                self.catalog[number].detail = SlotDetail(
                     slotID: slot.id,
-                    image: ep.image ?? self.catalog.channels[i].detail?.image,
-                    genres: ep.genres.isEmpty ? (self.catalog.channels[i].detail?.genres ?? []) : ep.genres,
+                    image: ep.image ?? self.catalog[number].detail?.image,
+                    genres: ep.genres.isEmpty ? (self.catalog[number].detail?.genres ?? []) : ep.genres,
                     location: [ep.locationLong, ep.location,
-                               self.catalog.channels[i].detail?.location ?? ""]
+                               self.catalog[number].detail?.location ?? ""]
                         .first { !$0.isEmpty } ?? "")
             }
         }
@@ -1036,8 +1034,8 @@ final class AppModel: ObservableObject {
     /// matched back to a show by their title. Finished slots are dropped on the
     /// way in so `upcoming` still means what it says.
     func refreshSchedule() async {
-        var grids: [Int: [NTSAPI.Broadcast]] = [:]
-        for number in catalog.channels.map(\.number) {
+        var grids: [ChannelNumber: [NTSAPI.Broadcast]] = [:]
+        for number in ChannelNumber.allCases {
             guard let slots = try? await NTSAPI.schedule(channel: number) else { continue }
             grids[number] = slots
         }
@@ -1045,11 +1043,11 @@ final class AppModel: ObservableObject {
         scheduleFetched = Date()
 
         let now = Date()
-        for idx in catalog.channels.indices {
-            guard let slots = grids[catalog.channels[idx].number] else { continue }
-            let head = catalog.channels[idx].onAir?.id
-            catalog.channels[idx].upcoming = slots.filter { ($0.end ?? .distantPast) > now }
-            if catalog.channels[idx].onAir?.id != head { refreshDetail(channel: idx) }
+        for number in ChannelNumber.allCases {
+            guard let slots = grids[number] else { continue }
+            let head = catalog[number].onAir?.id
+            catalog[number].upcoming = slots.filter { ($0.end ?? .distantPast) > now }
+            if catalog[number].onAir?.id != head { refreshDetail(number) }
             // Every slot names its show; folding those in is how the index covers
             // shows past the 1012 the shows endpoint will hand out.
             for b in slots where !b.showAlias.isEmpty {
@@ -1076,11 +1074,11 @@ final class AppModel: ObservableObject {
     }
 
     private func advance(now: Date) {
-        for idx in catalog.channels.indices {
-            let live = catalog.channels[idx].upcoming.drop { ($0.end ?? .distantFuture) <= now }
-            guard live.first?.id != catalog.channels[idx].onAir?.id else { continue }
-            catalog.channels[idx].upcoming = Array(live)
-            refreshDetail(channel: idx)
+        for number in ChannelNumber.allCases {
+            let live = catalog[number].upcoming.drop { ($0.end ?? .distantFuture) <= now }
+            guard live.first?.id != catalog[number].onAir?.id else { continue }
+            catalog[number].upcoming = Array(live)
+            refreshDetail(number)
         }
     }
 

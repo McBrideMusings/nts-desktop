@@ -18,7 +18,7 @@ enum MenuBarBadge: Hashable {
     init(_ selection: Selection) {
         switch selection {
         case .idle:            self = .mark
-        case .channel(let n):  self = .character(String(n))
+        case .channel(let n):  self = .character(String(n.rawValue))
         case .mixtape:         self = .character("M")
         case .episode:         self = .play
         }

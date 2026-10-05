@@ -34,9 +34,9 @@ struct ScheduleTimeline: View {
                     Text("NTS \(channel.rawValue)")
                         .font(Theme.mono(9, .bold))
                         .tracking(1.2)
-                        .foregroundStyle(on ? channelInk(channel.rawValue) : Theme.inkMuted)
+                        .foregroundStyle(on ? channelInk(channel) : Theme.inkMuted)
                         .padding(.horizontal, 9).padding(.vertical, 5)
-                        .background(on ? channelFill(channel.rawValue) : .clear)
+                        .background(on ? channelFill(channel) : .clear)
                         .overlay(Rectangle().stroke(Theme.hairline(on ? 0 : 0.10), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
@@ -59,8 +59,8 @@ struct ScheduleTimeline: View {
         .padding(.vertical, 9)
     }
 
-    private func channelFill(_ n: Int) -> Color { n == 1 ? Theme.ch1 : Theme.ch2 }
-    private func channelInk(_ n: Int) -> Color { n == 1 ? Theme.ch1Text : Theme.ch2Text }
+    private func channelFill(_ n: ChannelNumber) -> Color { n == .one ? Theme.ch1 : Theme.ch2 }
+    private func channelInk(_ n: ChannelNumber) -> Color { n == .one ? Theme.ch1Text : Theme.ch2Text }
 
     // MARK: Timeline
 

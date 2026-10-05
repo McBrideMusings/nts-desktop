@@ -60,16 +60,14 @@ enum Snapshot {
         // rail reads the current programme off the grid, so the sample is a
         // grid — one slot per channel, ending an hour out so it stays on air.
         func seedChannels(_ m: AppModel) {
-            func slot(_ n: Int, _ title: String, _ startEnd: String, _ city: String) -> NTSAPI.Broadcast {
+            func slot(_ n: ChannelNumber, _ title: String, _ startEnd: String, _ city: String) -> NTSAPI.Broadcast {
                 NTSAPI.Broadcast(channel: n, title: title, start: Date(),
                                  end: Date().addingTimeInterval(3600), startEnd: startEnd,
                                  genres: [], location: city, image: nil,
                                  showAlias: "", episodeAlias: "")
             }
-            if m.catalog.channels.count >= 2 {
-                m.catalog.channels[0].upcoming = [slot(1, "Low Slung Transmission", "17:00 – 19:00", "LONDON")]
-                m.catalog.channels[1].upcoming = [slot(2, "Desert Frequency Hour", "09:00 – 11:00", "LOS ANGELES")]
-            }
+            m.catalog[.one].upcoming = [slot(.one, "Low Slung Transmission", "17:00 – 19:00", "LONDON")]
+            m.catalog[.two].upcoming = [slot(.two, "Desert Frequency Hour", "09:00 – 11:00", "LOS ANGELES")]
         }
 
         // Seed a sample mixtape catalog so the dial ring renders (no network in
@@ -90,7 +88,7 @@ enum Snapshot {
         // Default launch state is now idle — nothing selected (empty center, idle
         // now-playing bar). This shot verifies that empty state.
         shot("01-default-mix-dial.png") { seedChannels($0); seedMixtapes($0) }
-        shot("02-channel1-live.png") { seedChannels($0); seedMixtapes($0); $0.select(.channel(1), autoplay: false) }
+        shot("02-channel1-live.png") { seedChannels($0); seedMixtapes($0); $0.select(.channel(.one), autoplay: false) }
         shot("03-tracklist.png") {
             $0.catalog.mixtapes = [sampleMix]
             $0.select(.mixtape("rap-house"), autoplay: false)
@@ -160,7 +158,7 @@ enum Snapshot {
             ("13-shape-wide-1440x520.png",     CGSize(width: 1440, height: 520)),
         ]
         for (name, size) in shapes {
-            shot(name, size: size) { seedChannels($0); seedMixtapes($0); $0.select(.channel(1), autoplay: false) }
+            shot(name, size: size) { seedChannels($0); seedMixtapes($0); $0.select(.channel(.one), autoplay: false) }
         }
 
         // The catalog is deliberately not snapshotted. `ImageRenderer` lays a

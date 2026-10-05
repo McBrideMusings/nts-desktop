@@ -352,7 +352,7 @@ extension AppModel {
             channelCount: catalog.channels.count,
             channels: catalog.channels.map { ch in
                 ChannelSnapshot(
-                    number: ch.number,
+                    number: ch.number.rawValue,
                     show: ch.show,
                     startEnd: ch.startEnd,
                     slots: ch.upcoming.count,
