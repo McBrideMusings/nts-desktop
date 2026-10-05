@@ -12,6 +12,8 @@ struct VolumeCurve: Equatable {
         case linear, perceptual
     }
 
+    static let gainRange: ClosedRange<Double> = 0...100
+    static let sliderRange: ClosedRange<Double> = 0...100
     static let exponentRange: ClosedRange<Double> = 2...5
     static let defaultExponent = 3.0
 
@@ -23,13 +25,13 @@ struct VolumeCurve: Equatable {
 
     /// Gain (0–100) for a slider position (0–100).
     func gain(forSlider slider: Double) -> Double {
-        let p = max(0, min(100, slider)) / 100
+        let p = Self.sliderRange.clamp(slider) / 100
         return pow(p, effectiveExponent) * 100
     }
 
     /// Slider position (0–100) for a gain (0–100).
     func slider(forGain gain: Double) -> Double {
-        let g = max(0, min(100, gain)) / 100
+        let g = Self.gainRange.clamp(gain) / 100
         return pow(g, 1 / effectiveExponent) * 100
     }
 
@@ -38,5 +40,11 @@ struct VolumeCurve: Equatable {
         let g = gain(forSlider: slider) / 100
         guard g > 0 else { return floor }
         return max(floor, 20 * log10(g))
+    }
+}
+
+extension ClosedRange {
+    func clamp(_ value: Bound) -> Bound {
+        Swift.min(upperBound, Swift.max(lowerBound, value))
     }
 }

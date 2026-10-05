@@ -197,9 +197,9 @@ final class PlayerEngine: ObservableObject {
         return max(0, edge - playhead)
     }
 
-    /// `volume` is 0–100 to match the prototype's meter.
+    /// `volume` is 0–100 to match the prototype's meter; `AppModel` owns the clamp.
     func apply(volume: Double, muted: Bool) {
-        player.volume = Float(max(0, min(100, volume)) / 100)
+        player.volume = Float(volume / 100)
         player.isMuted = muted
     }
 }

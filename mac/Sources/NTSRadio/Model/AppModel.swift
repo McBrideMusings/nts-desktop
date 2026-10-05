@@ -145,10 +145,17 @@ final class AppModel: ObservableObject {
     /// Dragging the volume slider fires this on every frame; only the disk write
     /// is debounced (`engine.apply` below stays live so audio tracks the drag).
     private var volumePersist: Task<Void, Never>?
-    @Published var volume: Double = UserDefaults.standard.object(forKey: "volume") as? Double ?? 72 {
+    /// The gain, always within `VolumeCurve.gainRange`. The setter clamps before
+    /// anything is stored or published, so no writer needs its own clamp.
+    var volume: Double {
+        get { storedVolume }
+        set { storedVolume = VolumeCurve.gainRange.clamp(newValue) }
+    }
+    @Published private var storedVolume: Double = VolumeCurve.gainRange.clamp(
+        UserDefaults.standard.object(forKey: "volume") as? Double ?? 72) {
         didSet {
-            engine.apply(volume: volume, muted: muted)
-            let volume = volume
+            engine.apply(volume: storedVolume, muted: muted)
+            let volume = storedVolume
             volumePersist?.cancel()
             volumePersist = Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 300_000_000)
@@ -161,10 +168,14 @@ final class AppModel: ObservableObject {
         .flatMap(VolumeCurve.Kind.init(rawValue:)) ?? .perceptual {
         didSet { UserDefaults.standard.set(volumeKind.rawValue, forKey: "volumeCurve") }
     }
-    @Published var volumeExponent: Double = min(VolumeCurve.exponentRange.upperBound, max(
-        VolumeCurve.exponentRange.lowerBound,
-        UserDefaults.standard.object(forKey: "volumeExponent") as? Double ?? VolumeCurve.defaultExponent)) {
-        didSet { UserDefaults.standard.set(volumeExponent, forKey: "volumeExponent") }
+    /// Always within `VolumeCurve.exponentRange`, clamped before it is stored.
+    var volumeExponent: Double {
+        get { storedVolumeExponent }
+        set { storedVolumeExponent = VolumeCurve.exponentRange.clamp(newValue) }
+    }
+    @Published private var storedVolumeExponent: Double = VolumeCurve.exponentRange.clamp(
+        UserDefaults.standard.object(forKey: "volumeExponent") as? Double ?? VolumeCurve.defaultExponent) {
+        didSet { UserDefaults.standard.set(storedVolumeExponent, forKey: "volumeExponent") }
     }
     var volumeCurve: VolumeCurve { VolumeCurve(kind: volumeKind, exponent: volumeExponent) }
     /// The knob's position, 0–100. `volume` (the gain) is what is stored, so

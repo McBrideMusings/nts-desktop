@@ -130,7 +130,7 @@ extension NSApplication {
 
     @objc var ntsVolume: Int {
         get { MainActor.assumeIsolated { Int((AppModel.shared.volume).rounded()) } }
-        set { MainActor.assumeIsolated { AppModel.shared.volume = Double(min(100, max(0, newValue))) } }
+        set { MainActor.assumeIsolated { AppModel.shared.volume = Double(newValue) } }
     }
 
     @objc var ntsVolumeCurve: String {
@@ -152,12 +152,7 @@ extension NSApplication {
 
     @objc var ntsVolumeSteepness: Double {
         get { MainActor.assumeIsolated { AppModel.shared.volumeExponent } }
-        set {
-            MainActor.assumeIsolated {
-                let r = VolumeCurve.exponentRange
-                AppModel.shared.volumeExponent = min(r.upperBound, max(r.lowerBound, newValue))
-            }
-        }
+        set { MainActor.assumeIsolated { AppModel.shared.volumeExponent = newValue } }
     }
 
     @objc var ntsMuted: Bool {
