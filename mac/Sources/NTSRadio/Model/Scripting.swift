@@ -77,8 +77,8 @@ enum ScriptState {
             guard m.catalog.mixtapes.contains(where: { $0.alias == value }) else { return nil }
             return .mixtape(value)
         case "channel":
-            guard let n = Int(value), m.catalog.channels.contains(where: { $0.number == n }) else { return nil }
-            return .channel(n)
+            guard let n = Int(value).flatMap(ChannelNumber.init(rawValue:)) else { return nil }
+            return .channel(n.rawValue)
         // `episode:<show>/<episode>`. Unlike a mixtape or a channel there is
         // nothing local to check it against — the catalog holds no list of the
         // ~89,000 episodes — so both halves being present is the whole test, and
@@ -551,10 +551,7 @@ final class NTSOpenCatalogCommand: NTSCommand {
             if let channel = self.evaluatedArguments?["channel"] as? Int {
                 guard let number = ChannelNumber(rawValue: channel) else {
                     self.scriptErrorNumber = -1703   // errAETypeError
-                    self.scriptErrorString = """
-                        NTS \(channel) is not a channel. Use \
-                        \(ChannelNumber.allCases.map { String($0.rawValue) }.joined(separator: " or ")).
-                        """
+                    self.scriptErrorString = "NTS \(channel) is not a channel. Use 1 or 2."
                     return false
                 }
                 m.scheduleChannel = number
