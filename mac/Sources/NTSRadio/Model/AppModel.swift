@@ -439,12 +439,13 @@ final class AppModel: ObservableObject {
     /// mixtape the catalog no longer carries leaves launch idle.
     func resumeLastSource() {
         guard preferences.resumeLastSource, let id = preferences.lastSource else { return }
-        guard let s = ScriptState.selection(from: id), s != .idle else {
-            Log.app.info("resume: \(id, privacy: .public) is not in the catalog, staying idle")
-            return
+        switch ScriptState.selection(from: id) {
+        case let s? where SourceKey(s) != nil:
+            Log.app.info("resume: tuning \(id, privacy: .public)")
+            select(s)
+        default:
+            Log.app.info("resume: \(id, privacy: .public) is not a channel or mixtape in the catalog, staying idle")
         }
-        Log.app.info("resume: tuning \(id, privacy: .public)")
-        select(s)
     }
 
     /// Stash the outgoing source's tracks/episode before `selection` moves on,

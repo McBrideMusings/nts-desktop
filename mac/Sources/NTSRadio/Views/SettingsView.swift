@@ -279,11 +279,10 @@ private extension View {
 
 /// Reports its content's size rounded up to whole points.
 ///
-/// The window takes its size from the pane, and a pane whose height came out
-/// fractional (595.5) never settled: AppKit snapped the window to 596, the
-/// hosting view read the spare half point as safe area and grew by it, and
-/// every pass repeated that until AppKit raised for running out of passes and
-/// the app died. A whole-point height is one the window can match exactly.
+/// The window takes its size from the pane and snaps to whole points. A
+/// fractional pane height leaves a spare half point that the hosting view reads
+/// as safe area and grows by on every layout pass, until AppKit raises for
+/// running out of passes; a whole-point height is one the window matches exactly.
 private struct WholePoints: Layout {
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let size = subviews.first?.sizeThatFits(proposal) ?? .zero
