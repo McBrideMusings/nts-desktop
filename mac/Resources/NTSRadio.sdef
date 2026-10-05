@@ -257,6 +257,14 @@
             <result type="text" description="The state after closing, as JSON."/>
         </command>
 
+        <command name="simulate" code="NTSrSIMU"
+                 description="Provoke one of the events stream recovery answers, so a script can watch a channel or mixtape mend itself without sleeping the Mac or dropping its network. Read the recovery record and rendering from the state afterwards.">
+            <cocoa class="NTSSimulateCommand"/>
+            <direct-parameter type="text"
+                              description="stall (the audio stops while play stays down; recovery reloads after 15 seconds of silence), failure (the stream is swapped for one that cannot connect), wake (what the Mac waking delivers), or network (what the network coming back delivers)."/>
+            <result type="text" description="The state straight after the event, as JSON."/>
+        </command>
+
         <command name="check for updates" code="NTSrUPDT"
                  description="Ask Sparkle to check for an update now, the same as the status menu's or the main menu's Check for Updates… item. Sparkle may put up its own window to report what it found.">
             <cocoa class="NTSCheckForUpdatesCommand"/>

@@ -1,8 +1,8 @@
 # Hand verification
 
-**264 claims about how this app behaves**, one per row, precise enough to tell pass from fail. Use them as a lookup while verifying a change, or as a regression sweep when a change is broad enough to warrant one.
+**274 claims about how this app behaves**, one per row, precise enough to tell pass from fail. Use them as a lookup while verifying a change, or as a regression sweep when a change is broad enough to warrant one.
 
-They came out of a product-description pass over the whole app in August 2026: 27 documents written from the code, then driven against the installed build. The 65 rows whose Device includes `script` carry a machine-readable check, and `admin verify` runs them and writes their Result (see **Running the scripted rows**). The rest need a person and are marked `—` until someone runs them.
+They came out of a product-description pass over the whole app in August 2026: 27 documents written from the code, then driven against the installed build. The 75 rows whose Device includes `script` carry a machine-readable check, and `admin verify` runs them and writes their Result (see **Running the scripted rows**). The rest need a person and are marked `—` until someone runs them.
 
 The machine-specific side of verification — how to build, install and get a handle on the app — is `.claude/skills/verify-project/SKILL.md`, which is deliberately untracked. This directory is the part that is true on any machine.
 
@@ -17,6 +17,7 @@ The machine-specific side of verification — how to build, install and get a ha
 | [catalog.md](catalog.md) | `catalog/*` |
 | [system.md](system.md) | `system/*` |
 | [cross-cutting.md](cross-cutting.md) | `cross-cutting/*` |
+| [unattended.md](unattended.md) | stream recovery after sleep, network loss and a dead item — the root job's release bar |
 
 Each file has one table per document. Each row is an item with a stable ID, a priority, what it needs, the claim with a link to the document section, the setup, numbered steps, the expected result, and a Result column. Items that cannot be checked by hand are listed under each document as "Not checkable by hand".
 

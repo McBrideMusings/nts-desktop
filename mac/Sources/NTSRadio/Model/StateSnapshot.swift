@@ -159,6 +159,28 @@ struct StateSnapshot: Codable {
     /// tune — "" when idle or an episode was the last thing tuned.
     var resumeLastSource: Bool
     var lastSource: String
+
+    /// What the engine is doing about a stream that should be playing and
+    /// is silent. `playing` and `rendering` say that it is silent; this says
+    /// whether anything is being done about it, and what mended it last time.
+    var recovery: RecoverySnapshot
+}
+
+/// `PlayerEngine`'s recovery state, mirrored for `StateSnapshot.recovery`.
+/// Times are ISO 8601, "" when the thing has not happened since launch.
+struct RecoverySnapshot: Codable {
+    /// Whether what is loaded is a channel or a mixtape — the only kind
+    /// recovery reloads.
+    var endless: Bool
+    /// Reloads since audio last came out; 0 when no recovery is under way.
+    var attempts: Int
+    var reason: String
+    var lastAttempt: String
+    /// Streaks that ended with audio coming out again, since launch.
+    var recoveries: Int
+    var lastRecovered: String
+    /// "satisfied", "unsatisfied", or "unknown" before the first report.
+    var network: String
 }
 
 /// `ShowIndex`'s coverage, mirrored for `StateSnapshot.showIndex`.
@@ -342,7 +364,16 @@ extension AppModel {
             recordedSources: recording.sources,
             trackLead: preferences.trackLead.rawValue,
             resumeLastSource: preferences.resumeLastSource,
-            lastSource: preferences.lastSource ?? ""
+            lastSource: preferences.lastSource ?? "",
+            recovery: RecoverySnapshot(
+                endless: engine.isEndless,
+                attempts: engine.recoveryAttempts,
+                reason: engine.recoveryReason,
+                lastAttempt: engine.lastRecoveryAttempt.map(LogFiles.stamp) ?? "",
+                recoveries: engine.recoveries,
+                lastRecovered: engine.lastRecovered.map(LogFiles.stamp) ?? "",
+                network: engine.networkSatisfied.map { $0 ? "satisfied" : "unsatisfied" } ?? "unknown"
+            )
         )
     }
 }

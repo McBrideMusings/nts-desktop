@@ -48,6 +48,7 @@ preference.
 | Menu-bar bars tracking playback status | status at a glance |
 | Media keys, Control Centre tile | root |
 | Auto-update | root |
+| Stream recovery after sleep, network loss and a dead item | root |
 | Star and follow from the card, account sync, saved list | capture |
 | Tracklists, live and episode | capture |
 | Source links out to nts.live, genre chips | reach the service |

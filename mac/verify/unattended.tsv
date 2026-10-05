@@ -1,0 +1,11 @@
+# ID	steps	check	note — see run.py for the step vocabulary
+UNA-01	tune channel:1 --wait ; simulate failure ; until 20 .rendering	.[0].rendering and (.[1].rendering | not) and .[2].rendering and .[2].recovery.recoveries == .[0].recovery.recoveries + 1 and (.[2].recovery.reason | startswith("item failed")) and .[2].recovery.attempts == 0
+UNA-02	tune mixtape:slow-focus --wait ; simulate stall ; simulate wake ; until 10 .rendering	.[0].rendering and (.[1].rendering | not) and .[1].playing and .[2].recovery.attempts == 1 and .[2].recovery.reason == "wake" and .[3].rendering and .[3].recovery.recoveries == .[0].recovery.recoveries + 1	10s is inside the 15s stall grace, so the wake did it
+UNA-03	tune channel:2 --wait ; simulate stall ; simulate network ; until 10 .rendering	.[0].rendering and (.[1].rendering | not) and .[2].recovery.reason == "network" and .[3].rendering and .[3].recovery.recoveries == .[0].recovery.recoveries + 1	10s is inside the 15s stall grace, so the network return did it
+UNA-04	tune channel:1 --wait ; simulate stall ; until 30 .rendering	.[0].rendering and (.[1].rendering | not) and .[2].rendering and .[2]._ms >= 14000 and .[2].recovery.reason == "stalled" and .[2].recovery.recoveries == .[0].recovery.recoveries + 1
+UNA-05	tune episode:anz/anz-25th-june-2026 --wait ; sleep 2 ; simulate stall ; simulate wake	.[0].rendering and (.[3].recovery.endless | not) and .[3].recovery.attempts == 0 and (.[3].rendering | not) and .[3].position > 1
+UNA-06	tune channel:1 --wait ; pause ; simulate wake ; simulate failure ; sleep 2 ; state	(.[1].playing | not) and .[2].recovery.attempts == 0 and .[5].recovery.attempts == 0 and (.[5].rendering | not)
+UNA-07	simulate nonsense	.[0].code == -1703
+UNA-10	manual	admin unattended sleep exits 0: rendering within 30s of the Mac waking, recovery.reason wake or network
+UNA-11	manual	admin unattended wifi exits 0: rendering within 30s of Wi-Fi coming back, recovery.reason network
+UNA-12	manual	admin unattended soak exits 0: no silent stretch longer than 30s across 4 hours

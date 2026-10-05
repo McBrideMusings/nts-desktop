@@ -584,7 +584,7 @@ final class AppModel: ObservableObject {
             return
         }
         let url = currentMixtape?.streamURL ?? currentChannel?.streamURL
-        if let url { engine.load(url, autoplay: autoplay, force: force) }
+        if let url { engine.load(url, endless: true, autoplay: autoplay, force: force) }
     }
 
     /// Fetch an episode and start it.
@@ -613,7 +613,7 @@ final class AppModel: ObservableObject {
                 // known in advance rather than revealed as it airs, so it goes
                 // straight in rather than through `receive`'s live-buffer delay.
                 self.publish(TracklistAdapter.tracks(from: detail.tracklist, hue: 0))
-                self.engine.load(stream, autoplay: autoplay)
+                self.engine.load(stream, endless: false, autoplay: autoplay)
             } catch {
                 guard !Task.isCancelled, let self else { return }
                 self.episodeError = error.localizedDescription

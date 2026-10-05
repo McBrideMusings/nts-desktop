@@ -646,6 +646,34 @@ final class NTSCloseCatalogCommand: NTSCommand {
     }
 }
 
+/// `simulate stall|failure|wake|network` — the events stream recovery answers,
+/// delivered on demand. `wake` and `network` call the same handlers the real
+/// notification and path monitor do; `stall` and `failure` break the player
+/// underneath an unchanged intent, which is what sleep and a dead server do.
+@objc(NTSSimulateCommand)
+final class NTSSimulateCommand: NTSCommand {
+    override func performDefaultImplementation() -> Any? {
+        run {
+            let engine = AppModel.shared.engine
+            let what = (self.directParameter as? String) ?? ""
+            switch what {
+            case "stall":   engine.simulateStall()
+            case "failure": engine.simulateFailure()
+            case "wake":    engine.didWake()
+            case "network":
+                // A return needs a loss before it.
+                engine.networkChanged(satisfied: false)
+                engine.networkChanged(satisfied: true)
+            default:
+                self.scriptErrorNumber = -1703   // errAETypeError
+                self.scriptErrorString = "\"\(what)\" is not an event. Use stall, failure, wake or network."
+                return false
+            }
+            return true
+        }
+    }
+}
+
 /// The same call the status menu's and the main menu's "Check for Updates…"
 /// items make. Sparkle owns everything past this point — the network fetch,
 /// and any window it puts up to report what it found or that the appcast
