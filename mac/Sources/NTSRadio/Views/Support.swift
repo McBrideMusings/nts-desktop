@@ -215,6 +215,68 @@ final class LoopingPlayerView: NSView {
     }
 }
 
+// MARK: - Whether the window is on screen
+
+extension View {
+    /// Writes whether this view's window is on screen — ordered in, not
+    /// minimised, not fully covered — into `onScreen`, and keeps it current.
+    /// A view with no window (an offscreen snapshot) counts as on screen.
+    func windowOnScreen(_ onScreen: Binding<Bool>) -> some View {
+        background(WindowOnScreenReader(onScreen: onScreen))
+    }
+}
+
+private struct WindowOnScreenReader: NSViewRepresentable {
+    @Binding var onScreen: Bool
+
+    func makeNSView(context: Context) -> WindowOnScreenView {
+        let v = WindowOnScreenView()
+        v.report = { onScreen = $0 }
+        return v
+    }
+
+    func updateNSView(_ nsView: WindowOnScreenView, context: Context) {
+        nsView.report = { onScreen = $0 }
+    }
+}
+
+private final class WindowOnScreenView: NSView {
+    var report: (Bool) -> Void = { _ in }
+    private var observer: NSObjectProtocol?
+    /// What was last logged for the current window.
+    private var logged: Bool?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let observer { NotificationCenter.default.removeObserver(observer) }
+        observer = nil
+        logged = nil
+        if let window {
+            // Ordering out, miniaturising and being covered all post this.
+            observer = NotificationCenter.default.addObserver(
+                forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.publish() }
+            }
+        }
+        publish()
+    }
+
+    private func publish() {
+        let onScreen = window.map { $0.occlusionState.contains(.visible) } ?? true
+        if onScreen != logged {
+            Log.app.info("window on screen: \(onScreen) title=\(self.window?.title ?? "none", privacy: .public)")
+            logged = onScreen
+        }
+        // Out of the view update that may have caused it.
+        DispatchQueue.main.async { [report] in report(onScreen) }
+    }
+
+    deinit {
+        if let observer { NotificationCenter.default.removeObserver(observer) }
+    }
+}
+
 // MARK: - Loading sweep
 
 /// A diagonal light pass, used to say "requested but not yet rendering audio"

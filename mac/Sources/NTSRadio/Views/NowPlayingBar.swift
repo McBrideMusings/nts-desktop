@@ -228,8 +228,12 @@ private struct LevelLamps: View {
     private let bands = 5, rows = 7
     private let lamp: CGFloat = 2.2, gap: CGFloat = 1.0
 
+    /// Whether the window is on screen. A hidden window draws nothing anyone
+    /// sees, and drawing it keeps SwiftUI's GPU renderer holding its memory.
+    @State private var onScreen = true
+
     /// Whether the picture is allowed to change from frame to frame.
-    private var animating: Bool { running && !reduceMotion }
+    private var animating: Bool { running && !reduceMotion && onScreen }
 
     var body: some View {
         // Stopping the clock stops the work: a paused or reduced-motion panel
@@ -263,6 +267,7 @@ private struct LevelLamps: View {
             }
             .frame(width: CGFloat(bands) * lamp + CGFloat(bands - 1) * gap, height: 22)
         }
+        .windowOnScreen($onScreen)
     }
 
     // MARK: What the lamps show
