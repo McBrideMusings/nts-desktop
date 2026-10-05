@@ -549,12 +549,15 @@ final class NTSOpenCatalogCommand: NTSCommand {
                 m.catalogTab = tab
             }
             if let channel = self.evaluatedArguments?["channel"] as? Int {
-                guard m.catalog.channels.contains(where: { $0.number == channel }) else {
+                guard let number = ChannelNumber(rawValue: channel) else {
                     self.scriptErrorNumber = -1703   // errAETypeError
-                    self.scriptErrorString = "NTS \(channel) is not a channel. Use 1 or 2."
+                    self.scriptErrorString = """
+                        NTS \(channel) is not a channel. Use \
+                        \(ChannelNumber.allCases.map { String($0.rawValue) }.joined(separator: " or ")).
+                        """
                     return false
                 }
-                m.scheduleChannel = channel
+                m.scheduleChannel = number
             }
             m.query = (self.evaluatedArguments?["searchingFor"] as? String) ?? ""
             m.detail = nil

@@ -28,15 +28,15 @@ struct ScheduleTimeline: View {
 
     private var controls: some View {
         HStack(spacing: 8) {
-            ForEach(model.catalog.channels, id: \.number) { channel in
-                let on = model.scheduleChannel == channel.number
-                Button { model.scheduleChannel = channel.number } label: {
-                    Text("NTS \(channel.number)")
+            ForEach(ChannelNumber.allCases, id: \.self) { channel in
+                let on = model.scheduleChannel == channel
+                Button { model.scheduleChannel = channel } label: {
+                    Text("NTS \(channel.rawValue)")
                         .font(Theme.mono(9, .bold))
                         .tracking(1.2)
-                        .foregroundStyle(on ? channelInk(channel.number) : Theme.inkMuted)
+                        .foregroundStyle(on ? channelInk(channel.rawValue) : Theme.inkMuted)
                         .padding(.horizontal, 9).padding(.vertical, 5)
-                        .background(on ? channelFill(channel.number) : .clear)
+                        .background(on ? channelFill(channel.rawValue) : .clear)
                         .overlay(Rectangle().stroke(Theme.hairline(on ? 0 : 0.10), lineWidth: 1))
                 }
                 .buttonStyle(.plain)

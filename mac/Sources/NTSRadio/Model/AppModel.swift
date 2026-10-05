@@ -834,7 +834,7 @@ final class AppModel: ObservableObject {
     /// Which channel's grid the schedule tab is showing. One at a time: at the
     /// window's 340pt floor, two columns of programme titles leave about fifteen
     /// characters each.
-    @Published var scheduleChannel: Int = 1
+    @Published var scheduleChannel: ChannelNumber = .one
 
     /// One day of one channel's grid — the unit the timeline scrolls through.
     struct ScheduleDay: Identifiable {
@@ -849,7 +849,7 @@ final class AppModel: ObservableObject {
 
     /// The selected channel's grid, grouped into days in air order.
     var scheduleDays: [ScheduleDay] {
-        let slots = catalog.channels.first { $0.number == scheduleChannel }?.upcoming ?? []
+        let slots = catalog[scheduleChannel].upcoming
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
 
@@ -880,7 +880,7 @@ final class AppModel: ObservableObject {
     /// timeline scrolls to and marks ON AIR.
     var onAirSlot: NTSAPI.Broadcast? {
         let now = Date()
-        return catalog.channels.first { $0.number == scheduleChannel }?.upcoming.first {
+        return catalog[scheduleChannel].upcoming.first {
             ($0.start ?? .distantFuture) <= now && now < ($0.end ?? .distantPast)
         }
     }
@@ -890,7 +890,7 @@ final class AppModel: ObservableObject {
     /// in one of them this is what the NOW rule sits above.
     var nextSlot: NTSAPI.Broadcast? {
         let now = Date()
-        return catalog.channels.first { $0.number == scheduleChannel }?.upcoming.first {
+        return catalog[scheduleChannel].upcoming.first {
             ($0.start ?? .distantPast) > now
         }
     }

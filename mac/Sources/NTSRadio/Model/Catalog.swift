@@ -38,6 +38,13 @@ struct SlotDetail: Hashable, Codable {
     let location: String
 }
 
+/// A channel that exists. Where a value has to name a channel and nothing else,
+/// this is the type, so a 3 is turned away where it is parsed rather than
+/// leaving a view with an empty grid and no reason why.
+enum ChannelNumber: Int, CaseIterable {
+    case one = 1, two = 2
+}
+
 struct Channel: Identifiable, Hashable {
     let number: Int          // 1 or 2
     let artHue: Double
@@ -153,6 +160,13 @@ final class Catalog: ObservableObject {
             Channel(number: 1, artHue: 235, accent: Theme.ch1, accentText: Theme.ch1Text, city: "LONDON"),
             Channel(number: 2, artHue: 22,  accent: Theme.ch2, accentText: Theme.ch2Text, city: "LOS ANGELES"),
         ]
+    }
+
+    /// The channel a `ChannelNumber` names. Never missing: `init` lays out one
+    /// entry per case in number order, and every later write edits an entry in
+    /// place.
+    subscript(_ number: ChannelNumber) -> Channel {
+        channels[number.rawValue - 1]
     }
 
     /// Map a fetched (or cached) feed into the in-memory catalog. Entries with

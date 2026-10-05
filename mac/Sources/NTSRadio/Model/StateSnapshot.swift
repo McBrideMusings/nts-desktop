@@ -338,7 +338,7 @@ extension AppModel {
             catalogQuery: query,
             catalogRows: catalogRows.count,
             catalogFirstRows: catalogRows.prefix(3).map { "\($0.title) · \($0.meta)" },
-            scheduleChannel: scheduleChannel,
+            scheduleChannel: scheduleChannel.rawValue,
             scheduleDays: scheduleDays.map { "\($0.label) · \($0.slots.count)" },
             onAir: onAirSlot.map { "\($0.startEnd) \($0.title)" } ?? "",
             nextUp: nextSlot.map { "\($0.startEnd) \($0.title)" } ?? "",
