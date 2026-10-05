@@ -26,6 +26,7 @@ final class Preferences: ObservableObject {
         ).clamped
         trackLead = TrackLead(rawValue: defaults.string(forKey: Keys.trackLead) ?? "") ?? .title
         showInDock = defaults.bool(forKey: Keys.showInDock)
+        resumeLastSource = defaults.bool(forKey: Keys.resumeLastSource)
         startOnLogin = loginItem.isEnabled
         // Dragging the volume slider writes the gain on every frame; only the
         // disk write waits for the drag to settle. `output` stays live.
@@ -49,6 +50,8 @@ final class Preferences: ObservableObject {
         static let trackLead = "trackLead"
         static let showInDock = "showInDock"
         static let exploreFilters = "exploreFilters"
+        static let resumeLastSource = "resumeLastSource"
+        static let lastSource = "lastSource"
     }
 
     // MARK: Volume
@@ -116,6 +119,21 @@ final class Preferences: ObservableObject {
                 ?? NTSAPI.ExploreFilters()
         }
         set { defaults.set(try? JSONEncoder().encode(newValue), forKey: Keys.exploreFilters) }
+    }
+
+    // MARK: Launch
+
+    /// Whether launch tunes back to `lastSource` instead of starting idle.
+    @Published var resumeLastSource: Bool {
+        didSet { defaults.set(resumeLastSource, forKey: Keys.resumeLastSource) }
+    }
+
+    /// The channel or mixtape last tuned, as the id `tune to` takes
+    /// (`mixtape:slow-focus`, `channel:1`). Nil once idle or an episode is
+    /// tuned — an episode would need its position back, which nothing keeps.
+    var lastSource: String? {
+        get { defaults.string(forKey: Keys.lastSource) }
+        set { defaults.set(newValue, forKey: Keys.lastSource) }
     }
 
     // MARK: Login item

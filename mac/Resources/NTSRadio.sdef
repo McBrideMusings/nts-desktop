@@ -97,6 +97,11 @@
                       description="Whether Sparkle checks for updates on its own schedule, the same toggle as Settings ▸ General.">
                 <cocoa key="ntsAutoChecksForUpdates"/>
             </property>
+
+            <property name="resume last source" code="pRLS" type="boolean"
+                      description="Whether launch tunes back to the last channel or mixtape instead of starting idle, the same toggle as Settings ▸ General. An episode, or stop, leaves nothing to resume.">
+                <cocoa key="ntsResumeLastSource"/>
+            </property>
         </class-extension>
 
         <command name="tune to" code="NTSrTUNE"

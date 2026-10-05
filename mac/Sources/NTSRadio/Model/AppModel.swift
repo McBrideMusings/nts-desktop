@@ -408,6 +408,10 @@ final class AppModel: ObservableObject {
     func select(_ s: Selection, autoplay: Bool = true) {
         cacheCurrentSource()
         selection = s
+        switch s {
+        case .mixtape, .channel: preferences.lastSource = ScriptState.sourceID(s)
+        case .idle, .episode: preferences.lastSource = nil
+        }
         // An episode's fetch, detail and failure belong to that episode; carried
         // onto a channel or a mixtape, a stale `episodeError` reads as this
         // source having failed.
@@ -428,6 +432,19 @@ final class AppModel: ObservableObject {
         loadCurrent(autoplay: autoplay)
         updateTracklist()
         updateMixtapeTitle()
+    }
+
+    /// Tune back to the source the last session ended on, when Settings ▸
+    /// General asks for it — through `tune to`'s own parse and `select`, so a
+    /// mixtape the catalog no longer carries leaves launch idle.
+    func resumeLastSource() {
+        guard preferences.resumeLastSource, let id = preferences.lastSource else { return }
+        guard let s = ScriptState.selection(from: id), s != .idle else {
+            Log.app.info("resume: \(id, privacy: .public) is not in the catalog, staying idle")
+            return
+        }
+        Log.app.info("resume: tuning \(id, privacy: .public)")
+        select(s)
     }
 
     /// Stash the outgoing source's tracks/episode before `selection` moves on,

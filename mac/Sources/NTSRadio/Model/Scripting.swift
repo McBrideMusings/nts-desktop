@@ -187,6 +187,11 @@ extension NSApplication {
         get { MainActor.assumeIsolated { AppModel.shared.preferences.autoChecksForUpdates } }
         set { MainActor.assumeIsolated { AppModel.shared.preferences.autoChecksForUpdates = newValue } }
     }
+
+    @objc var ntsResumeLastSource: Bool {
+        get { MainActor.assumeIsolated { AppModel.shared.preferences.resumeLastSource } }
+        set { MainActor.assumeIsolated { AppModel.shared.preferences.resumeLastSource = newValue } }
+    }
 }
 
 // MARK: - Commands

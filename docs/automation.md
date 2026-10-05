@@ -46,7 +46,7 @@ Grouped by what they answer:
 - **Window** — `pane`, `tracksOpen`, `windowVisible`, `catalogOpen`, `catalogTab`, `catalogQuery`, `catalogDetail`, `detailTags`, `settingsVisible`, `settingsPane`, `knobAngle`
 - **Catalog** — `catalogRows`, `catalogFirstRows`, `savedCount`, `savedKeys` (every saved item's id in the Saved tab's order — `show:<alias>`, `mixtape:<alias>`, `episode:<show>/<episode>`; a `save` puts its item first), `mixtapeCount`, `genreCount`, `moodCount`, `channels`, `onAir`, `nextUp`, `scheduleChannel`, `scheduleDays`, `showIndex`
 - **Explore** — `exploreMood`, `exploreGenres`, `exploreMusicOnly`, `exploreFocused`, `exploreLoaded`, `exploreTotal`
-- **App** — `signedIn`, `syncedWithAccount`, `outage`, `running`, `autoChecksForUpdates`, `canCheckForUpdates`
+- **App** — `signedIn`, `syncedWithAccount`, `outage`, `running`, `autoChecksForUpdates`, `canCheckForUpdates`, `resumeLastSource`, `lastSource` (the `mixtape:<alias>` or `channel:<n>` launch would tune; `""` once `stop` or an episode leaves nothing to resume)
 - **Logs** — `logDirectory`, `recordedSources`
 
 **`playing` and `rendering` are different.** The first means playback was asked for; the second means audio is actually coming out. Wait on `rendering` if you want sound, not intent.
@@ -161,7 +161,7 @@ osascript -e 'tell application "NTS Radio" to check for updates'
 
 Eight are read-only: `state`, `playing`, `rendering`, `source`, `source name`, `current track`, `window visible`, `knob angle`.
 
-Six are writable:
+Seven are writable:
 
 ```bash
 osascript -e 'tell application "NTS Radio" to set its volume to 30'
@@ -170,6 +170,7 @@ osascript -e 'tell application "NTS Radio" to set its volume steepness to 3'
 osascript -e 'tell application "NTS Radio" to set muted to true'
 osascript -e 'tell application "NTS Radio" to set auto checks for updates to true'
 osascript -e 'tell application "NTS Radio" to set track lead to "artist"'
+osascript -e 'tell application "NTS Radio" to set resume last source to true'
 ```
 
 ### ⚠️ `set volume to 30` does not work

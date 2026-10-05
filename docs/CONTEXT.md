@@ -8,7 +8,7 @@ Every number below was measured against the running app rather than read from a 
 
 ## The objects
 
-**Source.** The thing currently tuned: one of the two live *channels*, one *mixtape*, or one past *episode*. The fourth state is *idle* — nothing tuned, which is what every launch starts in. `Selection` in `AppModel.swift`.
+**Source.** The thing currently tuned: one of the two live *channels*, one *mixtape*, or one past *episode*. The fourth state is *idle* — nothing tuned, which is what launch starts in unless *resume playback on launch* is on and the last source was a channel or mixtape. `Selection` in `AppModel.swift`.
 
 **Channel.** NTS 1 or NTS 2. Endless: no duration, no position, so no seek bar. Identified to a script as `channel:1`.
 

@@ -98,6 +98,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 self.showStillStatusItem(for: selection)
             }
             .store(in: &bag)
+
+        // Last, so the status item is already following the selection it sets.
+        model.resumeLastSource()
     }
 
     /// The status item with no motion: the badge for whatever is selected, held

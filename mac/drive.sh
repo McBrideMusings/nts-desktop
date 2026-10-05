@@ -61,7 +61,7 @@ q() {
 # quoted for its text ones.
 value() {
   case $1 in
-    volume|volume-steepness|muted|auto-checks-for-updates) printf '%s' "$2" ;;
+    volume|volume-steepness|muted|auto-checks-for-updates|resume-last-source) printf '%s' "$2" ;;
     *) q "$2" ;;
   esac
 }

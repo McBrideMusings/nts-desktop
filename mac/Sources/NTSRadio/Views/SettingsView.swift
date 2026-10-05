@@ -83,6 +83,7 @@ private struct GeneralSettings: View {
             LabeledContent("Startup:") {
                 VStack(alignment: .leading, spacing: 6) {
                     Toggle("Open NTS Radio at login", isOn: $prefs.startOnLogin)
+                    Toggle("Resume playback on launch", isOn: $prefs.resumeLastSource)
                     Toggle("Show in Dock", isOn: $prefs.showInDock)
                     Text("With the Dock icon hidden, NTS Radio lives in the menu bar only.")
                         .settingsNote()

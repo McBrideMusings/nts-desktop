@@ -154,6 +154,11 @@ struct StateSnapshot: Codable {
 
     /// Which line leads a tracklist row — "title" or "artist".
     var trackLead: String
+
+    /// Whether launch tunes `lastSource`, and the channel or mixtape it would
+    /// tune — "" when idle or an episode was the last thing tuned.
+    var resumeLastSource: Bool
+    var lastSource: String
 }
 
 /// `ShowIndex`'s coverage, mirrored for `StateSnapshot.showIndex`.
@@ -335,7 +340,9 @@ extension AppModel {
             canCheckForUpdates: preferences.canCheckForUpdates,
             logDirectory: LogFiles.directory.path,
             recordedSources: recording.sources,
-            trackLead: preferences.trackLead.rawValue
+            trackLead: preferences.trackLead.rawValue,
+            resumeLastSource: preferences.resumeLastSource,
+            lastSource: preferences.lastSource ?? ""
         )
     }
 }
