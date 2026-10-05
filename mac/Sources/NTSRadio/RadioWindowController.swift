@@ -3,7 +3,7 @@ import AppKit
 
 /// Hosts the radio UI (`PopoverView`) in a single window that the status-item
 /// click shows and hides, built the first time it is shown and kept from then
-/// on. Unlike the old `MenuBarExtra` popover, this window stays open when the
+/// on, with its SwiftUI content taken out while it is closed. Unlike the old `MenuBarExtra` popover, this window stays open when the
 /// app isn't frontmost and can be dragged anywhere on screen — it's a
 /// free-floating window that happens to be summoned from the menu bar.
 @MainActor
@@ -14,6 +14,12 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
     /// that never opens the window must not build it. Read this to ask about
     /// the window; call `builtWindow()` only to put it on screen.
     private var built: KeyableWindow?
+    /// The radio UI while the window is off screen. An ordered-out window
+    /// still redraws its SwiftUI content on every model change, and each
+    /// redraw of the full window reallocates ~350MB of GPU memory, so the
+    /// content leaves the window when it goes off screen and comes back when
+    /// it returns. Kept rather than rebuilt so scroll positions survive.
+    private var parked: NSViewController?
     private static let frameName = "NTSRadioWindow"
 
     /// The smallest the window may get, in two regimes rather than one rectangle.
@@ -47,9 +53,17 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
         super.init()
     }
 
-    /// The window, building it on the first call.
+    /// The window, building it on the first call and putting back any content
+    /// `takeOffScreen` parked.
     private func builtWindow() -> KeyableWindow {
-        if let built { return built }
+        if let built {
+            if let parked {
+                built.contentViewController = parked
+                self.parked = nil
+                Log.app.info("radio window content restored")
+            }
+            return built
+        }
         let root = PopoverView()
             .environmentObject(model)
             .environmentObject(model.auth)
@@ -132,7 +146,7 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
     /// one brings it back, which is two clicks to do what you asked for once.
     func toggle(relativeTo statusButton: NSStatusBarButton?) {
         if let window = built, window.isVisible, NSApp.isActive, window.isKeyWindow {
-            window.orderOut(nil)
+            takeOffScreen(window)
         } else {
             show(relativeTo: statusButton)
         }
@@ -148,6 +162,10 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
     /// Whether the window is on screen — the scripting dictionary's
     /// `window visible`.
     var isWindowVisible: Bool { built?.isVisible ?? false }
+
+    /// Whether the radio UI is in the window — the state blob's
+    /// `windowContentAttached`.
+    var isContentAttached: Bool { built?.contentViewController != nil }
 
     /// Put the window on screen without activating the app. A scripted open must
     /// not take keyboard focus from whatever the person at the machine is typing
@@ -167,10 +185,28 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
             return
         }
         let before = window.scriptLogState
-        window.orderOut(nil)
+        takeOffScreen(window)
         Log.app.info("script close window: \(before, privacy: .public) -> \(window.scriptLogState, privacy: .public)")
     }
 
+    /// The close button and ⌘W. The window is kept (`isReleasedWhenClosed` is
+    /// false), so closing it is ordering it out like the other ways to close it.
+    nonisolated func windowWillClose(_ notification: Notification) {
+        MainActor.assumeIsolated {
+            if let window = notification.object as? NSWindow { takeOffScreen(window) }
+        }
+    }
+
+    /// Every way to close the window — the menu-bar click, the close button,
+    /// ⌘W, a script — ends here, and parks its content (see `parked`) so a
+    /// closed window does no SwiftUI work. Miniaturising does not come here.
+    private func takeOffScreen(_ window: NSWindow) {
+        window.orderOut(nil)
+        guard let content = window.contentViewController else { return }
+        parked = content
+        window.contentViewController = nil
+        Log.app.info("radio window content parked")
+    }
 
     private func placeFrame(_ window: NSWindow, relativeTo statusButton: NSStatusBarButton?) {
         if !window.isVisible, !window.setFrameUsingName(Self.frameName) {

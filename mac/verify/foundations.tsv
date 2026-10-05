@@ -27,3 +27,4 @@ DICT-07	catalog explore ; show anz ; until 10 .detailTags | length > 0	.[1].cata
 DICT-08	tune channel:1 ; get playing ; get rendering ; get source ; get source-name ; get current-track ; get volume ; get volume-curve ; get volume-steepness ; get muted ; get track-lead ; get window-visible ; get knob-angle ; get auto-checks-for-updates	.[1:] | length == 13 and all(has("error") | not)
 DICT-09	quit ; state	.[1] | has("source") and (has("error") | not)
 DICT-10	set muted true ; set auto-checks-for-updates true ; set playing true ; set source channel:1	.[0].muted and .[1].autoChecksForUpdates and .[2].code != null and .[3].code != null
+WIN-12	window open ; window close ; window open ; window close	.[0].windowContentAttached and (.[1].windowContentAttached | not) and .[2].windowContentAttached and (.[3].windowContentAttached | not)

@@ -94,7 +94,7 @@ Three properties are writable — `volume`, `muted`, `auto checks for updates`. 
 
 Recorded so they stop being re-raised. Each was investigated and is correct.
 
-**The first window open peaks near 285MB.** Drawing any SwiftUI first starts SwiftUI's GPU renderer, which takes ~200MB of GPU-driver memory for about a second, once per process. The radio window is built on its first show, so a session that never opens it never pays this.
+**Every window open peaks near 275MB.** Drawing the radio window's SwiftUI content takes ~200MB of GPU-driver memory for about a second, on each open. The window is built on its first show and holds no SwiftUI content while closed, so nothing that changes while it is closed draws it.
 
 **An episode's audio is resolved on every play.** The signed playlist's signature expires; caching it would produce dead links. `AppModel.swift:614-618`.
 

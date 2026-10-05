@@ -54,6 +54,7 @@ Not checkable by hand:
 | WIN-09 | P2 | mouse | The window's minimum size follows the two-part rule (during the drag). | Window open. | 1. Drag the corner to make it as small as possible, first wide-and-short, then narrow-and-tall. | Stops at 520×230 and at 340×520. Dragging diagonally through the corner does not stick or jump. | — |
 | WIN-10 | P2 | keyboard | ⌘W closes the window but does not quit (edge cases). | Window open and key. | 1. Press ⌘W.<br>2. Check the menu bar. | Window closes; the icon remains. | — |
 | WIN-11 | P2 | script | Window state survives a close and reopen (confirmed). | Catalog pane, drawer open. | 1. `close window`, `open window`, read `pane` and `tracksOpen`. | Both unchanged. | pass (scripted 2026-10-04) |
+| WIN-12 | P2 | script | A closed window holds no SwiftUI content, and opening it puts the content back. | Window closed. | 1. `open window`, `close window`, twice, reading `windowContentAttached` after each. | `true`, `false`, `true`, `false`. | — |
 
 Not checkable by hand:
 

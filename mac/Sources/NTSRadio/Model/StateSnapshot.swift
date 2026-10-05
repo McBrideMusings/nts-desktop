@@ -72,6 +72,11 @@ struct StateSnapshot: Codable {
     var outage: OutageSnapshot
 
     var windowVisible: Bool
+    /// Whether the radio UI is in its window. False while the window is closed
+    /// (and before it is first built): a closed window keeps no SwiftUI
+    /// content, so it does no work on a model change. A miniaturised window
+    /// keeps it.
+    var windowContentAttached: Bool
     /// Settings is its own window, so "is it up" is not answerable from
     /// anything about the radio window. Without these a script could open it
     /// and have no way to tell that it had.
@@ -297,6 +302,7 @@ extension AppModel {
             duration: (engine.duration * 10).rounded() / 10,
             outage: outage,
             windowVisible: RadioWindowController.scriptTarget?.isWindowVisible ?? false,
+            windowContentAttached: RadioWindowController.scriptTarget?.isContentAttached ?? false,
             settingsVisible: SettingsWindowController.shared.isVisible,
             settingsPane: SettingsWindowController.shared.visiblePane.rawValue,
             pane: {
