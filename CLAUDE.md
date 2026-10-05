@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-NTS Radio (git@github.com:McBrideMusings/nts-desktop.git) is a native macOS menu-bar app (SwiftUI, Swift 6) for streaming NTS Radio (nts.live) — the two live channels and all of NTS's Infinite Mixtapes, picked from a radial cover-art dial. It plays streams via AVPlayer, fetches the mixtape catalog live from `https://www.nts.live/api/v2/mixtapes` (disk-cached for offline/instant launch), and — for signed-in NTS Supporters accounts — subscribes to Google Firestore's Listen API for real-time live tracklists. Active development; the last commit merged a "now-playing source links" feature and the changelog is still at `0.1.0`.
+NTS Radio is a native macOS menu-bar app (SwiftUI, Swift 6) for streaming NTS Radio (nts.live) — the two live channels and all of NTS's Infinite Mixtapes, picked from a radial cover-art dial. It plays streams via AVPlayer, fetches the mixtape catalog live from `https://www.nts.live/api/v2/mixtapes` (disk-cached for offline/instant launch), and — for signed-in NTS Supporters accounts — subscribes to Google Firestore's Listen API for real-time live tracklists.
 
 ## Commands
 
@@ -32,10 +32,16 @@ Requires macOS 15+ and Xcode 16+ / Swift 6 to build.
 
 The whole app lives in the `mac/` Swift package (root `Makefile`/`admin.toml` just delegate into it):
 
-- `mac/Sources/NTSRadio/Model/` — `Catalog.swift` (mixtape catalog fetch/cache), `PlayerEngine.swift` (AVPlayer), `NTSAPI.swift` / `NTSAuth.swift` (NTS REST API + sign-in), `AppModel.swift` (app state), `SlotArtLoader.swift` (the schedule-artwork fetch queue — concurrency-limited, debounced, trimmed to the live grid), `ExploreLoader.swift` (the Explore paging queue), `StateSnapshot.swift` (the `Codable` type behind the AppleScript `state` blob), `NowPlayingCenter.swift` (system media keys + the Control Center tile), `TracklistAdapter.swift`, `Cache.swift`, `ShowIndex.swift` (local searchable show index), `ShowDetailBackfill.swift`
-  (the once-per-machine crawl that fills in each show's real name, location and
-  host blurb from `/api/v2/shows/<alias>`), `Saved.swift` (saved items, local and synced with the account), `CatalogRow.swift` (one tile type for the catalog grid), `Scripting.swift` (the AppleScript control surface)
-- `mac/Sources/NTSRadio/Views/` — `DialView.swift` (radial mixtape dial), `ChannelRail.swift`, `NowPlayingBar.swift`, `TracklistOverlay.swift`, `CatalogOverlay.swift` (saved / search + detail), `ExploreView.swift` (the default tab: browse the archive by mood and genre), `ScheduleTimeline.swift` (the schedule tab: a fortnight of one channel's grid, day by day), `TitleBarControls.swift` (the title bar's settings button only — the band and the centred NTS mark are `PopoverView`'s, because AppKit insets the accessory past the traffic lights), `SettingsView.swift` (the panes of the Settings window — General and Account — as plain system `Form`s in the `.columns` style, deliberately carrying no `Theme` values), `MenuBarIcon.swift`, `PopoverView.swift`
+- `mac/Sources/NTSRadio/Model/` — only the files whose names don't say what they hold:
+  - `Scripting.swift` and `mac/Resources/NTSRadio.sdef` are the two halves of the AppleScript control surface; `StateSnapshot.swift` is the `Codable` type behind its `state` blob.
+  - `SlotArtLoader.swift` is the schedule-artwork fetch queue — concurrency-limited, debounced, trimmed to the live grid; `ExploreLoader.swift` is the Explore paging queue.
+  - `NowPlayingCenter.swift` owns the system media keys and the Control Center tile.
+  - `ShowDetailBackfill.swift` is the once-per-machine crawl that fills in each show's real name, location and host blurb from `/api/v2/shows/<alias>`.
+  - `CatalogRow.swift` is the one tile type for the catalog grid.
+- `mac/Sources/NTSRadio/Views/` — likewise:
+  - `ExploreView.swift` is the default tab; `ScheduleTimeline.swift` is the schedule tab, a fortnight of one channel's grid, day by day.
+  - `TitleBarControls.swift` holds the title bar's settings button only — the band and the centred NTS mark are `PopoverView`'s, because AppKit insets the accessory past the traffic lights.
+  - `SettingsView.swift` draws the Settings window's panes as plain system `Form`s in the `.columns` style, deliberately carrying no `Theme` values.
 
 ### Where the window can be
 
@@ -44,26 +50,14 @@ The whole app lives in the `mac/` Swift package (root `Makefile`/`admin.toml` ju
 now-playing bar can never light both. The tracklist is **not** a third case: it is
 a drawer (`AppModel.tracksOpen`) that covers whichever pane is up and gives it
 back, with its own button outside the switch. All four combinations of the two
-are real, visible states. This replaced two independent `Bool`s whose fourth
-combination drew the catalog over the tracklist while leaving both buttons lit.
+are real, visible states.
 
 Nothing is drawn over the radio window. Settings and the account are the two
-panes of one real window (`SettingsWindowController` + `SettingsView`), so the
-title bar carries only a gear — whose green dot is the signed-in state.
-
-Four rules for that window:
-
-- **Don't use SwiftUI's `Settings` scene** — see `docs/adr/0003-hand-built-settings-window.md`.
-- **The tabs are an `NSToolbar` with `toolbarStyle = .preference`**, not a
-  SwiftUI `TabView`, whose `.tabItem`s draw a small segmented picker rather than
-  the icon-and-label toolbar every Mac preferences window has.
-- **Use one hosted view whose pane changes** (`SettingsSelection`), never a
-  swapped `contentViewController`, which makes AppKit size the window to the
-  incoming view first.
-- **Never resize that window by hand** — set `NSHostingController.sizingOptions
-  = [.preferredContentSize]` and let AppKit do it, because `setContentSize`
-  keeps the bottom-left corner (AppKit's origin) and walks the window up the
-  screen on every switch to a taller pane.
+panes of one real window, so the title bar carries only a gear — whose green
+dot is the signed-in state. Before touching the Settings window read
+`docs/adr/0003-hand-built-settings-window.md` (no `Settings` scene, an
+`NSToolbar` for the tabs, one hosted view whose pane changes, never resize by
+hand).
 
 There is a main menu (`AppDelegate.installMainMenu`) even though an agent app
 never draws one: it is the only place a key equivalent can live, and without it
