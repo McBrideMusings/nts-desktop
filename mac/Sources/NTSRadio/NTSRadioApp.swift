@@ -60,6 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             .sink { NSApp.setActivationPolicy($0 ? .regular : .accessory) }
             .store(in: &bag)
 
+        // Builds no window yet; the first show does.
         windowController = RadioWindowController(model: model)
 
         // Open the scripting layer for business, and hand it the window (the

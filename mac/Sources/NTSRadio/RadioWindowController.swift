@@ -1,14 +1,19 @@
 import SwiftUI
 import AppKit
 
-/// Hosts the radio UI (`PopoverView`) in a single, persistent window that the
-/// status-item click shows and hides. Unlike the old `MenuBarExtra` popover,
-/// this window stays open when the app isn't frontmost and can be dragged
-/// anywhere on screen — it's a free-floating window that happens to be summoned
-/// from the menu bar.
+/// Hosts the radio UI (`PopoverView`) in a single window that the status-item
+/// click shows and hides, built the first time it is shown and kept from then
+/// on. Unlike the old `MenuBarExtra` popover, this window stays open when the
+/// app isn't frontmost and can be dragged anywhere on screen — it's a
+/// free-floating window that happens to be summoned from the menu bar.
 @MainActor
 final class RadioWindowController: NSObject, NSWindowDelegate {
-    private var window: KeyableWindow!
+    private let model: AppModel
+    /// Nil until the window is first shown. Drawing any SwiftUI first brings up
+    /// RenderBox's Metal device, a large transient GPU allocation, so a launch
+    /// that never opens the window must not build it. Read this to ask about
+    /// the window; call `builtWindow()` only to put it on screen.
+    private var built: KeyableWindow?
     private static let frameName = "NTSRadioWindow"
 
     /// The smallest the window may get, in two regimes rather than one rectangle.
@@ -38,7 +43,13 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
     }
 
     init(model: AppModel) {
+        self.model = model
         super.init()
+    }
+
+    /// The window, building it on the first call.
+    private func builtWindow() -> KeyableWindow {
+        if let built { return built }
         let root = PopoverView()
             .environmentObject(model)
             .environmentObject(model.auth)
@@ -110,7 +121,8 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
         window.minSize = Self.minSize
         window.delegate = self
         window.setFrameAutosaveName(Self.frameName)  // remember size + position across launches
-        self.window = window
+        built = window
+        return window
     }
 
     /// The menu-bar click. Hiding is only right when the window is already the
@@ -119,7 +131,7 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
     /// otherwise the first click hides what you were pointing at and the second
     /// one brings it back, which is two clicks to do what you asked for once.
     func toggle(relativeTo statusButton: NSStatusBarButton?) {
-        if window.isVisible, NSApp.isActive, window.isKeyWindow {
+        if let window = built, window.isVisible, NSApp.isActive, window.isKeyWindow {
             window.orderOut(nil)
         } else {
             show(relativeTo: statusButton)
@@ -127,37 +139,43 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
     }
 
     func show(relativeTo statusButton: NSStatusBarButton?) {
-        placeFrame(relativeTo: statusButton)
+        let window = builtWindow()
+        placeFrame(window, relativeTo: statusButton)
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
     }
 
     /// Whether the window is on screen — the scripting dictionary's
     /// `window visible`.
-    var isWindowVisible: Bool { window.isVisible }
+    var isWindowVisible: Bool { built?.isVisible ?? false }
 
     /// Put the window on screen without activating the app. A scripted open must
     /// not take keyboard focus from whatever the person at the machine is typing
     /// into, so this is `show` minus the activation.
     func showWithoutActivating() {
+        let window = builtWindow()
         let before = window.scriptLogState
-        placeFrame(relativeTo: nil)
+        placeFrame(window, relativeTo: nil)
         window.orderFrontRegardless()
-        Log.app.info("script open window: \(before, privacy: .public) -> \(self.window.scriptLogState, privacy: .public)")
+        Log.app.info("script open window: \(before, privacy: .public) -> \(window.scriptLogState, privacy: .public)")
     }
 
     /// Take the window off screen. The app lives on in the menu bar.
     func hide() {
+        guard let window = built else {
+            Log.app.info("script close window: never shown")
+            return
+        }
         let before = window.scriptLogState
         window.orderOut(nil)
-        Log.app.info("script close window: \(before, privacy: .public) -> \(self.window.scriptLogState, privacy: .public)")
+        Log.app.info("script close window: \(before, privacy: .public) -> \(window.scriptLogState, privacy: .public)")
     }
 
 
-    private func placeFrame(relativeTo statusButton: NSStatusBarButton?) {
+    private func placeFrame(_ window: NSWindow, relativeTo statusButton: NSStatusBarButton?) {
         if !window.isVisible, !window.setFrameUsingName(Self.frameName) {
             // First ever open (no saved frame): drop it just below the menu-bar icon.
-            positionUnderStatusItem(statusButton)
+            positionUnderStatusItem(window, statusButton)
             window.saveFrame(usingName: Self.frameName)
         }
         // A frame saved while the window was smaller than the rule allows comes
@@ -177,7 +195,7 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
         MainActor.assumeIsolated { Self.clamped(frameSize) }
     }
 
-    private func positionUnderStatusItem(_ statusButton: NSStatusBarButton?) {
+    private func positionUnderStatusItem(_ window: NSWindow, _ statusButton: NSStatusBarButton?) {
         guard let statusButton, let buttonWindow = statusButton.window else {
             window.center(); return
         }

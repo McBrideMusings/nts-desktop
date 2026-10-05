@@ -239,7 +239,14 @@ struct DialView: View {
                 .rotationEffect(.degrees(model.knobAngle))
                 .opacity(facing == nil ? 0 : 1)
                 .animation(.spring(response: 0.45, dampingFraction: 0.72), value: model.knobAngle)
-                .onAppear { model.knobAngle = pointerTarget }
+                // Placed, not turned: the dial is first drawn when the window
+                // first opens, by which time a source may already be tuned, and
+                // the spring would otherwise swing the mark in from 0°.
+                .onAppear {
+                    var placed = Transaction()
+                    placed.disablesAnimations = true
+                    withTransaction(placed) { model.knobAngle = pointerTarget }
+                }
                 .onChange(of: pointerTarget) { _, new in model.knobAngle += shortestTurn(to: new) }
         }
         .frame(width: g.knob, height: g.knob)
