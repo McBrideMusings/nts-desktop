@@ -108,7 +108,7 @@ def osa(script):
     return reply(subprocess.run(["osascript", "-e", script], capture_output=True, text=True))
 
 
-API_LINE = re.compile(r"^\S+ (\S+) (ok|failed)\b")
+API_LINE = re.compile(r"^(\S+) (ok|failed)\b")
 
 
 def burst(secs, commands):

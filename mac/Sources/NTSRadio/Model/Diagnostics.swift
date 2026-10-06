@@ -104,9 +104,7 @@ struct LogMessage: ExpressibleByStringInterpolation, Sendable {
     }
 }
 
-/// The name a request is logged and reported under — not a URL. The raw value
-/// is the first word of every `api` log line ("<endpoint> <path> ok|failed"),
-/// which mac/verify/run.py's API_LINE parses, so each stays a single word.
+/// The name a request is logged and reported under — not a URL.
 enum Endpoint: String {
     case schedule, mixtapes, sitemap, show, episodes, episode, moods, genres, explore, favourites
     case recentlyAdded = "recently-added"

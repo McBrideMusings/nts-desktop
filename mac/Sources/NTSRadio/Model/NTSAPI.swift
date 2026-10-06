@@ -52,7 +52,7 @@ enum NTSAPI {
         do {
             return try JSONDecoder().decode(T.self, from: data)
         } catch {
-            Log.api.error("\(endpoint.rawValue, privacy: .public) malformed response")
+            Log.api.error("\(url.path(percentEncoded: true), privacy: .public) malformed response (\(endpoint.rawValue, privacy: .public))")
             if reportFailures { await ServiceStatus.shared.failed(endpoint, APIError.malformed) }
             throw APIError.malformed
         }
@@ -68,14 +68,15 @@ enum NTSAPI {
             let (data, response) = try await URLSession.shared.data(for: request)
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
             guard (200..<300).contains(code) else { throw APIError.http(code) }
-            // "<endpoint> <path> ok|failed" — the path ties a line to one show,
-            // and mac/verify/run.py's API_LINE counts requests by it.
-            Log.api.debug("\(endpoint.rawValue, privacy: .public) \(url.path, privacy: .public) ok, \(data.count) bytes")
+            // "<path> ok|failed (<endpoint>)…" — the path ties a line to one
+            // show, and mac/verify/run.py's API_LINE counts requests by its
+            // first two words. Percent-encoded, the path can hold no space.
+            Log.api.debug("\(url.path(percentEncoded: true), privacy: .public) ok (\(endpoint.rawValue, privacy: .public)), \(data.count) bytes")
             if reportFailures { await ServiceStatus.shared.succeeded(endpoint) }
             return data
         } catch {
             let detail = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            Log.api.error("\(endpoint.rawValue, privacy: .public) \(url.path, privacy: .public) failed: \(detail, privacy: .public)")
+            Log.api.error("\(url.path(percentEncoded: true), privacy: .public) failed (\(endpoint.rawValue, privacy: .public)): \(detail, privacy: .public)")
             if reportFailures { await ServiceStatus.shared.failed(endpoint, error) }
             throw error
         }
