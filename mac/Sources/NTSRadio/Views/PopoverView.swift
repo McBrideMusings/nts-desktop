@@ -93,10 +93,10 @@ struct PopoverView: View {
             //
             // Both overlays animate off `paneState` — the pair, not the two
             // properties separately. Pressing EXPLORE while the drawer is up
-            // changes both at once, and with a curve each (0.18 and 0.22) the two
-            // ran side by side: there was a moment with the catalog, the
-            // tracklist and the faceplate all part-visible. One value means one
-            // transaction and one curve over the same region.
+            // changes both at once, and a curve each would run side by side,
+            // leaving a moment with the catalog, the tracklist and the faceplate
+            // all part-visible. One value means one transaction and one curve
+            // over the same region.
             .overlay {
                 if model.tracksOpen {
                     TracklistOverlay()
