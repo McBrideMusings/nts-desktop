@@ -351,7 +351,10 @@ extension AppModel {
             catalogFirstRows: catalogRows.prefix(3).map { "\($0.title) · \($0.meta)" },
             scheduleChannel: timeline.channel.rawValue,
             scheduleDays: timeline.days.map { "\($0.label) · \($0.slots.count)" },
-            scheduleEnded: timeline.days.flatMap(\.slots).filter { ($0.end ?? .distantFuture) <= Date() }.count,
+            scheduleEnded: {
+                let now = Date()
+                return timeline.days.flatMap(\.slots).filter { ($0.end ?? .distantFuture) <= now }.count
+            }(),
             onAir: timeline.onAir.map { "\($0.startEnd) \($0.title)" } ?? "",
             nextUp: timeline.next.map { "\($0.startEnd) \($0.title)" } ?? "",
             showIndex: ShowIndexSnapshot(
