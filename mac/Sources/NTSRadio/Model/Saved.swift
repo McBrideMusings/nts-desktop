@@ -125,74 +125,99 @@ final class Saved: ObservableObject {
         guard let token = try? await token?() else { return }
         try? await NTSFavourites.registerDevice(token: token)
         guard let favourites = try? await NTSFavourites.fetch(token: token) else { return }
+        let fetched = mergeRemote(favourites)
+        syncedWithAccount = true
+        let pendingUnstars = await flushPendingUnstars(fetched)
+        let merged = await mergeFavourites(favourites, skipping: pendingUnstars)
+        guard merged.count != items.count else { return }
+        items = merged
+        persist()
+    }
 
-        // Merged into what this session has already created rather than
-        // replacing it: a star made before the first sync completes must keep
-        // its document name, or unstarring it would have nothing to delete.
+    /// Record the fetched favourites' document names, keyed like `remote`, and
+    /// return them.
+    ///
+    /// Merged into what this session has already created rather than
+    /// replacing it: a star made before the first sync completes must keep
+    /// its document name, or unstarring it would have nothing to delete.
+    private func mergeRemote(_ favourites: [NTSFavourites.Favourite]) -> [String: NTSFavourites.Favourite] {
         let fetched = Dictionary(favourites.map { f in
             let (show, episode) = Self.normalized(f)
             return (show + ":" + episode, f)
         }, uniquingKeysWith: { first, _ in first })
         remote.merge(fetched) { mine, _ in mine }
-        syncedWithAccount = true
+        return fetched
+    }
 
-        // Anything unstarred here while this fetch was in the air — or before it
-        // started, when nothing knew the document name — is deleted now that the
-        // snapshot has named it. The fetch is older than the unstar, so the rows
-        // below must not be read as "the account still wants this".
-        //
-        // Taken as a copy *before* the deletes run: `deleteFromAccount` clears a
-        // key from `unstarred` on success, and reading the live set in the merge
-        // below then let every successfully-deleted row straight back into the
-        // list — the account forgot it and this file did not, which is worse
-        // than the bug this was written to fix.
+    /// Delete everything unstarred here while the fetch was in the air — or
+    /// before it started, when nothing knew the document name — now that the
+    /// snapshot has named it, and return the keys that were pending. The fetch
+    /// is older than the unstar, so those rows must not be read as "the account
+    /// still wants this".
+    ///
+    /// Returns a copy taken *before* the deletes run: `deleteFromAccount` clears
+    /// a key from `unstarred` on success, and a merge that read the live set
+    /// would let every successfully-deleted row straight back into the list —
+    /// the account forgot it and this file did not.
+    private func flushPendingUnstars(_ fetched: [String: NTSFavourites.Favourite]) async -> Set<String> {
         let pendingUnstars = unstarred
         for key in pendingUnstars {
             guard let favourite = fetched[key] else { continue }
             await deleteFromAccount(favourite, key: key)
         }
+        return pendingUnstars
+    }
 
+    /// The local list with every account favourite it lacks appended, except
+    /// the ones unstarred here.
+    private func mergeFavourites(_ favourites: [NTSFavourites.Favourite],
+                                 skipping pendingUnstars: Set<String>) async -> [Item] {
         var merged = items
         for favourite in favourites {
             let (showAlias, episodeAlias) = Self.normalized(favourite)
             guard !pendingUnstars.contains(showAlias + ":" + episodeAlias) else { continue }
             if episodeAlias.isEmpty {
                 guard !merged.contains(where: { $0.kind == .show && $0.alias == showAlias }) else { continue }
-                let indexed = ShowIndex.shared.ref(showAlias)
-                // The sitemap that seeds the show index carries no artwork — a
-                // show only gets a picture once it turns up in a schedule, live,
-                // or recently-added feed. A followed show that never has is
-                // fetched here instead of staying blank forever.
-                if let picture = indexed?.picture {
-                    merged.append(Item(kind: .show, alias: showAlias,
-                                       title: indexed?.name ?? ShowIndex.title(from: showAlias),
-                                       subtitle: indexed?.location ?? "", image: picture))
-                } else if let d = try? await NTSAPI.show(alias: showAlias) {
-                    merged.append(Item(kind: .show, alias: showAlias, title: d.name,
-                                       subtitle: d.location, image: d.image?.absoluteString))
-                } else {
-                    merged.append(Item(kind: .show, alias: showAlias,
-                                       title: ShowIndex.title(from: showAlias), subtitle: "", image: nil))
-                }
+                merged.append(await item(forShow: showAlias))
             } else {
-                // Episodes carry no local index the way shows do, so each one
-                // missing locally is fetched for its real title and artwork.
                 let id = "episode:\(showAlias)/\(episodeAlias)"
                 guard !merged.contains(where: { $0.id == id }) else { continue }
-                if let detail = try? await NTSAPI.episode(show: showAlias, episode: episodeAlias) {
-                    merged.append(Item(kind: .episode, alias: showAlias, episodeAlias: episodeAlias,
-                                       title: detail.name, subtitle: detail.date,
-                                       image: detail.image?.absoluteString))
-                } else {
-                    merged.append(Item(kind: .episode, alias: showAlias, episodeAlias: episodeAlias,
-                                       title: ShowIndex.title(from: episodeAlias),
-                                       subtitle: "", image: nil))
-                }
+                merged.append(await item(forEpisode: showAlias, episodeAlias))
             }
         }
-        guard merged.count != items.count else { return }
-        items = merged
-        persist()
+        return merged
+    }
+
+    /// A followed show's row: the show index's entry when it has a picture,
+    /// else the show's page, else a title made from the alias.
+    ///
+    /// The sitemap that seeds the show index carries no artwork — a show only
+    /// gets a picture once it turns up in a schedule, live, or recently-added
+    /// feed. A followed show that never has is fetched here instead of staying
+    /// blank forever.
+    private func item(forShow alias: String) async -> Item {
+        let indexed = ShowIndex.shared.ref(alias)
+        if let picture = indexed?.picture {
+            return Item(kind: .show, alias: alias, title: indexed?.name ?? ShowIndex.title(from: alias),
+                        subtitle: indexed?.location ?? "", image: picture)
+        }
+        if let d = try? await NTSAPI.show(alias: alias) {
+            return Item(kind: .show, alias: alias, title: d.name,
+                        subtitle: d.location, image: d.image?.absoluteString)
+        }
+        return Item(kind: .show, alias: alias, title: ShowIndex.title(from: alias), subtitle: "", image: nil)
+    }
+
+    /// A saved episode's row: the episode's page, else a title made from the
+    /// alias. Episodes carry no local index the way shows do, so each one
+    /// missing locally is fetched for its real title and artwork.
+    private func item(forEpisode show: String, _ episode: String) async -> Item {
+        if let detail = try? await NTSAPI.episode(show: show, episode: episode) {
+            return Item(kind: .episode, alias: show, episodeAlias: episode,
+                        title: detail.name, subtitle: detail.date, image: detail.image?.absoluteString)
+        }
+        return Item(kind: .episode, alias: show, episodeAlias: episode,
+                    title: ShowIndex.title(from: episode), subtitle: "", image: nil)
     }
 
     /// A favourite's aliases, correcting one thing nts.live's own client gets

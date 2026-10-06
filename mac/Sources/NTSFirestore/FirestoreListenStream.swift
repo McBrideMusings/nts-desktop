@@ -204,24 +204,7 @@ public final class FirestoreListenStream {
                 metadata: metadata,
                 requestProducer: { writer in
                     for request in requests { try await writer.write(request) }
-                    // Hold the send side open so the server keeps streaming, but cap
-                    // the lifetime: the bearer token is sent only at open and expires
-                    // (~1h), so tear down and reconnect with a fresh one before then.
-                    // The same poll also catches a silently dead connection: Firestore
-                    // sends a `targetChange` keepalive roughly every 30s, so no message
-                    // at all for `stallThreshold` means the stream died without an error.
-                    let deadline = Date().addingTimeInterval(Self.maxStreamAge)
-                    while !Task.isCancelled {
-                        try await Task.sleep(nanoseconds: 30 * 1_000_000_000)
-                        if Date() >= deadline {
-                            await reconnectReason.set(.expired)
-                            throw ForcedReconnect()
-                        }
-                        if await liveness.timeSinceLastMessage() >= Self.stallThreshold {
-                            await reconnectReason.set(.stalled)
-                            throw ForcedReconnect()
-                        }
-                    }
+                    try await Self.holdOpen(liveness: liveness, reconnectReason: reconnectReason)
                 },
                 onResponse: { response in
                     var first = true
@@ -235,6 +218,27 @@ public final class FirestoreListenStream {
                     }
                 }
             )
+        }
+    }
+
+    /// Hold the send side open so the server keeps streaming, but cap the
+    /// lifetime: the bearer token is sent only at open and expires (~1h), so
+    /// throw `ForcedReconnect` to reconnect with a fresh one before then. The
+    /// same poll also catches a silently dead connection: Firestore sends a
+    /// `targetChange` keepalive roughly every 30s, so no message at all for
+    /// `stallThreshold` means the stream died without an error.
+    private static func holdOpen(liveness: Liveness, reconnectReason: ReconnectReason) async throws {
+        let deadline = Date().addingTimeInterval(maxStreamAge)
+        while !Task.isCancelled {
+            try await Task.sleep(nanoseconds: 30 * 1_000_000_000)
+            if Date() >= deadline {
+                await reconnectReason.set(.expired)
+                throw ForcedReconnect()
+            }
+            if await liveness.timeSinceLastMessage() >= stallThreshold {
+                await reconnectReason.set(.stalled)
+                throw ForcedReconnect()
+            }
         }
     }
 

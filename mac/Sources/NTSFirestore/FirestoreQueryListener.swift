@@ -21,21 +21,33 @@ public final class FirestoreQueryListener<Element: Sendable> {
             tokenProvider: tokenProvider,
             onConnect: { await store.reset() },
             onMessage: { message in
-                switch message.responseType {
-                case .documentChange(let change):
-                    let doc = change.document
-                    await onUpdate(await store.upsert(doc.name, decode(doc)))
-                case .documentDelete(let del):
-                    await onUpdate(await store.remove(del.document))
-                case .documentRemove(let rem):
-                    await onUpdate(await store.remove(rem.document))
-                case .targetChange(let tc) where tc.targetChangeType == .reset:
-                    await onUpdate(await store.reset())
-                default:
-                    break
+                if let list = await Self.apply(message, to: store, decode: decode) {
+                    await onUpdate(list)
                 }
             }
         )
+    }
+
+    /// Apply one message to the document set, returning the list to emit, or
+    /// `nil` for a message that changes nothing (a keepalive, a non-reset
+    /// target change).
+    private static func apply(
+        _ message: Google_Firestore_V1_ListenResponse, to store: Store,
+        decode: @Sendable (Google_Firestore_V1_Document) -> (sort: Date, value: Element)?
+    ) async -> [Element]? {
+        switch message.responseType {
+        case .documentChange(let change):
+            let doc = change.document
+            return await store.upsert(doc.name, decode(doc))
+        case .documentDelete(let del):
+            return await store.remove(del.document)
+        case .documentRemove(let rem):
+            return await store.remove(rem.document)
+        case .targetChange(let tc) where tc.targetChangeType == .reset:
+            return await store.reset()
+        default:
+            return nil
+        }
     }
 
     public func start() { stream.start() }

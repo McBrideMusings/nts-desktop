@@ -235,24 +235,32 @@ final class NowPlayingCenter {
             // already in (see Cache.configureImageCache), so a source the user
             // has seen before paints without a round trip.
             artworkTask = Task { [weak self] in
-                // A cover that fails to download would otherwise stay missing
-                // until the user switched sources and back, so a dropped
-                // connection leaves a permanently blank tile. Try again a
-                // couple of times, backing off; the source is a long-running
-                // stream, so there's time.
-                for delay in [UInt64(0), 3, 10] {
-                    if delay > 0 { try? await Task.sleep(nanoseconds: delay * 1_000_000_000) }
-                    guard !Task.isCancelled, let self, self.artworkKey == key else { return }
-                    guard let (data, _) = try? await URLSession.shared.data(from: url),
-                          let image = NSImage(data: data)
-                    else { continue }
-                    guard !Task.isCancelled, self.artworkKey == key else { return }
-                    self.artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-                    self.push()
-                    return
-                }
+                let art = await Self.fetchArtwork(url)
+                guard !Task.isCancelled, let art, let self, self.artworkKey == key else { return }
+                self.artwork = art
+                self.push()
             }
         }
+    }
+
+    /// Download a cover, or `nil` once every attempt has failed or the task is
+    /// cancelled. Nothing but `loadArtwork` changes `artworkKey`, and it cancels
+    /// the previous task when it does, so cancellation is the staleness check.
+    ///
+    /// A cover that fails to download would otherwise stay missing until the
+    /// user switched sources and back, so a dropped connection leaves a
+    /// permanently blank tile. Try again a couple of times, backing off; the
+    /// source is a long-running stream, so there's time.
+    private static func fetchArtwork(_ url: URL) async -> MPMediaItemArtwork? {
+        for delay in [UInt64(0), 3, 10] {
+            if delay > 0 { try? await Task.sleep(nanoseconds: delay * 1_000_000_000) }
+            guard !Task.isCancelled else { return nil }
+            guard let (data, _) = try? await URLSession.shared.data(from: url),
+                  let image = NSImage(data: data)
+            else { continue }
+            return MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+        }
+        return nil
     }
 
     /// Draw a SwiftUI view into artwork — used for the live channels' procedural
