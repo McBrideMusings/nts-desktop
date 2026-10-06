@@ -18,8 +18,18 @@ struct NowPlayingBar: View {
     /// was already here, so the title runs out of room 50pt sooner. Neither the
     /// switch nor the tracklist button ever drops out — they are the only ways
     /// between the panes.
+    ///
+    /// Compact also lets the title wrap to a second line: the show name is the
+    /// one fact the bar exists to show, so it takes height before it gives up
+    /// characters.
     let width: CGFloat
     private var compact: Bool { width < 495 }
+
+    /// The last few points above the window's 340pt minimum. Even compact, the
+    /// four controls left the title about 86pt — "LOW SLU…" — so here the gaps
+    /// close up and the tracklist chip shrinks to the switch's segment height,
+    /// which gives a two-line title room for a twelve-letter word.
+    private var narrow: Bool { width < 360 }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -47,7 +57,7 @@ struct NowPlayingBar: View {
     private var buffering: Bool { !model.isIdle && engine.isPlaying && !engine.isRendering }
 
     private var controls: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: narrow ? 8 : 14) {
             Button { model.togglePlay() } label: {
                 Image(systemName: engine.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 13))
@@ -75,7 +85,8 @@ struct NowPlayingBar: View {
                     text: model.isIdle ? "NOTHING PLAYING" : model.displayName,
                     url: model.nowPlayingShowURL,
                     font: Theme.display(14, .heavy),
-                    color: model.isIdle ? Theme.inkMuted : Theme.ink
+                    color: model.isIdle ? Theme.inkMuted : Theme.ink,
+                    lineLimit: compact ? 2 : 1
                 )
                 // Mixtape source episode — when it's a link, NTS shows it bold white
                 // (vs the muted, regular non-link descriptor). Buffering pre-empts
@@ -91,6 +102,7 @@ struct NowPlayingBar: View {
                 )
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(1)
 
             if !compact {
                 // `isRendering`, not `isPlaying`: the first is whether audio is
@@ -109,7 +121,7 @@ struct NowPlayingBar: View {
             // the tracklist over it and takes it away again. Being a loose button
             // next to a joined pair is the whole distinction — no divider is
             // needed to make it, and one only added a line to look at.
-            TracksButton()
+            TracksButton(side: narrow ? 28 : 32)
 
             PaneSwitch()
 
@@ -179,13 +191,14 @@ private struct PaneSwitch: View {
 /// while nothing is playing — silence has no tracklist.
 private struct TracksButton: View {
     @EnvironmentObject var model: AppModel
+    let side: CGFloat
 
     var body: some View {
         Button { model.toggleTracks() } label: {
             Image(systemName: "list.bullet")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(model.tracksOpen ? Theme.popover : Theme.ink)
-                .frame(width: 32, height: 32)
+                .frame(width: side, height: side)
                 .background(RoundedRectangle(cornerRadius: 6)
                     .fill(model.tracksOpen ? Theme.ink : Theme.hairline(0.08)))
         }
