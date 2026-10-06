@@ -36,6 +36,12 @@ These are where two pieces of code most easily disagree. Define once, use exactl
 
 **Rendering** means audio is actually reaching the speakers (`PlayerEngine.isRendering`, the real AVPlayer rate). Everything that reports live playback back to the user reads this: the menu-bar waterline, the level meter, the buffering state. **Buffering is precisely the disagreement between the two.**
 
+**Recovery.** Reloading a channel or mixtape at the live head when *playing* is true and *rendering* is false — the app's answer to the disagreement that *buffering* names. Four things trigger it: the Mac waking, the network path coming back, the item failing or an endless stream ending, and the *grace* running out with none of those. `PlayerEngine.recoverIfStalled`; the schedule is `StallWatch`. **An episode is never recovered**, because a reload would restart it from 0:00.
+
+**Streak.** The reloads made since audio last came out and held for a *settle*. It is the `attempts` count in the state blob's `recovery` record, and 0 means no recovery is under way. A streak ends one of two ways. A settle that holds counts it, adding 1 to `recoveries` and setting `attempts` to 0. A pause or a tune ends it uncounted. **An item failure mid-streak does not reload at once:** that failure is the streak's own reload failing, so the pending timer decides instead, and the backoff never turns into a tight loop.
+
+**Settle.** The 60s a reload that renders must keep rendering before its streak counts as recovered. A drop inside the settle keeps the streak, so a stream that plays for a second and dies again keeps backing off instead of starting over at attempt 1.
+
 **Seekable** means the loaded item has a real duration. The app never has to be told which kind of source is playing — endless streams report an indefinite duration, which is the truth rather than a failure to load.
 
 **Held track.** A track NTS has pushed that the app is deliberately not showing yet, because the audio it names has not reached the speakers. See the numbers below.
@@ -66,6 +72,10 @@ These are where two pieces of code most easily disagree. Define once, use exactl
 | **900s** | Schedule age before a re-fetch; matches NTS's own cache | `AppModel.swift:1122` |
 | **60s** | Schedule poll interval — the safety net behind the slot timer | `AppModel.swift:1211` |
 | **+1s** | Slot advance fires this far past the boundary, so the slot has genuinely ended | `AppModel.swift:1189` |
+| **15s** | Grace — silence before the first reload when no event says the stream died | `StallWatch.swift:15` |
+| **5 / 10 / 20 / 30s** | Backoff — how long a reload gets to render before the next; 30s from the fourth attempt on | `StallWatch.swift:25` |
+| **60s** | Settle — how long a reload must keep rendering before the streak counts as recovered | `StallWatch.swift:19` |
+| **20 / 25 / 35 / 45s** | Silence allowed before reloading after a drop mid-streak — grace plus that attempt's backoff | `StallWatch.swift:32` |
 | **24h** | Show index and episode index freshness | `ShowIndex.swift:33`, `EpisodeIndex.swift:55` |
 | **4 / 250ms** | Backfill crawl concurrency and stagger | `ShowDetailBackfill.swift:24-27` |
 | **~36.9KB** | Per show for the detail endpoint — ~68MB for the catalog, which is why the crawl runs once per machine | `ShowDetailBackfill.swift:4-6` |
