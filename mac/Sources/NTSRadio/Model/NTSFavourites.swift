@@ -63,16 +63,6 @@ enum NTSFavourites {
         "https://firestore.googleapis.com/v1/projects/\(project)/databases/(default)/documents"
     }
 
-    /// This installation's own id, kept only for the `user_devices` row. It is
-    /// *not* what favourites are filed under while signed in — see the note
-    /// above — so nothing depends on it matching anything the website knows.
-    static var installationID: String {
-        if let existing = UserDefaults.standard.string(forKey: "ntsDeviceID") { return existing }
-        let fresh = UUID().uuidString
-        UserDefaults.standard.set(fresh, forKey: "ntsDeviceID")
-        return fresh
-    }
-
     // MARK: Reading
 
     /// Every favourite on every device registered to this account.
@@ -126,7 +116,12 @@ enum NTSFavourites {
 
     /// Register this Mac against the account, so favourites written here are
     /// found by the same device lookup nts.live does.
-    static func registerDevice(token: String) async throws {
+    ///
+    /// `installationID` (`Preferences.installationID`) is kept only for this
+    /// row. It is *not* what favourites are filed under while signed in — see
+    /// the note above — so nothing depends on it matching anything the website
+    /// knows.
+    static func registerDevice(installationID: String, token: String) async throws {
         let uid = try accountID(from: token)
         let fields: [String: Any] = [
             "device_id": ["stringValue": installationID],
@@ -145,7 +140,7 @@ enum NTSFavourites {
     ///
     /// The document name is the whole point of the return value: it is what a
     /// later delete addresses, and without it an unstar has to hope the row was
-    /// in the snapshot `Saved.sync()` read at launch — which a star made in this
+    /// in the snapshot `Saved.sync(installationID:)` read at launch — which a star made in this
     /// session never is.
     @discardableResult
     static func add(showAlias: String, episodeAlias: String = "", token: String) async throws -> Favourite {

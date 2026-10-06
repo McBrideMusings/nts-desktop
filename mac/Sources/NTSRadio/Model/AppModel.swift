@@ -251,7 +251,8 @@ final class AppModel: ObservableObject {
             .sink { [weak self] _ in
                 self?.updateTracklist()
                 self?.updateMixtapeTitle()
-                Task { await self?.saved.sync() }
+                guard let self else { return }
+                Task { await self.saved.sync(installationID: self.preferences.installationID) }
             }
             .store(in: &bag)
         // Saved is built before auth exists, so it is handed the token source
@@ -269,7 +270,7 @@ final class AppModel: ObservableObject {
             }
             .store(in: &bag)
         Log.app.info("launched, logs in \(LogFiles.directory.path, privacy: .public)")
-        Task { await saved.sync() }
+        Task { await saved.sync(installationID: preferences.installationID) }
         updateTracklist()
         updateMixtapeTitle()
         nowPlaying = NowPlayingCenter(model: self)
@@ -289,12 +290,16 @@ final class AppModel: ObservableObject {
     /// fetches once (only if either actually needs a refresh) and hands each
     /// index its share.
     private func refreshSitemapIndices() async {
-        let needShow = showIndex.needsBuild
-        let needEpisode = episodeIndex.needsBuild
+        let needShow = showIndex.needsBuild(lastSeed: preferences.showIndexSeeded)
+        let needEpisode = episodeIndex.needsBuild(lastSeed: preferences.episodeIndexSeeded)
         guard needShow || needEpisode else { return }
         guard let walk = try? await NTSAPI.sitemapWalk() else { return }
-        if needShow { await showIndex.build(showAliases: walk.showAliases) }
-        if needEpisode { await episodeIndex.build(entries: walk.episodes) }
+        if needShow, await showIndex.build(showAliases: walk.showAliases) {
+            preferences.showIndexSeeded = Date()
+        }
+        if needEpisode, await episodeIndex.build(entries: walk.episodes) {
+            preferences.episodeIndexSeeded = Date()
+        }
     }
 
     // MARK: Derived view-model

@@ -13,7 +13,7 @@ import EpisodeMatch
 /// bucketed by the date suffix most of them carry.
 ///
 /// Modeled on `ShowIndex`: same disk cache through `Cache`, same ~daily
-/// staleness via a `UserDefaults` seed stamp, same best-effort failure (a bad
+/// staleness via a seed stamp kept in `Preferences`, same best-effort failure (a bad
 /// fetch leaves the old index standing). The matching algorithm itself lives
 /// in the `EpisodeMatch` library target — pure and I/O-free, so the accuracy
 /// probe (`swift run FSProbe accuracy`) can link it directly and check it
@@ -60,39 +60,25 @@ final class EpisodeIndex: ObservableObject {
         buckets = Cache.load([String: [EpisodeMatch.Candidate]].self, from: Self.fileName) ?? [:]
     }
 
-    private static let seededKey = "episodeIndexSeeded"
-    private var lastSeed: Date? {
-        get { UserDefaults.standard.object(forKey: Self.seededKey) as? Date }
-        set { UserDefaults.standard.set(newValue, forKey: Self.seededKey) }
-    }
-
-    /// Whether the index needs a rebuild — missing, or older than a day. Read
-    /// by `AppModel` before fetching the sitemap, so a walk that only
+    /// Whether the index needs a rebuild — missing, or `lastSeed` (when the
+    /// sitemap was last walked, `Preferences.episodeIndexSeeded`) older than a
+    /// day. Read by `AppModel` before fetching the sitemap, so a walk that only
     /// `ShowIndex` needs doesn't also re-seed a fresh `EpisodeIndex`.
-    var needsBuild: Bool {
+    func needsBuild(lastSeed: Date?) -> Bool {
         guard !built, !building else { return false }
         let age = lastSeed.map { Date().timeIntervalSince($0) }
         return buckets.isEmpty || (age ?? .infinity) > Self.maxAge
     }
 
-    /// Build the index if it's missing or older than a day, walking the
-    /// sitemap itself. Convenience for callers that don't need to share the
-    /// walk with `ShowIndex` — `AppModel`'s launch sequence calls
-    /// `build(entries:)` directly instead, off one shared `NTSAPI.sitemapWalk()`.
-    func buildIfStale() async {
-        guard needsBuild else { return }
-        guard let entries = try? await NTSAPI.sitemapWalk().episodes else { return }
-        await build(entries: entries)
-    }
-
-    /// Bucket the sitemap's episode entries by date and persist. Best-effort:
-    /// an empty `entries` (a failed walk upstream) leaves the existing index
-    /// standing rather than emptying it.
-    func build(entries: [(show: String, episodeAlias: String)]) async {
-        guard !building else { return }
+    /// Bucket the sitemap's episode entries by date and persist, answering
+    /// whether this counts as a seed for the caller to stamp. Best-effort: an
+    /// empty `entries` (a failed walk upstream) leaves the existing index
+    /// standing rather than emptying it, and is not a seed.
+    func build(entries: [(show: String, episodeAlias: String)]) async -> Bool {
+        guard !building else { return false }
         building = true
         defer { building = false; built = true }
-        guard !entries.isEmpty else { return }
+        guard !entries.isEmpty else { return false }
 
         var next: [String: [EpisodeMatch.Candidate]] = [:]
         for entry in entries {
@@ -101,8 +87,8 @@ final class EpisodeIndex: ObservableObject {
         }
         buckets = next
         resolved.removeAll()
-        lastSeed = Date()
         flush()
+        return true
     }
 
     func flush() {

@@ -89,46 +89,27 @@ final class ShowIndex: ObservableObject {
         flushSoon()
     }
 
-    /// Build the index if it's missing or older than a day. Safe to call on every
-    /// launch; a fresh cache makes it a no-op.
-    /// When the sitemap was last walked.
-    ///
-    /// Kept separately from the cache file's own timestamp, which used to stand
-    /// in for it: the timeline now writes that file whenever it learns a show's
-    /// artwork, so the file is always minutes old and a re-seed would never run
-    /// again.
-    private static let seededKey = "showIndexSeeded"
-    private var lastSeed: Date? {
-        get { UserDefaults.standard.object(forKey: Self.seededKey) as? Date }
-        set { UserDefaults.standard.set(newValue, forKey: Self.seededKey) }
-    }
-
-    /// Whether the index needs a rebuild — missing, or older than a day. Read
-    /// by `AppModel` before fetching the sitemap, so a walk that only
+    /// Whether the index needs a rebuild — missing, or `lastSeed` (when the
+    /// sitemap was last walked, `Preferences.showIndexSeeded`) older than a day.
+    /// Read by `AppModel` before fetching the sitemap, so a walk that only
     /// `EpisodeIndex` needs doesn't also re-seed a fresh `ShowIndex`.
-    var needsBuild: Bool {
+    func needsBuild(lastSeed: Date?) -> Bool {
         guard !built, !building else { return false }
         let age = lastSeed.map { Date().timeIntervalSince($0) }
         return shows.isEmpty || (age ?? .infinity) > Self.maxAge
-    }
-
-    /// Build the index if it's missing or older than a day, walking the
-    /// sitemap itself. Safe to call on every launch; a fresh cache makes it a
-    /// no-op. Convenience for callers that don't need to share the walk with
-    /// `EpisodeIndex` — `AppModel`'s launch sequence calls `build(showAliases:)`
-    /// directly instead, off one shared `NTSAPI.sitemapWalk()`.
-    func buildIfStale() async {
-        guard needsBuild else { return }
-        guard let aliases = try? await NTSAPI.sitemapWalk().showAliases else { return }
-        await build(showAliases: aliases)
     }
 
     /// Seed from the sitemap, then top up from what NTS published today.
     ///
     /// Best-effort in both halves: a failure leaves whatever is already indexed
     /// standing rather than emptying it, and `ServiceStatus` has already said so.
-    func build(showAliases: [String]) async {
-        guard !building else { return }
+    ///
+    /// Answers whether this counts as a seed, for the caller to stamp. Only a
+    /// walk that actually answered does: stamping regardless would mean a launch
+    /// with no network marked the index fresh for a day and the re-seed never
+    /// ran once the network came back.
+    func build(showAliases: [String]) async -> Bool {
+        guard !building else { return false }
         building = true
         defer { building = false; built = true }
 
@@ -148,12 +129,9 @@ final class ShowIndex: ObservableObject {
             }
         }
 
-        // Only a walk that actually answered counts as a seed. Stamping it
-        // regardless would mean a launch with no network marked the index fresh
-        // for a day and the re-seed never ran once the network came back.
-        if !showAliases.isEmpty { lastSeed = Date() }
         flush()
         sortedCache = nil
+        return !showAliases.isEmpty
     }
 
     /// A readable name from an alias, for a show the app has only seen in the

@@ -39,7 +39,27 @@ final class Preferences: ObservableObject {
 
     /// The live machine's stores.
     static func live() -> Preferences {
-        Preferences(defaults: .standard, loginItem: SystemLoginItem(), updates: SparkleUpdates())
+        let defaults = UserDefaults.standard
+        suppressAutoChecksForDevBuilds(defaults)
+        return Preferences(defaults: defaults, loginItem: SystemLoginItem(), updates: SparkleUpdates())
+    }
+
+    /// CI only bumps `CFBundleVersion` past its committed placeholder `"1"` on a
+    /// tagged release build — `admin build`/`admin deploy` always ships the
+    /// placeholder, since they build straight from the committed `Info.plist`. If
+    /// Sparkle's automatic background check stayed on by default, every locally
+    /// installed dev copy would nag "update available" forever the moment the
+    /// appcast is reachable, comparing build "1" against whatever the last real
+    /// release published.
+    ///
+    /// `register(defaults:)` sets the *registration-domain* default — the lowest
+    /// priority in `UserDefaults` — so this only changes what a fresh install
+    /// starts at. An explicit choice already made through the Settings toggle
+    /// lives in a higher domain and is never overwritten by this. It runs before
+    /// `SparkleUpdates` exists, so the updater starts with it already in place.
+    private static func suppressAutoChecksForDevBuilds(_ defaults: UserDefaults) {
+        guard Bundle.main.infoDictionary?["CFBundleVersion"] as? String == "1" else { return }
+        defaults.register(defaults: ["SUEnableAutomaticChecks": false])
     }
 
     private enum Keys {
@@ -52,6 +72,9 @@ final class Preferences: ObservableObject {
         static let exploreFilters = "exploreFilters"
         static let resumeLastSource = "resumeLastSource"
         static let lastSource = "lastSource"
+        static let showIndexSeeded = "showIndexSeeded"
+        static let episodeIndexSeeded = "episodeIndexSeeded"
+        static let installationID = "ntsDeviceID"
     }
 
     // MARK: Volume
@@ -134,6 +157,31 @@ final class Preferences: ObservableObject {
     var lastSource: String? {
         get { defaults.string(forKey: Keys.lastSource) }
         set { defaults.set(newValue, forKey: Keys.lastSource) }
+    }
+
+    // MARK: Bookkeeping
+
+    /// When `ShowIndex` was last seeded from the sitemap. Kept apart from the
+    /// index's cache file, whose timestamp moves whenever a show's artwork is
+    /// learned and so can't say when the sitemap was last walked.
+    var showIndexSeeded: Date? {
+        get { defaults.object(forKey: Keys.showIndexSeeded) as? Date }
+        set { defaults.set(newValue, forKey: Keys.showIndexSeeded) }
+    }
+
+    /// When `EpisodeIndex` was last seeded from the sitemap.
+    var episodeIndexSeeded: Date? {
+        get { defaults.object(forKey: Keys.episodeIndexSeeded) as? Date }
+        set { defaults.set(newValue, forKey: Keys.episodeIndexSeeded) }
+    }
+
+    /// This installation's id for NTS's `user_devices` row — made on first
+    /// read and kept for good, so re-registering updates the same row.
+    var installationID: String {
+        if let existing = defaults.string(forKey: Keys.installationID) { return existing }
+        let fresh = UUID().uuidString
+        defaults.set(fresh, forKey: Keys.installationID)
+        return fresh
     }
 
     // MARK: Login item
@@ -233,7 +281,6 @@ final class SparkleUpdates: UpdateChecker {
     private let controller: SPUStandardUpdaterController
 
     init() {
-        Self.suppressAutoChecksForDevBuilds()
         controller = SPUStandardUpdaterController(
             startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
     }
@@ -246,22 +293,4 @@ final class SparkleUpdates: UpdateChecker {
     var canCheck: Bool { controller.updater.canCheckForUpdates }
 
     func check() { controller.checkForUpdates(nil) }
-
-    /// CI only bumps `CFBundleVersion` past its committed placeholder `"1"` on a
-    /// tagged release build — `admin build`/`admin deploy` always ships the
-    /// placeholder, since they build straight from the committed `Info.plist`. If
-    /// Sparkle's automatic background check stayed on by default, every locally
-    /// installed dev copy would nag "update available" forever the moment the
-    /// appcast is reachable, comparing build "1" against whatever the last real
-    /// release published.
-    ///
-    /// `register(defaults:)` sets the *registration-domain* default — the lowest
-    /// priority in `UserDefaults` — so this only changes what a fresh install
-    /// starts at. An explicit choice already made through the Settings toggle
-    /// lives in a higher domain and is never overwritten by this. It runs before
-    /// the controller exists, so the updater starts with it already in place.
-    private static func suppressAutoChecksForDevBuilds() {
-        guard Bundle.main.infoDictionary?["CFBundleVersion"] as? String == "1" else { return }
-        UserDefaults.standard.register(defaults: ["SUEnableAutomaticChecks": false])
-    }
 }

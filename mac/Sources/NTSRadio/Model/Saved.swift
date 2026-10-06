@@ -120,10 +120,10 @@ final class Saved: ObservableObject {
 
     /// Merge the account's follows and saved episodes into the local list, and
     /// register this Mac so stars written here are found by the same device
-    /// lookup nts.live does.
-    func sync() async {
+    /// lookup nts.live does, under `installationID`.
+    func sync(installationID: String) async {
         guard let token = try? await token?() else { return }
-        try? await NTSFavourites.registerDevice(token: token)
+        try? await NTSFavourites.registerDevice(installationID: installationID, token: token)
         guard let favourites = try? await NTSFavourites.fetch(token: token) else { return }
         let fetched = mergeRemote(favourites)
         syncedWithAccount = true
