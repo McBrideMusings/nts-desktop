@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import NTSChannel
 
 /// Headless render of each popover state to PNG, for visual verification /
 /// regression against the prototype screenshots. Triggered by

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import NTSChannel
 
 /// The channels' programme grids: fetching them, handing each channel over to
 /// its next programme at a changeover, dressing the programme on air — and the

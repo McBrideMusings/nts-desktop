@@ -28,11 +28,18 @@ let package = Package(
             name: "StallWatch",
             path: "Sources/StallWatch"
         ),
+        // The two live channels as a type, shared so NTSFirestore's filter can
+        // take one without depending on the app.
+        .target(
+            name: "NTSChannel",
+            path: "Sources/NTSChannel"
+        ),
         // Firestore Listen client + generated protobuf/gRPC code, isolated from
         // the app so a probe tool can share it.
         .target(
             name: "NTSFirestore",
             dependencies: [
+                "NTSChannel",
                 .product(name: "GRPCCore", package: "grpc-swift-2"),
                 .product(name: "GRPCNIOTransportHTTP2", package: "grpc-swift-nio-transport"),
                 .product(name: "GRPCProtobuf", package: "grpc-swift-protobuf"),
@@ -44,6 +51,7 @@ let package = Package(
         .executableTarget(
             name: "NTSRadio",
             dependencies: [
+                "NTSChannel",
                 "NTSFirestore",
                 "EpisodeMatch",
                 "StallWatch",
@@ -74,7 +82,7 @@ let package = Package(
         // accuracy harness against the live sitemap.
         .executableTarget(
             name: "FSProbe",
-            dependencies: ["NTSFirestore", "EpisodeMatch"],
+            dependencies: ["NTSChannel", "NTSFirestore", "EpisodeMatch"],
             path: "Sources/FSProbe",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),

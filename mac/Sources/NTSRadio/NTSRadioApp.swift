@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import Combine
+import NTSChannel
 
 @main
 struct NTSRadioApp: App {

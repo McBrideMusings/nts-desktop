@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import NTSChannel
 
 /// The app's control surface: AppleScript terminology backed by the same
 /// `AppModel` the UI drives, so a script can tune, play, pause and — crucially —

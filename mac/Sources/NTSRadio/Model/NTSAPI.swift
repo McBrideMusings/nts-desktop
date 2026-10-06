@@ -1,5 +1,6 @@
 import Foundation
 import EpisodeMatch
+import NTSChannel
 
 /// Minimal client for nts.live's public API — the schedule grid, shows and
 /// episodes, the mixtape catalog, Explore. Best-effort + defensive: every field

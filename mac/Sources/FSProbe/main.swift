@@ -1,5 +1,6 @@
 import Foundation
 import NTSFirestore
+import NTSChannel
 
 // Throwaway probe: prove the Firestore Listen stream delivers live tracks.
 //   NTS_TOKEN=<firebase-id-token> swift run FSProbe <mixtape-alias|1|2>
@@ -15,7 +16,7 @@ if CommandLine.arguments.dropFirst().first == "accuracy" {
 
 let arg = CommandLine.arguments.dropFirst().first ?? "memory-lane"
 // "1"/"2" select a live channel; anything else is a mixtape alias.
-let filter = Int(arg).flatMap { LiveTracksFilter.channel($0) } ?? .mixtape(arg)
+let filter = Int(arg).flatMap(ChannelNumber.init(rawValue:)).map(LiveTracksFilter.channel) ?? .mixtape(arg)
 guard let token = ProcessInfo.processInfo.environment["NTS_TOKEN"], !token.isEmpty else {
     FileHandle.standardError.write(Data("NTS_TOKEN env var is required\n".utf8))
     exit(2)

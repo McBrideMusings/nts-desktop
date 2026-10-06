@@ -1,5 +1,6 @@
 import Foundation
 import NTSFirestore
+import NTSChannel
 
 /// Writes every `live_tracks` change for both live channels and every mixtape to
 /// `tracks.log`, whichever source is playing — one Firestore stream, one target
@@ -23,9 +24,7 @@ final class TracksRecording {
     func update(signedIn: Bool, mixtapes: [String], token: @escaping @Sendable () async throws -> String) {
         var wanted: [(label: String, filter: LiveTracksFilter)] = []
         if signedIn {
-            wanted += ChannelNumber.allCases.compactMap { n in
-                LiveTracksFilter.channel(n.rawValue).map { ("channel-\(n.rawValue)", $0) }
-            }
+            wanted += ChannelNumber.allCases.map { ("channel-\($0)", LiveTracksFilter.channel($0)) }
             wanted += Set(mixtapes).sorted().map { ("mixtape:\($0)", LiveTracksFilter.mixtape($0)) }
         }
         let labels = wanted.map(\.label)

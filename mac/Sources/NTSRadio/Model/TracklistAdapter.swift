@@ -30,8 +30,8 @@ enum TracklistAdapter {
             guard let mix = mixtape else { return nil }
             return Stream(filter: .mixtape(mix.alias), hue: mix.hue)
         case .channel:
-            guard let ch = channel, let filter = LiveTracksFilter.channel(ch.number.rawValue) else { return nil }
-            return Stream(filter: filter, hue: ch.artHue)
+            guard let ch = channel else { return nil }
+            return Stream(filter: .channel(ch.number), hue: ch.artHue)
         }
     }
 

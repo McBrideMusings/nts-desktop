@@ -1,5 +1,6 @@
 import Foundation
 import EpisodeMatch
+import NTSChannel
 
 /// One tile in the catalog grid.
 ///

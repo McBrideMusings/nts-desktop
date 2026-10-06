@@ -2,6 +2,7 @@ import SwiftUI
 import Combine
 import NTSFirestore
 import EpisodeMatch
+import NTSChannel
 
 enum Selection: Equatable {
     case idle              // nothing selected — the default empty state on launch

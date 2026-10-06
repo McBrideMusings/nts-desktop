@@ -1,4 +1,5 @@
 import SwiftUI
+import NTSChannel
 
 /// The schedule as a timeline: one channel at a time, a fortnight of programmes
 /// in air order, with the day headers pinned as they pass under the top edge.

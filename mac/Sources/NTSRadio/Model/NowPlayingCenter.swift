@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import MediaPlayer
 import SwiftUI
+import NTSChannel
 
 /// Bridges the app to the system playback controls: the laptop's media keys, a
 /// headset's play/pause and skip buttons, and the Now Playing tile in Control
