@@ -17,8 +17,8 @@ import OSLog
 /// Two files in `~/Library/Logs/NTS Radio/` (the path is `logDirectory` in the
 /// scripted `state`) hold the same history without `log show`:
 ///
-/// - `app.log` — every category below, copied from the unified log every two
-///   seconds by `AppLogMirror`. Tab-separated: time, category, level, message.
+/// - `app.log` — every category below, written by `AppLogger` at the call, in
+///   call order. Tab-separated: time, category, level, message.
 /// - `tracks.log` — one line per `live_tracks` document change for both live
 ///   channels and every mixtape, written by `TracksRecording` while signed in.
 ///
@@ -27,16 +27,81 @@ enum Log {
     static let subsystem = Bundle.main.bundleIdentifier ?? "live.nts.desktop"
 
     /// Requests to nts.live: what was asked for and what came back.
-    static let api = Logger(subsystem: subsystem, category: "api")
+    static let api = AppLogger(category: "api")
     /// Sign-in and the Keychain.
-    static let auth = Logger(subsystem: subsystem, category: "auth")
+    static let auth = AppLogger(category: "auth")
     /// Playback: what was loaded, and what refused to load.
-    static let player = Logger(subsystem: subsystem, category: "player")
+    static let player = AppLogger(category: "player")
     /// The app itself: windows, the login item, anything the shell refuses.
-    static let app = Logger(subsystem: subsystem, category: "app")
+    static let app = AppLogger(category: "app")
     /// The `live_tracks` recorder: when its stream connects, reconnects or fails.
     /// The documents themselves go to `tracks.log`.
-    static let tracks = Logger(subsystem: subsystem, category: "tracks")
+    static let tracks = AppLogger(category: "tracks")
+}
+
+/// One `Log` category. Each call renders its line once and writes that text
+/// both to `app.log` and to the unified log, so the file holds every line the
+/// moment it is logged — a launch that quits a second later still has them all.
+///
+/// Call sites read like `Logger`'s: `\(value, privacy: .public)` prints the
+/// value, and a string or object without it prints `<private>` in both places.
+/// Numbers and flags print as they are, as `Logger` prints them.
+struct AppLogger: Sendable {
+    let category: String
+    private let logger: Logger
+
+    init(category: String) {
+        self.category = category
+        logger = Logger(subsystem: Log.subsystem, category: category)
+    }
+
+    func debug(_ message: LogMessage) { write(message, level: .debug, name: "debug") }
+    func info(_ message: LogMessage) { write(message, level: .info, name: "info") }
+    func notice(_ message: LogMessage) { write(message, level: .default, name: "notice") }
+    func error(_ message: LogMessage) { write(message, level: .error, name: "error") }
+
+    private func write(_ message: LogMessage, level: OSLogType, name: String) {
+        logger.log(level: level, "\(message.text, privacy: .public)")
+        let flat = message.text.replacingOccurrences(of: "\t", with: " ")
+        LogFiles.app.writeStamped("\(category)\t\(name)\t\(flat)")
+    }
+}
+
+/// The text of one `AppLogger` line, built from a string literal.
+struct LogMessage: ExpressibleByStringInterpolation, Sendable {
+    let text: String
+
+    init(stringLiteral value: String) { text = value }
+    init(stringInterpolation: Interpolation) { text = stringInterpolation.text }
+
+    enum Privacy { case `public`, `private` }
+
+    struct Interpolation: StringInterpolationProtocol {
+        var text = ""
+
+        init(literalCapacity: Int, interpolationCount: Int) {
+            text.reserveCapacity(literalCapacity + interpolationCount * 8)
+        }
+
+        mutating func appendLiteral(_ literal: String) { text += literal }
+
+        mutating func appendInterpolation<T>(_ value: T, privacy: Privacy = .private) {
+            text += privacy == .public ? String(describing: value) : "<private>"
+        }
+
+        mutating func appendInterpolation<T: BinaryInteger>(_ value: T, privacy: Privacy = .public) {
+            text += privacy == .public ? String(value) : "<private>"
+        }
+
+        /// Six decimals, as `Logger` prints a float by default.
+        mutating func appendInterpolation<T: BinaryFloatingPoint>(_ value: T, privacy: Privacy = .public) {
+            text += privacy == .public ? String(format: "%f", Double(value)) : "<private>"
+        }
+
+        mutating func appendInterpolation(_ value: Bool, privacy: Privacy = .public) {
+            text += privacy == .public ? String(value) : "<private>"
+        }
+    }
 }
 
 /// The name a request is logged and reported under — not a URL. The raw value

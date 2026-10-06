@@ -64,7 +64,7 @@ tail -f "$dir/tracks.log"
 ```
 
 - **`tracks.log`** has one tab-separated line per change to a document in NTS's `live_tracks` collection, for every source at once, whichever one is playing: receive time (local, with UTC offset), source (`channel-1`, `channel-2`, `mixtape:<alias>`), kind (`added`, `modified`, `removed` for a document that left the newest 12, `deleted`; `/snapshot` marks the opening 12 Firestore sends when the stream connects), document id, `start`, `title` and `artists` (JSON, so the `artist_names` array shows exactly as NTS stored it), Firestore's `created` and `updated` times, and the names of any other fields. Lines with `stream` in the source column record the connection opening, reconnecting or failing. The token is never written.
-- **`app.log`** has everything the app sends to the unified log (categories `api`, `auth`, `player`, `app`, `tracks`), copied every two seconds, as time, category, level and message. Values the code does not mark public read `<private>`, the same as in `log show`.
+- **`app.log`** has everything the app sends to the unified log (categories `api`, `auth`, `player`, `app`, `tracks`), written as each line is logged, as time, category, level and message. Values the code does not mark public read `<private>`, the same as in `log show`.
 
 Each file moves to `<name>.1` at 5MB, so at most about 10MB of each is kept.
 

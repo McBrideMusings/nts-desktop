@@ -1,5 +1,4 @@
 import Foundation
-import OSLog
 
 /// A line-oriented log file on disk, capped in size.
 ///
@@ -10,6 +9,7 @@ final class FileLog: @unchecked Sendable {
     let url: URL
     private let maxBytes: Int
     private let queue: DispatchQueue
+    private let stampLock = NSLock()
     private var handle: FileHandle?
     private var size = 0
     /// Set while writes are failing, so a full disk logs one error, not one per line.
@@ -24,10 +24,24 @@ final class FileLog: @unchecked Sendable {
     /// Append one line. A line break inside `line` would split the record in
     /// two, so it is written as a literal `\n` or `\r`.
     func write(_ line: String) {
-        let clean = line
-            .replacingOccurrences(of: "\n", with: "\\n")
-            .replacingOccurrences(of: "\r", with: "\\r")
+        let clean = Self.oneLine(line)
         queue.async { self.append(clean + "\n") }
+    }
+
+    /// Append one line led by the time of this call. The stamp is taken and the
+    /// line queued under one lock, so lines from different threads still go
+    /// down in time order.
+    func writeStamped(_ rest: String) {
+        let clean = Self.oneLine(rest)
+        stampLock.withLock {
+            let stamp = LogFiles.stamp(Date())
+            queue.async { self.append("\(stamp)\t\(clean)\n") }
+        }
+    }
+
+    private static func oneLine(_ text: String) -> String {
+        text.replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "\\r")
     }
 
     /// Return once every line written so far is on disk.
@@ -85,7 +99,7 @@ enum LogFiles {
         .urls(for: .libraryDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("Logs/NTS Radio", isDirectory: true)
 
-    /// Every `Log` category, mirrored from the unified log by `AppLogMirror`.
+    /// Every `Log` category, written by `AppLogger` as each line is logged.
     static let app = FileLog(name: "app.log")
     /// One line per `live_tracks` document change, from `TracksRecording`.
     static let tracks = FileLog(name: "tracks.log")
@@ -99,66 +113,4 @@ enum LogFiles {
         f.timeZone = .current
         return f
     }()
-}
-
-/// Copies what the app logged to the unified log into `app.log`.
-///
-/// A `Logger` call cannot be intercepted, so rather than wrapping every call
-/// site this reads the process's own entries back from `OSLogStore` every two
-/// seconds, off the main thread. The text is what `log show` would print,
-/// including `<private>` where an interpolation was not marked public.
-final class AppLogMirror: @unchecked Sendable {
-    private var task: Task<Void, Never>?
-
-    func start() {
-        guard task == nil else { return }
-        task = Task.detached(priority: .utility) { [self] in await run() }
-    }
-
-    func stop() {
-        task?.cancel()
-        task = nil
-    }
-
-    private func run() async {
-        guard let store = try? OSLogStore(scope: .currentProcessIdentifier) else {
-            Log.app.error("could not open the unified log; app.log will stay empty")
-            return
-        }
-        let predicate = NSPredicate(format: "subsystem == %@", Log.subsystem)
-        // Entries can share a timestamp, so "already written" is the date plus
-        // what was at it — a date alone would drop the second of two.
-        var lastDate: Date?
-        var atLastDate: Set<String> = []
-        while !Task.isCancelled {
-            let position = lastDate.map { store.position(date: $0) }
-                ?? store.position(timeIntervalSinceLatestBoot: 0)
-            if let entries = try? store.getEntries(at: position, matching: predicate) {
-                for case let entry as OSLogEntryLog in entries {
-                    let message = entry.composedMessage.replacingOccurrences(of: "\t", with: " ")
-                    let line = "\(LogFiles.stamp(entry.date))\t\(entry.category)\t\(Self.name(entry.level))\t\(message)"
-                    if let last = lastDate {
-                        if entry.date < last { continue }
-                        if entry.date == last, atLastDate.contains(line) { continue }
-                    }
-                    if entry.date != lastDate { atLastDate = [] }
-                    lastDate = entry.date
-                    atLastDate.insert(line)
-                    LogFiles.app.write(line)
-                }
-            }
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-        }
-    }
-
-    private static func name(_ level: OSLogEntryLog.Level) -> String {
-        switch level {
-        case .debug: return "debug"
-        case .info: return "info"
-        case .notice: return "notice"
-        case .error: return "error"
-        case .fault: return "fault"
-        default: return "undefined"
-        }
-    }
 }

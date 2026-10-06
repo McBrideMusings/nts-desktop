@@ -199,10 +199,8 @@ final class AppModel: ObservableObject {
     private var trackRelease: Task<Void, Never>?
 
     /// The raw `live_tracks` feed for every source, written to `tracks.log`
-    /// whichever one is playing; and the copy of the app's own log in `app.log`.
-    /// See `Diagnostics.swift`.
+    /// whichever one is playing. See `Diagnostics.swift`.
     let recording = TracksRecording()
-    private let logMirror = AppLogMirror()
 
     private var bag = Set<AnyCancellable>()
 
@@ -269,7 +267,6 @@ final class AppModel: ObservableObject {
                                       token: { [auth = self.auth] in try await auth.validToken() })
             }
             .store(in: &bag)
-        logMirror.start()
         Log.app.info("launched, logs in \(LogFiles.directory.path, privacy: .public)")
         Task { await saved.sync() }
         updateTracklist()

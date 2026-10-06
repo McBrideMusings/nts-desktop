@@ -76,9 +76,6 @@ DRIVE = ROOT / "mac" / "drive.sh"
 REPORT = ROOT / "tmp" / "claude" / "verify" / "checklist.json"
 APP = "NTS Radio"
 APP_LOG = Path.home() / "Library" / "Logs" / APP / "app.log"
-# How long to wait for AppLogMirror, which copies the unified log into app.log
-# every 2 s, to reach the end of the run.
-MIRROR_WAIT = 10
 ERROR = re.compile(r"error: (?:NTS Radio got an error: )?(.*?) \((-?\d+)\)\s*$", re.S)
 
 
@@ -191,15 +188,9 @@ def stamped_lines():
 
 
 def app_log(spans):
-    """{row id: the app.log lines stamped inside its (start, end)}. The mirror
-    writes in time order, so once app.log holds a line stamped after the last
-    span — restore()'s window close logs one — it holds every line before it."""
-    last = max(end for _, end in spans.values())
-    deadline = time.monotonic() + MIRROR_WAIT
+    """{row id: the app.log lines stamped inside its (start, end)}. The app
+    writes each line as it logs it, so the file is complete when the run ends."""
     lines = stamped_lines()
-    while not any(at > last for at, _ in lines) and time.monotonic() < deadline:
-        time.sleep(0.5)
-        lines = stamped_lines()
     return {row: [line for at, line in lines if start <= at <= end]
             for row, (start, end) in spans.items()}
 
