@@ -43,7 +43,7 @@ Grouped by what they answer:
 
 - **Playback** — `source`, `sourceName`, `playing`, `rendering`, `position`, `duration`, `seekable`, `bufferSeconds`, `volume`, `volumeSlider`, `volumeCurve`, `volumeSteepness`, `muted`, `episodeStream`, `episodeLoading`, `episodeError`, `episodeURL`
 - **Tracklist** — `trackLead` (`"title"` or `"artist"`: which line leads a row; `currentTrack` and `pendingTrack` stay "artist — title" either way), `currentTrack`, `trackCount`, `pendingTrack`, `pendingSeconds`
-- **Window** — `pane`, `tracksOpen`, `windowVisible`, `windowContentAttached`, `catalogOpen`, `catalogTab`, `catalogQuery`, `catalogDetail`, `detailTags`, `settingsVisible`, `settingsPane`, `knobAngle`
+- **Window** — `pane`, `tracksOpen`, `windowVisible`, `windowContentAttached`, `catalogOpen`, `catalogTab`, `catalogQuery`, `catalogDetail`, `detailTags`, `detailError`, `settingsVisible`, `settingsPane`, `knobAngle`
 - **Catalog** — `catalogRows`, `catalogFirstRows`, `savedCount`, `savedKeys` (every saved item's id in the Saved tab's order — `show:<alias>`, `mixtape:<alias>`, `episode:<show>/<episode>`; a `save` puts its item first), `mixtapeCount`, `genreCount`, `moodCount`, `channels`, `onAir`, `nextUp`, `scheduleChannel`, `scheduleDays`, `showIndex`
 - **Explore** — `exploreMood`, `exploreGenres`, `exploreMusicOnly`, `exploreFocused`, `exploreLoaded`, `exploreTotal`
 - **App** — `signedIn`, `syncedWithAccount`, `outage`, `running`, `autoChecksForUpdates`, `canCheckForUpdates`, `resumeLastSource`, `lastSource` (the `mixtape:<alias>` or `channel:<n>` launch would tune; `""` once `stop` or an episode leaves nothing to resume)
@@ -151,6 +151,8 @@ osascript -e 'tell application "NTS Radio" to explore more'
 osascript -e 'tell application "NTS Radio" to save "veronica-vasicka"'
 osascript -e 'tell application "NTS Radio" to close catalog'
 ```
+
+**`open show` answers before the show's page has loaded.** The reply sets `catalogDetail` straight away; `detailTags` fills in once the page arrives. If the fetch fails, `detailError` carries the reason, for example "nts.live answered HTTP 404." for an alias that does not exist, and opening the show again retries. Wait for one or the other: `detailTags` non-empty or `detailError` non-empty.
 
 **`browse genre` takes a display name; `filter explore` takes an id.** `Kosmische` versus `ambientnewage-kosmiche`. The error message for an unknown genre explains the difference.
 

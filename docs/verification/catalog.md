@@ -84,7 +84,7 @@ Not checkable by hand:
 
 | ID | P | Device | Claim | Setup | Steps | Expected | Result |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| SHOW-01 | P1 | script | The episode list is not reported (driven by script) — **B-01**. | Explore showing 12 rows. | 1. `open show "anz"`.<br>2. Read `catalogDetail`, `catalogRows`, `catalogFirstRows`, `detailTags`. | Detail and tags set; rows still Explore's. | pass (scripted 2026-10-03) |
+| SHOW-01 | P1 | script | The episode list is not reported (driven by script) — **B-01**. | Explore showing 12 rows. | 1. `open show "anz"`.<br>2. Read `catalogDetail`, `catalogRows`, `catalogFirstRows`, `detailTags`. | Detail and tags set; rows still Explore's. | pass (scripted 2026-10-05) |
 | SHOW-02 | P1 | mouse | The pane draws what it has, then fills in (what it knows, and when). | A show never opened. | 1. Click it and watch for 3s. | Artwork and title at once; tags, blurb and episodes appear after. | — |
 | SHOW-03 | P1 | mouse | Scrolling to the last episode pages twelve more (the simple case). | A show with 30+ episodes open. | 1. Note the count line.<br>2. Scroll to the last episode.<br>3. Note it again. | Up by twelve. | — |
 | SHOW-04 | P2 | mouse | The count line drops "OF" once everything is loaded (the episode count). | A show with fewer than 24 episodes. | 1. Page to the end.<br>2. Read the count line. | A bare number, no `OF`. | — |
@@ -93,6 +93,7 @@ Not checkable by hand:
 | SHOW-07 | P2 | offline | A show that fails shows no error (cancel and interrupt) — **B-13**. | Wi-Fi off. | 1. Open a show never opened before. | Record. Expected: title and maybe artwork, no blurb, no episodes, no error in the pane. | — |
 | SHOW-08 | P2 | mouse | Leaving the catalog discards the detail (cancel and interrupt). | A show open. | 1. Press LIVE, then the catalog segment. | A list, not the detail. | pass |
 | SHOW-09 | P3 | keyboard | Escape does not close the detail (cancel and interrupt) — **B-16**. | A show open. | 1. Press Escape. | Nothing closes. | — |
+| SHOW-10 | P1 | script | A show whose page fails says why (cancel and interrupt). | None. | 1. `open show "not-a-real-show"`.<br>2. Read `detailError` until it is set. | The reply carries `detailError: ""`; within 10s it reads "nts.live answered HTTP 404." and `detailTags` stays empty. | pass (scripted 2026-10-05) |
 
 ## catalog/episode-playback.md
 

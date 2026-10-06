@@ -14,7 +14,8 @@ SAVE-02	manual	`save` writes to the NTS account, so the runner never drives it
 SAVE-08	dictionary	(.[0].sdef | test("<command name=\"save\"")) and (.[0].sdef | test("<command name=\"[^\"]*(star|unsave|list|saved)"; "i") | not)
 SCHD-09	catalog schedule 3	.[0].code == -1703 and (.[0].error | contains("NTS 3 is not a channel. Use 1 or 2."))
 SCHD-10	state	.[0].scheduleDays | length >= 8 and all(split(" · ")[1] | tonumber | . >= 1 and . <= 17)
-SHOW-01	catalog explore ; show anz ; until 10 .detailTags | length > 0	.[1].catalogDetail == "show:anz" and (.[2].detailTags | length > 0) and .[2].catalogRows == .[2].exploreLoaded
+SHOW-01	catalog explore ; show anz ; until 10 .detailTags | length > 0	.[1].catalogDetail == "show:anz" and (.[2].detailTags | length > 0) and .[2].detailError == "" and .[2].catalogRows == .[2].exploreLoaded
+SHOW-10	show not-a-real-show ; until 10 .detailError != ""	.[0].catalogDetail == "show:not-a-real-show" and .[0].detailError == "" and .[1].detailError == "nts.live answered HTTP 404." and (.[1].detailTags | length == 0)
 EP-01	tune episode:anz/anz-25th-june-2026 --wait	(.[0].episodeStream | test("sndcdn\\.com|mixcloud")) and (.[0].episodeLoading | not) and .[0].episodeError == ""
 EP-04	tune episode:anz/anz-25th-june-2026 ; tune channel:1 ; sleep 10 ; state	.[3].source == "channel:1" and .[3].playing and (.[3].episodeStream | test("sndcdn|mixcloud") | not)
 EP-05	tune episode:anz/not-a-real-episode ; until 10 .episodeError != ""	(.[0] | has("error") | not) and .[1].episodeError == "nts.live answered HTTP 404."

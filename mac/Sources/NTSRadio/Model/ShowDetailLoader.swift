@@ -14,6 +14,10 @@ final class ShowDetailLoader: ObservableObject {
     /// (Lung Dart has 102) needs one request per twelve.
     @Published private(set) var episodes: [String: [NTSAPI.Episode]] = [:]
     @Published private(set) var episodeTotals: [String: Int] = [:]
+    /// Why the last page fetch for an alias failed, until the next attempt.
+    /// Without it a failed fetch and one still in flight both read as a show
+    /// with no tags.
+    @Published private(set) var detailErrors: [String: String] = [:]
 
     /// Aliases with a request out, one set per endpoint, so a second show opened
     /// inside the first one's latency still fetches, and one show opened twice
@@ -29,7 +33,8 @@ final class ShowDetailLoader: ObservableObject {
 
     /// Fetch a show's page and then its first page of episodes, once. Both are
     /// best-effort: a failure leaves the detail view on what the schedule row
-    /// already knew. The requests run in the loader's own task, so a caller
+    /// already knew, records the page's error in `detailErrors`, and the next
+    /// `load` tries again. The requests run in the loader's own task, so a caller
     /// going away (a view's `.task` cancelled) can't cancel a fetch another
     /// caller is relying on.
     func load(_ alias: String) {
@@ -39,11 +44,17 @@ final class ShowDetailLoader: ObservableObject {
         }
         // Already fetching: that request loads the episodes once it lands.
         guard detailsInFlight.insert(alias).inserted else { return }
+        detailErrors[alias] = nil
         Task { [weak self] in
-            let d = try? await NTSAPI.show(alias: alias)
+            let result: Result<NTSAPI.ShowDetail, Error>
+            do { result = .success(try await NTSAPI.show(alias: alias)) }
+            catch { result = .failure(error) }
             guard let self else { return }
             self.detailsInFlight.remove(alias)
-            if let d {
+            switch result {
+            case .failure(let error):
+                self.detailErrors[alias] = error.localizedDescription
+            case .success(let d):
                 self.details[alias] = d
                 // The same fetch the backfill would otherwise make later —
                 // recording it here means this alias never re-queues for that.

@@ -112,9 +112,11 @@ struct StateSnapshot: Codable {
     /// pane covering the whole catalog was invisible from here — the grid's
     /// own fields keep describing the list underneath it — and its tags are
     /// chips you can click, so what they say is behaviour rather than
-    /// decoration.
+    /// decoration. `detailError` is why the open show's page fetch failed, so
+    /// a failed fetch and one still in flight don't both read as no tags.
     var catalogDetail: String
     var detailTags: [String]
+    var detailError: String
     var catalogQuery: String
     var catalogRows: Int
     var catalogFirstRows: [String]
@@ -334,6 +336,10 @@ extension AppModel {
                 guard case .show(let alias, _) = detail else { return [] }
                 let d = showDetail.details[alias]
                 return (d?.genres ?? []) + (d?.moods ?? [])
+            }(),
+            detailError: {
+                guard case .show(let alias, _) = detail else { return "" }
+                return showDetail.detailErrors[alias] ?? ""
             }(),
             catalogQuery: query,
             catalogRows: catalogRows.count,
