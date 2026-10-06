@@ -163,6 +163,9 @@ final class RadioWindowController: NSObject, NSWindowDelegate {
     /// `window visible`.
     var isWindowVisible: Bool { built?.isVisible ?? false }
 
+    /// The built window, for `Demo` to size and place.
+    var demoWindow: NSWindow? { built }
+
     /// Whether the radio UI is in the window — the state blob's
     /// `windowContentAttached`.
     var isContentAttached: Bool { built?.contentViewController != nil }

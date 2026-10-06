@@ -152,6 +152,12 @@ struct StateSnapshot: Codable {
     /// mark in the same place but are not the same movement.
     var knobAngle: Double
 
+    /// The alias of the mixtape under the dial's hover, empty when none.
+    /// `run demo` drives it, so a script can watch the sweep move.
+    var hoverMixtape: String
+    /// Whether `run demo` is still playing.
+    var demoRunning: Bool
+
     /// Sparkle's own state — otherwise "did Check for Updates actually do
     /// anything" is only answerable by watching a window appear.
     var autoChecksForUpdates: Bool
@@ -379,6 +385,8 @@ extension AppModel {
                 )
             },
             knobAngle: (knobAngle * 100).rounded() / 100,
+            hoverMixtape: hoverIndex.flatMap { catalog.mixtapes.indices.contains($0) ? catalog.mixtapes[$0].alias : nil } ?? "",
+            demoRunning: Demo.running,
             autoChecksForUpdates: preferences.autoChecksForUpdates,
             canCheckForUpdates: preferences.canCheckForUpdates,
             logDirectory: LogFiles.directory.path,

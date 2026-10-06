@@ -69,6 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // Resources/NTSRadio.sdef.
         AppModel.scriptingReady = true
         RadioWindowController.scriptTarget = windowController
+        Demo.startClipIfRequested()
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.image = MenuBarIcon.idleFrame

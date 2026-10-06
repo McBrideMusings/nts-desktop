@@ -265,6 +265,14 @@
             <result type="text" description="The state straight after the event, as JSON."/>
         </command>
 
+        <command name="run demo" code="NTSrDEMO"
+                 description="Play the scripted dial sweep used to record the portfolio clip: stop, show the live pane, size the window on a Retina display, then hover every other wedge in turn and clear the hover, and put the window back. It can run in parts. Answers at once; demoRunning in the state turns false when it ends.">
+            <cocoa class="NTSRunDemoCommand"/>
+            <direct-parameter type="text" optional="yes"
+                              description="place (clean state, window sized on a Retina display, left there), sweep (the hover around the dial), restore (window back where it was) or all, the default: place, sweep, restore."/>
+            <result type="text" description="The state as the sweep begins, as JSON."/>
+        </command>
+
         <command name="check for updates" code="NTSrUPDT"
                  description="Ask Sparkle to check for an update now, the same as the status menu's or the main menu's Check for Updates… item. Sparkle may put up its own window to report what it found.">
             <cocoa class="NTSCheckForUpdatesCommand"/>

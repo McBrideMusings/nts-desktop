@@ -675,6 +675,28 @@ final class NTSSimulateCommand: NTSCommand {
     }
 }
 
+/// `run demo` — the scripted dial sweep `admin noodle-clip` records. It answers
+/// at once; `demoRunning` in the state says when a sweep has finished.
+@objc(NTSRunDemoCommand)
+final class NTSRunDemoCommand: NTSCommand {
+    override func performDefaultImplementation() -> Any? {
+        run {
+            let name = (self.directParameter as? String)?.lowercased() ?? "all"
+            guard let part = Demo.Part(rawValue: name) else {
+                self.scriptErrorNumber = -1703   // errAETypeError
+                self.scriptErrorString = "\"\(name)\" is not a part of the demo. Use place, sweep, restore or all."
+                return false
+            }
+            if let failure = Demo.start(part) {
+                self.scriptErrorNumber = -1708   // errAEEventNotHandled
+                self.scriptErrorString = failure
+                return false
+            }
+            return true
+        }
+    }
+}
+
 /// The same call the status menu's and the main menu's "Check for Updates…"
 /// items make. Sparkle owns everything past this point — the network fetch,
 /// and any window it puts up to report what it found or that the appcast

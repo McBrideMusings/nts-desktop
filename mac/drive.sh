@@ -47,6 +47,9 @@ usage: admin drive <verb> [args]
   simulate stall|failure|wake|network
                                  break the stream, or deliver a wake or a
                                  network return, to watch recovery mend it
+  demo [place|sweep|restore] [--wait]
+                                 play the scripted dial sweep (all three parts by default);
+                                 --wait returns when the sweep ends
   updates                        check for updates
   window-id radio|<title>        the window number screencapture -l takes
   quit | launch                  graceful quit / open and wait for state
@@ -145,6 +148,23 @@ case $verb in
     if [[ $# -eq 1 ]]; then act "open settings $(q "$1")"; else act "open settings"; fi ;;
   close-settings) act "close settings" ;;
   simulate) [[ $# -eq 1 ]] || usage; act "simulate $(q "$1")" ;;
+  demo)
+    wait_end=false
+    [[ ${!#:-} == --wait ]] && { wait_end=true; set -- "${@:1:$#-1}"; }
+    [[ $# -le 1 ]] || usage
+    case ${1:-all} in
+      place|sweep|restore|all) ;;
+      *) usage ;;
+    esac
+    act "run demo $(q "${1:-all}")"
+    if $wait_end; then
+      for _ in $(seq 200); do
+        [[ $(tell "get state" | jq .demoRunning) == false ]] && exit 0
+        sleep 0.1
+      done
+      echo "the demo did not end within 20s" >&2
+      exit 1
+    fi ;;
   updates)  act "check for updates" ;;
   window-id)
     # The radio window has no title; the Settings window's title is its pane's name.
