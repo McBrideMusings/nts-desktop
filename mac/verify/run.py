@@ -25,6 +25,10 @@ one line per `script` row, keyed by the row's ID:
                           blocked when System Events will not say
     dictionary            {"sdef": <the installed bundle's dictionary XML>}
     require <jq>          null; when <jq> is false of `get state`, the row is blocked
+    burst <s> <cmd> & <cmd> & …
+                          every command sent in one osascript without waiting for
+                          replies, so they overlap inside the app; then <s> of the
+                          `api` log as {"requests": {"<path> ok|failed": count}}
 
 Every element that is an object also carries `_ms`, how long the step took.
 No expression inside a step may contain ` ; `, which separates steps.
@@ -61,6 +65,7 @@ import plistlib
 import re
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -104,6 +109,50 @@ def drive(*args):
 
 def osa(script):
     return reply(subprocess.run(["osascript", "-e", script], capture_output=True, text=True))
+
+
+API_LINE = re.compile(r"^\S+ (\S+) (ok|failed)\b")
+
+
+def burst(secs, commands):
+    """Send `commands` in one osascript inside `ignoring application responses`
+    and count the requests the app logs in the next `secs` seconds. Separate
+    osascript calls would each wait for their reply, so a request could land
+    before the next command arrived and nothing would overlap."""
+    stream = subprocess.Popen(
+        ["log", "stream", "--style", "ndjson", "--level", "debug", "--predicate",
+         'subsystem == "live.nts.desktop" AND category == "api"'],
+        stdout=subprocess.PIPE, text=True)
+    lines = []
+    reader = threading.Thread(target=lambda: lines.extend(stream.stdout), daemon=True)
+    try:
+        # `log stream` prints its filter line before it is attached; give it a
+        # second so the first request is not missed.
+        stream.stdout.readline()
+        reader.start()
+        time.sleep(1)
+        args = ["osascript", "-e", f'tell application "{APP}"', "-e", "ignoring application responses"]
+        for cmd in commands:
+            args += ["-e", cmd]
+        args += ["-e", "end ignoring", "-e", "end tell"]
+        sent = reply(subprocess.run(args, capture_output=True, text=True))
+        if "error" in sent:
+            return sent
+        time.sleep(secs)
+    finally:
+        stream.terminate()
+        stream.wait()
+    reader.join(2)
+    requests = {}
+    for line in lines:
+        try:
+            m = API_LINE.match(json.loads(line).get("eventMessage", ""))
+        except json.JSONDecodeError:
+            continue
+        if m:
+            key = f"{m[1]} {m[2]}"
+            requests[key] = requests.get(key, 0) + 1
+    return {"requests": requests}
 
 
 def jq(expr, data):
@@ -191,6 +240,9 @@ def step(text):
     if verb == "dictionary":
         proc = subprocess.run(["sdef", f"/Applications/{APP}.app"], capture_output=True, text=True)
         return {"sdef": proc.stdout}
+    if verb == "burst":
+        secs, _, cmds = rest.partition(" ")
+        return burst(float(secs), [c.strip() for c in cmds.split(" & ")])
     if verb == "require":
         if not jq(rest, drive("state"))[0]:
             raise Blocked(f"requires {rest}")

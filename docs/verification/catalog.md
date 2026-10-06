@@ -94,6 +94,7 @@ Not checkable by hand:
 | SHOW-08 | P2 | mouse | Leaving the catalog discards the detail (cancel and interrupt). | A show open. | 1. Press LIVE, then the catalog segment. | A list, not the detail. | pass |
 | SHOW-09 | P3 | keyboard | Escape does not close the detail (cancel and interrupt) — **B-16**. | A show open. | 1. Press Escape. | Nothing closes. | — |
 | SHOW-10 | P1 | script | A show whose page fails says why (cancel and interrupt). | None. | 1. `open show "not-a-real-show"`.<br>2. Read `detailError` until it is set. | The reply carries `detailError: ""`; within 10s it reads "nts.live answered HTTP 404." and `detailTags` stays empty. | pass (scripted 2026-10-05) |
+| SHOW-11 | P2 | script | One show opened several times fetches once, and a second show opened inside the first one's latency still loads (cancel and interrupt). | App just relaunched, so no show page is cached. Both shows already detailed in the show index, so the backfill never fetches them. | 1. In one `osascript`, without waiting for replies: `open show "ctm-festival-2015"` three times, then `open show "veronica-vasicka"`.<br>2. Count the `api` log lines for both shows over 6s.<br>3. Read `detailTags` until set.<br>4. `open show "ctm-festival-2015"` again. | Exactly one page request and one episodes request per show, each `ok`; Veronica Vasicka's tags arrive; reopening CTM Festival 2015 answers with its tags. | pass (scripted 2026-10-05) |
 
 ## catalog/episode-playback.md
 

@@ -67,12 +67,14 @@ enum NTSAPI {
             let (data, response) = try await URLSession.shared.data(for: request)
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
             guard (200..<300).contains(code) else { throw APIError.http(code) }
-            Log.api.debug("\(endpoint, privacy: .public) ok, \(data.count) bytes")
+            // "<endpoint> <path> ok|failed" — the path ties a line to one show,
+            // and mac/verify/run.py's API_LINE counts requests by it.
+            Log.api.debug("\(endpoint, privacy: .public) \(url.path, privacy: .public) ok, \(data.count) bytes")
             if reportFailures { await ServiceStatus.shared.succeeded(endpoint) }
             return data
         } catch {
             let detail = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            Log.api.error("\(endpoint, privacy: .public) failed: \(detail, privacy: .public)")
+            Log.api.error("\(endpoint, privacy: .public) \(url.path, privacy: .public) failed: \(detail, privacy: .public)")
             if reportFailures { await ServiceStatus.shared.failed(endpoint, error) }
             throw error
         }
