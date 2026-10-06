@@ -161,7 +161,6 @@ private struct SlotRow: View {
     /// This broadcast's own photograph, city and genres, once fetched.
     private var detail: SlotDetail? { model.slotArt.detail(for: slot) }
     private var onAir: Bool { model.timeline.onAir?.id == slot.id }
-    private var past: Bool { (slot.end ?? .distantFuture) <= Date() }
 
     private var meta: String {
         let location = [slot.location, detail?.location ?? "", indexed?.location ?? ""]
@@ -219,10 +218,6 @@ private struct SlotRow: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(Theme.hairline(0.05)).frame(height: 1)
         }
-        // Finished programmes stay in the list — the grid opens a day in the past
-        // and the day you are in is half over — but recede so the eye lands on
-        // what is still to come.
-        .opacity(past ? 0.4 : 1)
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .onTapGesture { model.openSlot(slot) }
@@ -253,8 +248,8 @@ private struct SlotRow: View {
     }
 
     /// Tapping the badge tunes the channel, which is the only thing a listener
-    /// can actually do with the programme that is on: the rest of the grid is
-    /// either finished or hasn't been broadcast yet.
+    /// can actually do with the programme that is on: the rest of the grid
+    /// hasn't been broadcast yet.
     private var onAirBadge: some View {
         Button { model.select(.channel(slot.channel)) } label: {
             Text("ON AIR")

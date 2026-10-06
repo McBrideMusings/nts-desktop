@@ -79,6 +79,7 @@ Not checkable by hand:
 | SCHD-10 | P2 | script | NTS 1's schedule spans 8 or more days at up to 17 slots each (confirmed). | — | 1. `open catalog showing "schedule" channel 1`.<br>2. Read `scheduleDays`. | `scheduleChannel` is 1 and there are at least 8 entries, each with a count from 1 to 17; the first and last days are partial. | pass (scripted 2026-10-06; NTS 2 runs days of up to 23 slots, so the ceiling holds for NTS 1 only) |
 | SCHD-11 | P2 | mouse | Day headers pin as they pass under the top edge (summary). | Schedule tab. | 1. Scroll slowly through a day boundary. | The header sticks at the top until the next day pushes it up. | — |
 | SCHD-12 | P3 | mouse | `YESTERDAY` never appears (edge cases) — **B-17**. | Schedule tab. | 1. Scroll to the very top of the grid.<br>2. Read the first day header. | `TODAY`, not `YESTERDAY`. Record if it ever shows. | — |
+| SCHD-13 | P2 | script | The grid holds no programme that has already finished, on either channel. | — | 1. `open catalog showing "schedule" channel 1`.<br>2. Read `scheduleEnded`.<br>3. The same for channel 2. | `scheduleEnded` is 0 both times. It is above 0 only in the second after a changeover, or the minute after a wake from sleep. | — |
 
 ## catalog/show-detail.md
 

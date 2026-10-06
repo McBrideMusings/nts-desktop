@@ -126,6 +126,10 @@ struct StateSnapshot: Codable {
     /// it grouped the grid into, and what it calls on air.
     var scheduleChannel: Int
     var scheduleDays: [String]
+    /// Slots in the timeline whose end has passed. Both writers of the grid
+    /// drop them, so this is 0 except for the second after a changeover and the
+    /// minute after a wake from sleep, before the advance catches up.
+    var scheduleEnded: Int
     var onAir: String
     var nextUp: String
 
@@ -347,6 +351,7 @@ extension AppModel {
             catalogFirstRows: catalogRows.prefix(3).map { "\($0.title) · \($0.meta)" },
             scheduleChannel: timeline.channel.rawValue,
             scheduleDays: timeline.days.map { "\($0.label) · \($0.slots.count)" },
+            scheduleEnded: timeline.days.flatMap(\.slots).filter { ($0.end ?? .distantFuture) <= Date() }.count,
             onAir: timeline.onAir.map { "\($0.startEnd) \($0.title)" } ?? "",
             nextUp: timeline.next.map { "\($0.startEnd) \($0.title)" } ?? "",
             showIndex: ShowIndexSnapshot(
