@@ -28,7 +28,7 @@ one line per `script` row, keyed by the row's ID:
     burst <s> <cmd> & <cmd> & …
                           every command sent in one osascript without waiting for
                           replies, so they overlap inside the app; then <s> of the
-                          `api` log as {"requests": {"<path> ok|failed": count}}
+                          `api` log as {"requests": {"<path> ok|failed|malformed": count}}
 
 Every element that is an object also carries `_ms`, how long the step took.
 No expression inside a step may contain ` ; `, which separates steps.
@@ -108,7 +108,7 @@ def osa(script):
     return reply(subprocess.run(["osascript", "-e", script], capture_output=True, text=True))
 
 
-API_LINE = re.compile(r"^(\S+) (ok|failed)\b")
+API_LINE = re.compile(r"^(\S+) (ok|failed|malformed)\b")
 
 
 def burst(secs, commands):
