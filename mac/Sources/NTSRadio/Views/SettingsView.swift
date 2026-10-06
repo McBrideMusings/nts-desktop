@@ -54,20 +54,22 @@ final class SettingsSelection: ObservableObject {
 /// the system went dark.
 struct SettingsView: View {
     @ObservedObject var selection: SettingsSelection
-    /// The live account, except under `admin snapshot`, which passes a seeded one
-    /// so the shot does not depend on who is signed in on the machine rendering it.
-    var auth: NTSAuth = AppModel.shared.auth
+    /// Both handed in, never reached for: the window passes the live ones, and
+    /// `admin snapshot` passes a throwaway store and a seeded account, so a shot
+    /// neither writes the machine's settings nor shows who is signed in on it.
+    let preferences: Preferences
+    let auth: NTSAuth
 
     var body: some View {
         switch selection.pane {
-        case .general: GeneralSettings()
+        case .general: GeneralSettings(prefs: preferences)
         case .account: AccountSettings(auth: auth)
         }
     }
 }
 
 private struct GeneralSettings: View {
-    @ObservedObject private var prefs = AppModel.shared.preferences
+    @ObservedObject var prefs: Preferences
 
     private var isPerceptual: Bool { prefs.curve.kind == .perceptual }
 

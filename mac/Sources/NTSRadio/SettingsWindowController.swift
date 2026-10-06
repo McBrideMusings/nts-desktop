@@ -86,7 +86,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSToolbarDeleg
     // MARK: Window
 
     private func make() -> NSWindow {
-        let hosting = NSHostingController(rootView: SettingsView(selection: selection))
+        let hosting = NSHostingController(rootView: SettingsView(
+            selection: selection,
+            preferences: AppModel.shared.preferences,
+            auth: AppModel.shared.auth))
         // The window follows the hosted view's own preferred size, so changing
         // pane resizes it once, by AppKit, anchored where AppKit anchors a
         // content-size change. Doing that by hand — `setContentSize`, or a

@@ -28,9 +28,19 @@ enum Snapshot {
             print("wrote \(name)")
         }
 
+        // Every shot's settings live in a store of their own, emptied before the
+        // first shot and deleted before exit, so a run starts from the code's
+        // defaults and leaves the machine's real `live.nts.desktop` untouched.
+        // Nothing here may touch `AppModel.shared`: making it starts Sparkle and
+        // binds the real store.
+        let store = UserDefaults(suiteName: snapshotSuite)!
+        store.removePersistentDomain(forName: snapshotSuite)
+        let prefs = Preferences(defaults: store, loginItem: NoLoginItem(), updates: NoUpdates())
+        let account = NTSAuth.sample(email: "listener@example.com")
+
         func shot(_ name: String, size: CGSize = CGSize(width: 880, height: 720),
                   _ configure: (AppModel) -> Void) {
-            let model = AppModel(preferences: AppModel.shared.preferences)
+            let model = AppModel(preferences: prefs)
             configure(model)
             shotView(name, PopoverView()
                 .environmentObject(model)
@@ -107,28 +117,8 @@ enum Snapshot {
             let selection = SettingsSelection()
             selection.pane = pane
             shotView("04-settings-\(pane.rawValue).png",
-                     SettingsView(selection: selection,
-                                  auth: NTSAuth.sample(email: "listener@example.com")))
+                     SettingsView(selection: selection, preferences: prefs, auth: account))
         }
-        // The General pane's volume row in each curve and each appearance. An
-        // off-screen render has no window to take its appearance from, so the
-        // colour scheme and a window-coloured ground are set by hand here.
-        let prefs = AppModel.shared.preferences
-        let shotGain = prefs.gain
-        let shotCurve = prefs.curve
-        prefs.gain = 12
-        for kind in VolumeCurve.Kind.allCases {
-            for dark in [false, true] {
-                prefs.curve.kind = kind
-                let selection = SettingsSelection()
-                shotView("04-settings-general-\(kind.rawValue)-\(dark ? "dark" : "light").png",
-                         SettingsView(selection: selection)
-                            .background(Color(white: dark ? 0.16 : 0.93))
-                            .environment(\.colorScheme, dark ? .dark : .light))
-            }
-        }
-        prefs.curve = shotCurve
-        prefs.gain = shotGain
         // The knob face only carries a title once a mixtape is selected, and the
         // longest names are the ones that reach the circle's edge — this is the
         // shot that shows whether they fit.
@@ -168,6 +158,45 @@ enum Snapshot {
         // reads as a broken screen. It is verified by capturing the real window
         // instead (`screencapture -l <windowNumber>`).
 
+        // The General pane's volume row in each curve and each appearance. An
+        // off-screen render has no window to take its appearance from, so the
+        // colour scheme and a window-coloured ground are set by hand here. Last,
+        // because it moves the gain and curve every shot above renders with.
+        prefs.gain = 12
+        for kind in VolumeCurve.Kind.allCases {
+            for dark in [false, true] {
+                prefs.curve.kind = kind
+                let selection = SettingsSelection()
+                shotView("04-settings-general-\(kind.rawValue)-\(dark ? "dark" : "light").png",
+                         SettingsView(selection: selection, preferences: prefs, auth: account)
+                            .background(Color(white: dark ? 0.16 : 0.93))
+                            .environment(\.colorScheme, dark ? .dark : .light))
+            }
+        }
+
+        // Emptying the domain leaves cfprefsd's empty plist on disk; flush, then
+        // delete the file so the run leaves nothing in ~/Library/Preferences.
+        store.removePersistentDomain(forName: snapshotSuite)
+        CFPreferencesAppSynchronize(snapshotSuite as CFString)
+        let plist = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Preferences/\(snapshotSuite).plist")
+        try? FileManager.default.removeItem(at: plist)
         exit(0)
     }
+
+    private static let snapshotSuite = "live.nts.desktop.snapshot"
+}
+
+/// Launch-at-login for a run that must never register anything.
+private struct NoLoginItem: LoginItem {
+    var isAvailable: Bool { false }
+    var isEnabled: Bool { false }
+    func setEnabled(_ enabled: Bool) throws {}
+}
+
+/// Update checks for a run that must never start Sparkle.
+private final class NoUpdates: UpdateChecker {
+    var automaticallyChecks = false
+    var canCheck: Bool { false }
+    func check() {}
 }
