@@ -75,6 +75,7 @@ These are where two pieces of code most easily disagree. Define once, use exactl
 | **0.5s** | Playback position tick | `PlayerEngine.swift:72` |
 | **22.5°** | One dial detent — 360 ÷ 16 | measured |
 | **495pt** | Now-playing bar drops the meter and volume slider below this width | `NowPlayingBar.swift:26` |
+| **360pt** | Now-playing bar closes its gaps to 8pt and shrinks the tracklist chip to 28pt below this width | `NowPlayingBar.swift:32` |
 | **520 / 230 / 340pt** | Window minimum: width ≥ 520 with height ≥ 230, **or** height ≥ 520 with width ≥ 340 | `RadioWindowController.swift:14-33` |
 | **0–100** | Volume scale, applied to the player as a fraction of 100 | `PlayerEngine.swift:170` |
 | **11 days** | What the schedule actually covers, at 11–17 slots a day | measured |
