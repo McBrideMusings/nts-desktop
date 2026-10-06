@@ -22,6 +22,12 @@ let package = Package(
             path: "Sources/EpisodeMatch",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        // When to reload a silent live stream, with no player and no clock, so
+        // its schedule is tested without audio or waiting.
+        .target(
+            name: "StallWatch",
+            path: "Sources/StallWatch"
+        ),
         // Firestore Listen client + generated protobuf/gRPC code, isolated from
         // the app so a probe tool can share it.
         .target(
@@ -40,6 +46,7 @@ let package = Package(
             dependencies: [
                 "NTSFirestore",
                 "EpisodeMatch",
+                "StallWatch",
                 .product(name: "Sparkle", package: "Sparkle"),
             ],
             path: "Sources/NTSRadio",
@@ -79,6 +86,11 @@ let package = Package(
             dependencies: ["EpisodeMatch"],
             path: "Tests/EpisodeMatchTests",
             swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .testTarget(
+            name: "StallWatchTests",
+            dependencies: ["StallWatch"],
+            path: "Tests/StallWatchTests"
         ),
     ]
 )

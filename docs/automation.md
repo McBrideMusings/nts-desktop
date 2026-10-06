@@ -48,7 +48,7 @@ Grouped by what they answer:
 - **Explore** — `exploreMood`, `exploreGenres`, `exploreMusicOnly`, `exploreFocused`, `exploreLoaded`, `exploreTotal`
 - **App** — `signedIn`, `syncedWithAccount`, `outage`, `running`, `autoChecksForUpdates`, `canCheckForUpdates`, `resumeLastSource`, `lastSource` (the `mixtape:<alias>` or `channel:<n>` launch would tune; `""` once `stop` or an episode leaves nothing to resume)
 - **Logs** — `logDirectory`, `recordedSources`
-- **Recovery** — `recovery`: `endless` (a channel or mixtape is loaded, the only kind that is ever reloaded), `attempts` (reloads since audio last came out; 0 when nothing is being recovered), `reason` and `lastAttempt` (what set off the latest reload, and when), `recoveries` and `lastRecovered` (streaks since launch that ended with audio back), `network` (`satisfied`, `unsatisfied` or `unknown`). Times are ISO 8601 in UTC, `""` when it has not happened yet.
+- **Recovery** — `recovery`: `endless` (a channel or mixtape is loaded, the only kind that is ever reloaded), `attempts` (reloads since audio last came out and held for 60 seconds; 0 when nothing is being recovered), `reason` and `lastAttempt` (what set off the latest reload, and when), `recoveries` and `lastRecovered` (streaks since launch that ended with audio back for 60 seconds), `network` (`satisfied`, `unsatisfied` or `unknown`). Times are ISO 8601 in UTC, `""` when it has not happened yet.
 
 **`playing` and `rendering` are different.** The first means playback was asked for; the second means audio is actually coming out. Wait on `rendering` if you want sound, not intent.
 
@@ -112,7 +112,7 @@ seek to 1800   on a channel → -1708  What's tuned has no position to seek to �
 
 Values are clamped: `seek to -50` lands on `0`, `seek to 99999` on the last second.
 
-**A channel or mixtape that falls silent while play is down comes back on its own.** The app reloads it at the live head when the Mac wakes, when the network comes back, when the stream fails or ends, and after 15 seconds of silence with none of those. A reload that does not start is tried again after 5, 10, 20, then every 30 seconds. `simulate` provokes each of those events, so a script can watch the `recovery` record and `rendering` without sleeping the Mac or turning Wi-Fi off:
+**A channel or mixtape that falls silent while play is down comes back on its own.** The app reloads it at the live head when the Mac wakes, when the network comes back, when the stream fails or ends, and after 15 seconds of silence with none of those. A reload that does not start is tried again after 5, 10, 20, then every 30 seconds. One that starts and drops within 60 seconds is reloaded after 20, 25, 35, then every 45 seconds of silence. `simulate` provokes each of those events, so a script can watch the `recovery` record and `rendering` without sleeping the Mac or turning Wi-Fi off:
 
 ```bash
 osascript -e 'tell application "NTS Radio" to simulate "stall"'    # audio stops, play stays down

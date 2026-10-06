@@ -2,6 +2,7 @@ import AppKit
 import AVFoundation
 import Combine
 import Network
+import StallWatch
 
 /// Thin AVPlayer wrapper. Handles both the live MP3 relay streams and the
 /// mixtape HLS streams transparently (AVPlayer negotiates either).
@@ -60,35 +61,26 @@ final class PlayerEngine: ObservableObject {
 
     // MARK: Recovery state, for the scripted `state` and the log.
 
-    /// Reloads made since audio last came out. Zero means no recovery is under
-    /// way; it goes back to zero when the stream renders again, or when the
-    /// listener pauses or tunes something else.
-    private(set) var recoveryAttempts = 0
+    /// Decides when to reload and when a streak of reloads has worked; this
+    /// engine carries out what it says.
+    private var watch = StallWatch()
+    /// Reloads made since audio last came out and held for
+    /// `StallWatch.settle`. Zero means no recovery is under way; it also goes
+    /// back to zero when the listener pauses or tunes something else.
+    var recoveryAttempts: Int { watch.attempts }
     /// What prompted the latest reload: `wake`, `network`, `item failed: …`,
     /// `stalled`, `retry`.
     private(set) var recoveryReason = ""
     private(set) var lastRecoveryAttempt: Date?
-    /// Streaks that ended with audio coming out again, since launch.
-    private(set) var recoveries = 0
+    /// Streaks that ended with audio holding again, since launch.
+    var recoveries: Int { watch.recoveries }
     private(set) var lastRecovered: Date?
     /// The network path as `NWPathMonitor` last reported it; nil before its
     /// first report.
     private(set) var networkSatisfied: Bool?
 
-    /// How long a stream that should be playing may stay silent before it is
-    /// reloaded with no other event to say it died — a Wi-Fi blip that never
-    /// changed the network path, or a server that stopped sending.
-    static let stallGrace: Duration = .seconds(15)
-
-    /// How long a reload gets to start rendering before the next one: 5, 10,
-    /// 20, then 30 seconds for as long as it takes. The first wait is long
-    /// enough for a slow network to fill the buffer, so a reload is never cut
-    /// off by the one after it.
-    static func backoff(after attempt: Int) -> Duration {
-        .seconds(min(5 * (1 << min(attempt - 1, 3)), 30))
-    }
-
-    /// The pending stall grace or retry — never both, so a trigger replaces it.
+    /// The timer `watch.pending` names — never more than one, so arming one
+    /// replaces the other.
     private var recoveryTimer: Task<Void, Never>?
     private var itemWatch: AnyCancellable?
     private var observers: [NSObjectProtocol] = []
@@ -210,86 +202,86 @@ final class PlayerEngine: ObservableObject {
         itemDied("item failed: \(error)")
     }
 
-    /// A failure that lands while a retry is already waiting is that retry's
-    /// own reload failing — offline, say — and reloading again at once would
-    /// turn the backoff into a tight loop. Only a wake or a returning network
-    /// jumps the queue.
     private func itemDied(_ reason: String) {
         Log.player.error("\(reason, privacy: .public) url=\(self.currentURLString, privacy: .public)")
-        guard recoveryAttempts == 0 else { return }
-        // A failed item cannot be rendering, whatever `isRendering` reads:
-        // that comes from a separate KVO that may not have landed yet.
-        recover(reason: reason)
+        perform(watch.failed(playerFacts), reason: reason)
     }
 
     /// Reload the current stream at the live head when the listener asked for
-    /// audio and none is coming out, then check again after `backoff` and keep
-    /// going until it renders or the listener stops asking. Does nothing to an
-    /// episode, a paused player, or one that is rendering.
+    /// audio and none is coming out, then check again after the backoff and
+    /// keep going until it renders or the listener stops asking. Does nothing
+    /// to an episode, a paused player, or one that is rendering.
     func recoverIfStalled(reason: String) {
-        guard !isRendering else {
-            Log.player.info("recover skipped reason=\(reason, privacy: .public): rendering")
-            return
-        }
-        recover(reason: reason)
+        perform(watch.stalled(playerFacts), reason: reason)
     }
 
-    private func recover(reason: String) {
-        guard isPlaying, isEndless, let url = currentURL else {
+    /// Tell `watch` the player changed. Called whenever `isPlaying` or
+    /// `isRendering` changes.
+    private func watchStall() {
+        perform(watch.changed(playerFacts), reason: recoveryReason)
+    }
+
+    private var playerFacts: StallWatch.Player {
+        StallWatch.Player(playing: isPlaying, rendering: isRendering,
+                          reloadable: isEndless && currentURL != nil)
+    }
+
+    private func perform(_ step: StallWatch.Step, reason: String) {
+        switch step {
+        case .none:
+            break
+        case .arm(let timer, let wait):
+            if timer == .settle {
+                Log.player.info("""
+                    rendering after \(self.recoveryAttempts) attempt(s); \
+                    recovered once it holds \(String(describing: wait), privacy: .public)
+                    """)
+            }
+            arm(timer, after: wait)
+        case .disarm:
+            disarm()
+        case .reload(let attempt, let check):
+            // `reloadable` is false without a URL, so a reload always has one.
+            let url = currentURL!
+            recoveryReason = reason
+            lastRecoveryAttempt = Date()
+            Log.player.notice("""
+                recover attempt=\(attempt) reason=\(reason, privacy: .public) \
+                next-check=\(String(describing: check), privacy: .public) url=\(url.absoluteString, privacy: .public)
+                """)
+            replaceItem(with: url)
+            player.play()
+            arm(.retry, after: check)
+        case .skip:
             Log.player.info("""
                 recover skipped reason=\(reason, privacy: .public) playing=\(self.isPlaying) \
                 rendering=\(self.isRendering) endless=\(self.isEndless)
                 """)
-            return
+        case .recovered(let streak):
+            lastRecovered = Date()
+            Log.player.notice("""
+                recovered after \(streak) attempt(s), \
+                last reason=\(self.recoveryReason, privacy: .public)
+                """)
+            disarm()
+        case .dropped(let streak):
+            Log.player.info("recovery dropped after \(streak) attempt(s): no longer playing")
+            disarm()
         }
-        recoveryAttempts += 1
-        recoveryReason = reason
-        lastRecoveryAttempt = Date()
-        let wait = Self.backoff(after: recoveryAttempts)
-        Log.player.notice("""
-            recover attempt=\(self.recoveryAttempts) reason=\(reason, privacy: .public) \
-            next-check=\(String(describing: wait), privacy: .public) url=\(url.absoluteString, privacy: .public)
-            """)
-        replaceItem(with: url)
-        player.play()
-        arm(after: wait) { $0.recoverIfStalled(reason: "retry") }
     }
 
-    /// Start or clear the timer that turns a silence into a recovery. Called
-    /// whenever `isPlaying` or `isRendering` changes.
-    private func watchStall() {
-        if isRendering {
-            if recoveryAttempts > 0 {
-                recoveries += 1
-                lastRecovered = Date()
-                Log.player.notice("""
-                    recovered after \(self.recoveryAttempts) attempt(s), \
-                    last reason=\(self.recoveryReason, privacy: .public)
-                    """)
-                recoveryAttempts = 0
-            }
-            disarm()
-            return
-        }
-        guard isPlaying, isEndless, currentURL != nil else {
-            if recoveryAttempts > 0 {
-                Log.player.info("recovery dropped after \(self.recoveryAttempts) attempt(s): no longer playing")
-                recoveryAttempts = 0
-            }
-            disarm()
-            return
-        }
-        guard recoveryTimer == nil else { return }
-        arm(after: Self.stallGrace) { $0.recoverIfStalled(reason: "stalled") }
-    }
-
-    private func arm(after wait: Duration, _ fire: @escaping @MainActor (PlayerEngine) -> Void) {
+    private func arm(_ timer: StallWatch.Timer, after wait: Duration) {
         recoveryTimer?.cancel()
         recoveryTimer = Task { [weak self] in
             try? await Task.sleep(for: wait)
             guard !Task.isCancelled, let self else { return }
             self.recoveryTimer = nil
-            fire(self)
+            let reason = switch timer {
+            case .grace: "stalled"
+            case .retry: "retry"
+            case .settle: self.recoveryReason
+            }
+            self.perform(self.watch.fired(timer, self.playerFacts), reason: reason)
         }
     }
 
@@ -319,7 +311,7 @@ final class PlayerEngine: ObservableObject {
     func load(_ url: URL, endless: Bool, autoplay: Bool, force: Bool = false) {
         if url != currentURL || force {
             // A choice the listener made ends any recovery of what was there.
-            recoveryAttempts = 0
+            watch.reset()
             disarm()
             isEndless = endless
             replaceItem(with: url)

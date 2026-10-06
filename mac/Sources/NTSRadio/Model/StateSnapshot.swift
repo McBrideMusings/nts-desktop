@@ -179,11 +179,12 @@ struct RecoverySnapshot: Codable {
     /// Whether what is loaded is a channel or a mixtape — the only kind
     /// recovery reloads.
     var endless: Bool
-    /// Reloads since audio last came out; 0 when no recovery is under way.
+    /// Reloads since audio last came out and held for `StallWatch.settle`; 0
+    /// when no recovery is under way.
     var attempts: Int
     var reason: String
     var lastAttempt: String
-    /// Streaks that ended with audio coming out again, since launch.
+    /// Streaks that ended with audio holding again, since launch.
     var recoveries: Int
     var lastRecovered: String
     /// "satisfied", "unsatisfied", or "unknown" before the first report.
