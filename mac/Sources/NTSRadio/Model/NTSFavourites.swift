@@ -230,11 +230,11 @@ enum NTSFavourites {
                 Log.auth.error("favourites \(method, privacy: .public) \(code) — \(detail, privacy: .public)")
                 throw FavouritesError.refused(code)
             }
-            ServiceStatus.shared.succeeded("favourites")
+            ServiceStatus.shared.succeeded(.favourites)
             return data
         } catch {
             Log.auth.error("favourites \(method, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
-            ServiceStatus.shared.failed("favourites", error)
+            ServiceStatus.shared.failed(.favourites, error)
             throw error
         }
     }

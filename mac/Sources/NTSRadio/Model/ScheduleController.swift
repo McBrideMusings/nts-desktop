@@ -164,7 +164,7 @@ final class ScheduleController: ObservableObject {
         slotArt.adopt(slot, detail: nil)
         detailTasks[number] = Task { [weak self] in
             guard let ep = try? await NTSAPI.episode(show: slot.showAlias, episode: slot.episodeAlias,
-                                                     reportAs: "on-air-detail"),
+                                                     reportAs: .onAirDetail),
                   !Task.isCancelled, let self,
                   self.catalog[number].onAir?.id == slot.id
             else { return }

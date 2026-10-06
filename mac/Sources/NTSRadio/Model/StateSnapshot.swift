@@ -270,7 +270,7 @@ extension AppModel {
         let outage: OutageSnapshot
         if let o = ServiceStatus.shared.outage {
             outage = .present(what: o.what, headline: o.headline, detail: o.detail,
-                               endpoint: o.endpoint, failures: o.failures)
+                               endpoint: o.endpoint.rawValue, failures: o.failures)
         } else {
             outage = .none
         }

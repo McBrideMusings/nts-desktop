@@ -39,6 +39,46 @@ enum Log {
     static let tracks = Logger(subsystem: subsystem, category: "tracks")
 }
 
+/// The name a request is logged and reported under — not a URL. The raw value
+/// is the first word of every `api` log line ("<endpoint> <path> ok|failed"),
+/// which mac/verify/run.py's API_LINE parses, so each stays a single word.
+enum Endpoint: String {
+    case schedule, mixtapes, sitemap, show, episodes, episode, moods, genres, explore, favourites
+    case recentlyAdded = "recently-added"
+    case onAirDetail = "on-air-detail"
+    case scheduleArt = "schedule-art"
+    case resolveStream = "resolve-stream"
+    case siteToken = "site-token"
+
+    /// What a failure means to someone looking at the window. An outage
+    /// banner that named `/api/v2/radio/schedule/1` would be telling the user
+    /// about our plumbing rather than about their radio.
+    ///
+    /// Two different consequences, so two different sentences: a feed that
+    /// failed leaves what is already on screen standing but stale, while a play
+    /// that failed produced no audio at all. Saying "may be out of date" about a
+    /// dead play button would be describing the wrong problem.
+    var consequence: String {
+        switch self {
+        case .schedule:         return "the schedule may be out of date"
+        case .mixtapes:         return "the mixtape list may be out of date"
+        case .show:             return "this show’s details wouldn’t load"
+        case .episodes:         return "this show’s episodes wouldn’t load"
+        // The rail fetching the current programme's photograph hits the same
+        // endpoint as pressing play on an episode, but the consequence is a
+        // missing picture, not silence. Reported separately so the banner stops
+        // announcing a playback failure while the radio is playing fine.
+        case .onAirDetail:      return "the current show’s artwork wouldn’t load"
+        case .episode,
+             .resolveStream,
+             .siteToken:        return "this episode wouldn’t start"
+        case .sitemap, .recentlyAdded, .moods, .genres, .explore,
+             .scheduleArt, .favourites:
+                                return "something wouldn’t load"
+        }
+    }
+}
+
 /// Whether nts.live is answering, in terms the interface can show.
 ///
 /// Every request funnels through `NTSAPI.fetch`, which reports here on the way
@@ -59,7 +99,7 @@ final class ServiceStatus: ObservableObject {
         /// The technical detail, for the log and the scripted state.
         let detail: String
         /// Which endpoint reported it, so its next success can clear it.
-        let endpoint: String
+        let endpoint: Endpoint
         let since: Date
         var failures: Int
 
@@ -72,7 +112,7 @@ final class ServiceStatus: ObservableObject {
 
     /// Logging is the caller's job (`NTSAPI.fetchData`/`fetch` do it for every
     /// request, reported or not) — this only tracks what the banner shows.
-    func failed(_ endpoint: String, _ error: Error) {
+    func failed(_ endpoint: Endpoint, _ error: Error) {
         let offline = (error as? URLError).map {
             [.notConnectedToInternet, .networkConnectionLost, .cannotFindHost,
              .cannotConnectToHost, .timedOut].contains($0.code)
@@ -86,7 +126,7 @@ final class ServiceStatus: ObservableObject {
             return
         }
         outage = Outage(
-            what: Self.plainName(for: endpoint),
+            what: endpoint.consequence,
             headline: offline ? "No connection" : "NTS isn’t answering",
             detail: detail,
             endpoint: endpoint,
@@ -95,35 +135,8 @@ final class ServiceStatus: ObservableObject {
         )
     }
 
-    func succeeded(_ endpoint: String) {
+    func succeeded(_ endpoint: Endpoint) {
         guard outage?.endpoint == endpoint else { return }
         outage = nil
-    }
-
-    /// What each endpoint means to someone looking at the window. An outage
-    /// banner that named `/api/v2/radio/schedule/1` would be telling the user
-    /// about our plumbing rather than about their radio.
-    ///
-    /// Two different consequences, so two different sentences: a feed that
-    /// failed leaves what is already on screen standing but stale, while a play
-    /// that failed produced no audio at all. Saying "may be out of date" about a
-    /// dead play button would be describing the wrong problem.
-    private static func plainName(for endpoint: String) -> String {
-        switch endpoint {
-        case "schedule":        return "the schedule may be out of date"
-        case "mixtapes":        return "the mixtape list may be out of date"
-        case "shows":           return "the show index may be incomplete"
-        case "show":            return "this show’s details wouldn’t load"
-        case "episodes":        return "this show’s episodes wouldn’t load"
-        // The rail fetching the current programme's photograph hits the same
-        // endpoint as pressing play on an episode, but the consequence is a
-        // missing picture, not silence. Reported separately so the banner stops
-        // announcing a playback failure while the radio is playing fine.
-        case "on-air-detail":   return "the current show’s artwork wouldn’t load"
-        case "episode",
-             "resolve-stream",
-             "site-token":      return "this episode wouldn’t start"
-        default:                return "something wouldn’t load"
-        }
     }
 }

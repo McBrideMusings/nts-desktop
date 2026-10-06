@@ -43,7 +43,7 @@ enum NTSAPI {
     /// 1,834 healthy requests is not an outage.
     private static func fetch<T: Decodable>(_ type: T.Type,
                                             from url: URL,
-                                            endpoint: String,
+                                            endpoint: Endpoint,
                                             headers: [String: String] = [:],
                                             reportFailures: Bool = true) async throws -> T {
         let data = try await fetchData(from: url, endpoint: endpoint, headers: headers,
@@ -51,14 +51,14 @@ enum NTSAPI {
         do {
             return try JSONDecoder().decode(T.self, from: data)
         } catch {
-            Log.api.error("\(endpoint, privacy: .public) malformed response")
+            Log.api.error("\(endpoint.rawValue, privacy: .public) malformed response")
             if reportFailures { await ServiceStatus.shared.failed(endpoint, APIError.malformed) }
             throw APIError.malformed
         }
     }
 
     private static func fetchData(from url: URL,
-                                  endpoint: String,
+                                  endpoint: Endpoint,
                                   headers: [String: String] = [:],
                                   reportFailures: Bool = true) async throws -> Data {
         var request = URLRequest(url: url)
@@ -69,12 +69,12 @@ enum NTSAPI {
             guard (200..<300).contains(code) else { throw APIError.http(code) }
             // "<endpoint> <path> ok|failed" — the path ties a line to one show,
             // and mac/verify/run.py's API_LINE counts requests by it.
-            Log.api.debug("\(endpoint, privacy: .public) \(url.path, privacy: .public) ok, \(data.count) bytes")
+            Log.api.debug("\(endpoint.rawValue, privacy: .public) \(url.path, privacy: .public) ok, \(data.count) bytes")
             if reportFailures { await ServiceStatus.shared.succeeded(endpoint) }
             return data
         } catch {
             let detail = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            Log.api.error("\(endpoint, privacy: .public) \(url.path, privacy: .public) failed: \(detail, privacy: .public)")
+            Log.api.error("\(endpoint.rawValue, privacy: .public) \(url.path, privacy: .public) failed: \(detail, privacy: .public)")
             if reportFailures { await ServiceStatus.shared.failed(endpoint, error) }
             throw error
         }
@@ -166,7 +166,7 @@ enum NTSAPI {
     /// URL are dropped; everything else is best-effort optional.
     static func mixtapes() async throws -> [MixtapeFeed] {
         let url = URL(string: "https://www.nts.live/api/v2/mixtapes")!
-        let decoded = try await fetch(MixtapeResponse.self, from: url, endpoint: "mixtapes")
+        let decoded = try await fetch(MixtapeResponse.self, from: url, endpoint: .mixtapes)
 
         return decoded.results.compactMap { e -> MixtapeFeed? in
             guard let stream = e.audio_stream_endpoint_hls_aac else { return nil }
@@ -221,7 +221,7 @@ enum NTSAPI {
     /// show index, keyed by the alias each slot supplies.
     static func schedule(channel: ChannelNumber) async throws -> [Broadcast] {
         let url = URL(string: "https://www.nts.live/api/v2/radio/schedule/\(channel)")!
-        let decoded = try await fetch(ScheduleResponse.self, from: url, endpoint: "schedule")
+        let decoded = try await fetch(ScheduleResponse.self, from: url, endpoint: .schedule)
 
         return decoded.results.flatMap { day -> [Broadcast] in
             (day.broadcasts ?? []).map { slot in
@@ -454,14 +454,14 @@ enum NTSAPI {
     /// `AppModel`'s launch sequence.
     static func sitemapWalk() async throws -> SitemapWalk {
         let index = try await fetchData(from: URL(string: "https://www.nts.live/sitemap.xml.gz")!,
-                                        endpoint: "sitemap")
+                                        endpoint: .sitemap)
         let parts = locations(in: index).filter { $0.hasSuffix(".xml.gz") }
 
         var showAliases: Set<String> = []
         var episodes: [(show: String, episodeAlias: String)] = []
         for part in parts {
             guard let url = URL(string: part) else { continue }
-            let data = try await fetchData(from: url, endpoint: "sitemap")
+            let data = try await fetchData(from: url, endpoint: .sitemap)
             for location in locations(in: data) {
                 let segments = location.split(separator: "/").map(String.init)
                 guard let i = segments.firstIndex(of: "shows"), segments.count > i + 1 else { continue }
@@ -490,7 +490,7 @@ enum NTSAPI {
     /// daily, so today's shows are missing from it while they are already here.
     static func recentlyAdded(limit: Int = 24) async throws -> [EpisodeCard] {
         let url = URL(string: "https://www.nts.live/api/v2/collections/recently-added?offset=0&limit=\(limit)")!
-        let decoded = try await fetch(ShowEnvelope.self, from: url, endpoint: "recently-added")
+        let decoded = try await fetch(ShowEnvelope.self, from: url, endpoint: .recentlyAdded)
         return decoded.results.compactMap { e -> EpisodeCard? in
             guard let show = e.show_alias, !show.isEmpty else { return nil }
             return EpisodeCard(
@@ -522,7 +522,7 @@ enum NTSAPI {
     /// "NTS isn't answering" banner over while everything else works fine.
     static func show(alias: String, silent: Bool = false) async throws -> ShowDetail {
         let url = URL(string: "https://www.nts.live/api/v2/shows/\(alias)")!
-        let s = try await fetch(ShowJSON.self, from: url, endpoint: "show", reportFailures: !silent)
+        let s = try await fetch(ShowJSON.self, from: url, endpoint: .show, reportFailures: !silent)
         return ShowDetail(
             alias: alias,
             name: decodeEntities(s.name ?? alias).trimmingCharacters(in: .whitespaces),
@@ -543,7 +543,7 @@ enum NTSAPI {
     static func episodes(alias: String, offset: Int = 0, limit: Int = 12) async throws
         -> (episodes: [Episode], total: Int) {
         let url = URL(string: "https://www.nts.live/api/v2/shows/\(alias)/episodes?offset=\(offset)&limit=\(limit)")!
-        let decoded = try await fetch(ShowEnvelope.self, from: url, endpoint: "episodes")
+        let decoded = try await fetch(ShowEnvelope.self, from: url, endpoint: .episodes)
         let episodes = decoded.results.map { e in
             Episode(
                 name: decodeEntities(e.name ?? "").trimmingCharacters(in: .whitespaces),
@@ -602,7 +602,7 @@ enum NTSAPI {
     /// just to fetch the on-air programme's photograph, where the consequence is
     /// a blank tile and saying "this episode wouldn't start" is simply untrue.
     static func episode(show: String, episode: String,
-                        reportAs endpoint: String = "episode") async throws -> EpisodeDetail {
+                        reportAs endpoint: Endpoint = .episode) async throws -> EpisodeDetail {
         let url = URL(string: "https://www.nts.live/api/v2/shows/\(show)/episodes/\(episode)")!
         let e = try await fetch(ShowJSON.self, from: url, endpoint: endpoint)
         let tracklist = (e.embeds?.tracklist?.results ?? []).map {
@@ -714,7 +714,7 @@ enum NTSAPI {
 
     static func moods() async throws -> [Mood] {
         let url = URL(string: "https://www.nts.live/api/v2/moods")!
-        let decoded = try await fetch(MoodResponse.self, from: url, endpoint: "moods")
+        let decoded = try await fetch(MoodResponse.self, from: url, endpoint: .moods)
         return decoded.results.compactMap { m in
             guard let id = m.id else { return nil }
             return Mood(id: id,
@@ -725,7 +725,7 @@ enum NTSAPI {
 
     static func genres() async throws -> [Genre] {
         let url = URL(string: "https://www.nts.live/api/v2/genres")!
-        let decoded = try await fetch(GenreResponse.self, from: url, endpoint: "genres")
+        let decoded = try await fetch(GenreResponse.self, from: url, endpoint: .genres)
         return decoded.results.compactMap(genre)
     }
 
@@ -746,7 +746,7 @@ enum NTSAPI {
                                  URLQueryItem(name: "limit", value: String(explorePageSize))]
             + filters.queryItems
 
-        let decoded = try await fetch(ExploreResponse.self, from: components.url!, endpoint: "explore")
+        let decoded = try await fetch(ExploreResponse.self, from: components.url!, endpoint: .explore)
         let episodes = decoded.results.compactMap { e -> EpisodeCard? in
             let (show, episode) = episodeAliases(e.article?.path)
             guard !show.isEmpty, !episode.isEmpty else { return nil }
@@ -798,11 +798,11 @@ enum NTSAPI {
         components.queryItems = [URLQueryItem(name: "url", value: source.absoluteString)]
 
         let resolved = try await fetch(Resolved.self, from: components.url!,
-                                       endpoint: "resolve-stream",
+                                       endpoint: .resolveStream,
                                        headers: ["Accept": "application/json",
                                                  "Authorization": "Basic \(token)"])
         guard let hls = resolved.hls, let url = URL(string: hls) else {
-            await ServiceStatus.shared.failed("resolve-stream", APIError.malformed)
+            await ServiceStatus.shared.failed(.resolveStream, APIError.malformed)
             throw APIError.malformed
         }
         return url
@@ -819,12 +819,12 @@ enum NTSAPI {
     /// plays an episode never fetches it.
     private static func siteToken() async throws -> String {
         if let cachedToken { return cachedToken }
-        let data = try await fetchData(from: URL(string: "https://www.nts.live/")!, endpoint: "site-token")
+        let data = try await fetchData(from: URL(string: "https://www.nts.live/")!, endpoint: .siteToken)
         guard let html = String(data: data, encoding: .utf8),
               let range = html.range(of: #""NTS_API_TOKEN":"[^"]+""#, options: .regularExpression),
               let token = html[range].split(separator: "\"").last.map(String.init)
         else {
-            await ServiceStatus.shared.failed("site-token", APIError.tokenMissing)
+            await ServiceStatus.shared.failed(.siteToken, APIError.tokenMissing)
             throw APIError.tokenMissing
         }
         cachedToken = token

@@ -129,7 +129,7 @@ final class SlotArtLoader: ObservableObject {
 
             if !episode.isEmpty,
                let ep = try? await NTSAPI.episode(show: show, episode: episode,
-                                                  reportAs: "schedule-art") {
+                                                  reportAs: .scheduleArt) {
                 image = ep.image
                 genres = ep.genres
                 location = [ep.locationLong, ep.location].first { !$0.isEmpty } ?? ""
