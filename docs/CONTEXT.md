@@ -88,7 +88,7 @@ These are where two pieces of code most easily disagree. Define once, use exactl
 | **360pt** | Now-playing bar closes its gaps to 8pt and shrinks the tracklist chip to 28pt below this width | `NowPlayingBar.swift:32` |
 | **520 / 230 / 340pt** | Window minimum: width ≥ 520 with height ≥ 230, **or** height ≥ 520 with width ≥ 340 | `RadioWindowController.swift:14-33` |
 | **0–100** | Volume scale, applied to the player as a fraction of 100 | `PlayerEngine.swift:170` |
-| **11 days** | What the schedule actually covers, at 11–17 slots a day | measured |
+| **11 days** | What the schedule actually covers; NTS 1 runs 11–17 slots a day, NTS 2 up to 23 | measured |
 | **1,835 / 1,834** | Shows known / shows named on a warm machine | measured |
 
 ## The scripting surface
