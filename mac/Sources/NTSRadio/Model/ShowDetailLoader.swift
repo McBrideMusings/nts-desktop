@@ -14,7 +14,12 @@ final class ShowDetailLoader: ObservableObject {
     /// (Lung Dart has 102) needs one request per twelve.
     @Published private(set) var episodes: [String: [NTSAPI.Episode]] = [:]
     @Published private(set) var episodeTotals: [String: Int] = [:]
-    @Published private(set) var episodesLoading = false
+
+    /// Aliases with a request out, one set per endpoint, so a second show opened
+    /// inside the first one's latency still fetches, and one show opened twice
+    /// fetches once.
+    private var detailsInFlight: Set<String> = []
+    private var episodesInFlight: Set<String> = []
 
     private let showIndex: ShowIndex
 
@@ -22,33 +27,46 @@ final class ShowDetailLoader: ObservableObject {
         self.showIndex = showIndex
     }
 
-    /// Fetch a show's page and its first page of episodes, once. Both are
+    /// Fetch a show's page and then its first page of episodes, once. Both are
     /// best-effort: a failure leaves the detail view on what the schedule row
-    /// already knew.
-    func load(_ alias: String) async {
-        if details[alias] == nil, let d = try? await NTSAPI.show(alias: alias) {
-            details[alias] = d
-            // The same fetch the backfill would otherwise make later —
-            // recording it here means this alias never re-queues for that.
-            showIndex.noteDetailed(alias: alias, name: d.name, location: d.location,
-                                   genres: d.genres, picture: d.image?.absoluteString,
-                                   description: d.description, detailed: Date())
+    /// already knew. The requests run in the loader's own task, so a caller
+    /// going away (a view's `.task` cancelled) can't cancel a fetch another
+    /// caller is relying on.
+    func load(_ alias: String) {
+        if details[alias] != nil {
+            if episodes[alias] == nil { loadMore(for: alias) }
+            return
         }
-        if episodes[alias] == nil { loadMore(for: alias) }
+        // Already fetching: that request loads the episodes once it lands.
+        guard detailsInFlight.insert(alias).inserted else { return }
+        Task { [weak self] in
+            let d = try? await NTSAPI.show(alias: alias)
+            guard let self else { return }
+            self.detailsInFlight.remove(alias)
+            if let d {
+                self.details[alias] = d
+                // The same fetch the backfill would otherwise make later —
+                // recording it here means this alias never re-queues for that.
+                self.showIndex.noteDetailed(alias: alias, name: d.name, location: d.location,
+                                            genres: d.genres, picture: d.image?.absoluteString,
+                                            description: d.description, detailed: Date())
+            }
+            if self.episodes[alias] == nil { self.loadMore(for: alias) }
+        }
     }
 
-    /// Fetch the next twelve episodes of a show, if there are more and nothing
-    /// is already in flight. The episode list calls this as its last row
-    /// appears, same as Explore's grid.
+    /// Fetch the next twelve episodes of a show, if there are more and none of
+    /// that show's are already in flight. The episode list calls this as its
+    /// last row appears, same as Explore's grid.
     func loadMore(for alias: String) {
-        guard !episodesLoading else { return }
         let loaded = episodes[alias]?.count ?? 0
         if let total = episodeTotals[alias], loaded >= total { return }
-        episodesLoading = true
+        guard episodesInFlight.insert(alias).inserted else { return }
         Task { [weak self] in
-            defer { Task { @MainActor in self?.episodesLoading = false } }
-            guard let page = try? await NTSAPI.episodes(alias: alias, offset: loaded) else { return }
+            let page = try? await NTSAPI.episodes(alias: alias, offset: loaded)
             guard let self else { return }
+            self.episodesInFlight.remove(alias)
+            guard let page else { return }
             self.episodes[alias, default: []] += page.episodes
             self.episodeTotals[alias] = page.total
         }

@@ -437,7 +437,7 @@ private struct ShowDetailPane: View {
             Spacer(minLength: 0)
         }
         .padding(22)
-        .task { await model.showDetail.load(alias) }
+        .task { model.showDetail.load(alias) }
     }
 
     private var subline: String {
@@ -634,7 +634,7 @@ private struct CreditRow: View {
                 CreditChip(credit: c) {
                     guard !c.alias.isEmpty else { return }
                     model.detail = .show(alias: c.alias, fallbackTitle: c.name)
-                    Task { await model.showDetail.load(c.alias) }
+                    model.showDetail.load(c.alias)
                 }
             }
         }

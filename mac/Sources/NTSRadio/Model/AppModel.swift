@@ -903,7 +903,7 @@ final class AppModel: ObservableObject {
         switch row.target {
         case .show(let alias, let title):
             detail = .show(alias: alias, fallbackTitle: title)
-            Task { await showDetail.load(alias) }
+            showDetail.load(alias)
         case .mixtape(let alias):
             detail = .mixtape(alias: alias)
         case .none:
