@@ -106,10 +106,6 @@ final class ScheduleController: ObservableObject {
     /// copies a title or a time anywhere — the rail reads them off the head of
     /// the grid — so this is idempotent and can run as often as it likes.
     func advanceSlots(now: Date = Date()) {
-        withAnimation(.easeInOut(duration: 0.4)) { advance(now: now) }
-    }
-
-    private func advance(now: Date) {
         for number in ChannelNumber.allCases {
             let live = catalog[number].upcoming.drop { ($0.end ?? .distantFuture) <= now }
             guard live.first?.id != catalog[number].onAir?.id else { continue }
@@ -173,15 +169,13 @@ final class ScheduleController: ObservableObject {
                 image: ep.image,
                 genres: ep.genres,
                 location: [ep.locationLong, ep.location].first { !$0.isEmpty } ?? ""))
-            withAnimation(.easeInOut(duration: 0.3)) {
-                self.catalog[number].detail = SlotDetail(
-                    slotID: slot.id,
-                    image: ep.image ?? self.catalog[number].detail?.image,
-                    genres: ep.genres.isEmpty ? (self.catalog[number].detail?.genres ?? []) : ep.genres,
-                    location: [ep.locationLong, ep.location,
-                               self.catalog[number].detail?.location ?? ""]
-                        .first { !$0.isEmpty } ?? "")
-            }
+            self.catalog[number].detail = SlotDetail(
+                slotID: slot.id,
+                image: ep.image ?? self.catalog[number].detail?.image,
+                genres: ep.genres.isEmpty ? (self.catalog[number].detail?.genres ?? []) : ep.genres,
+                location: [ep.locationLong, ep.location,
+                           self.catalog[number].detail?.location ?? ""]
+                    .first { !$0.isEmpty } ?? "")
         }
     }
 

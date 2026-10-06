@@ -43,7 +43,7 @@ struct ServiceBanner: View {
                 Rectangle().fill(Theme.liveDot.opacity(0.35)).frame(height: 1)
             }
             .transition(.move(edge: .top).combined(with: .opacity))
-            .animation(.easeOut(duration: 0.25), value: outage)
+            .animation(Theme.Motion.panel, value: outage)
         }
     }
 }

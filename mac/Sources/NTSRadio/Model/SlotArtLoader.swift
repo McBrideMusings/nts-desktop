@@ -146,10 +146,8 @@ final class SlotArtLoader: ObservableObject {
             }
 
             guard let self else { return }
-            withAnimation(.easeInOut(duration: 0.25)) {
-                self.slotDetails[key] = SlotDetail(slotID: slot.id, image: image,
-                                                   genres: genres, location: location)
-            }
+            self.slotDetails[key] = SlotDetail(slotID: slot.id, image: image,
+                                               genres: genres, location: location)
             self.saveSlotDetailsSoon()
             // Only the show endpoint's answer is passed on. An episode's
             // title and cover belong to that broadcast, not to the show — and

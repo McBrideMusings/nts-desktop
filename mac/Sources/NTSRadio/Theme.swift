@@ -46,6 +46,24 @@ enum Theme {
     /// changed shade as the artwork moved behind it.
     static let dialEdge = Color(hex: 0x2e2e31)
 
+    /// Every curve the app animates with. Retune the feel here, not at a call
+    /// site: a view that wants motion picks the tier that matches what changed.
+    enum Motion {
+        /// The pointer's own feedback — a press, a hover, a reveal under it.
+        static let press = Animation.easeOut(duration: 0.14)
+        /// Something about the content changed — the selection, the programme
+        /// on air, artwork arriving.
+        static let state = Animation.easeOut(duration: 0.2)
+        /// A region of the window came or went — a pane, a tab, the outage banner.
+        static let panel = Animation.easeOut(duration: 0.25)
+        /// The dial's pointer turning to a new source. A spring, so it settles
+        /// like a physical knob rather than stopping dead.
+        static let knob = Animation.spring(response: 0.45, dampingFraction: 0.72)
+        /// How far a pressed button shrinks, and how far it dims.
+        static let pressScale: CGFloat = 0.97
+        static let pressOpacity: Double = 0.85
+    }
+
     // App backdrop gradient (behind the popover)
     static var appBackdrop: some View {
         ZStack {

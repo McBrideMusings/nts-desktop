@@ -18,16 +18,41 @@ import AVFoundation
 /// style cannot be applied without also making the frame clickable, so a new
 /// icon button cannot be added with the same gap. Use this instead of `.plain`
 /// for anything whose tappable area is meant to be its chip.
+///
+/// A press shrinks the button a little as well as dimming it. Dimming alone, on
+/// these near-black chips, read as the button going disabled rather than going
+/// down. Reduce Motion keeps the dim and drops the shrink.
 struct HitButtonStyle: ButtonStyle {
+    /// Off for a text link: a run of text that shrinks under the pointer
+    /// visibly shifts its words, where a chip just looks pushed in.
+    var scales = true
+
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .contentShape(Rectangle())
-            .opacity(configuration.isPressed ? 0.65 : 1)
+        Pressed(label: configuration.label, pressed: configuration.isPressed, scales: scales)
+    }
+
+    /// A view, not the style, reads the environment: Reduce Motion can change
+    /// while the window is up.
+    private struct Pressed: View {
+        let label: Configuration.Label
+        let pressed: Bool
+        let scales: Bool
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+        var body: some View {
+            label
+                .contentShape(Rectangle())
+                .scaleEffect(pressed && scales && !reduceMotion ? Theme.Motion.pressScale : 1)
+                .opacity(pressed ? Theme.Motion.pressOpacity : 1)
+                .animation(Theme.Motion.press, value: pressed)
+        }
     }
 }
 
 extension ButtonStyle where Self == HitButtonStyle {
     static var hit: HitButtonStyle { HitButtonStyle() }
+    /// `.hit` for text: dims on press, never shrinks.
+    static var hitText: HitButtonStyle { HitButtonStyle(scales: false) }
 }
 
 // MARK: - Label that is a link when it has somewhere to go
@@ -71,7 +96,7 @@ struct LinkLabel: View {
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .buttonStyle(.hit)
+        .buttonStyle(.hitText)
         .disabled(!isLink)
         // No `maxWidth: .infinity` on the label: `.hit` lays a `contentShape`
         // over whatever frame it is given, so a full-width label makes the blank

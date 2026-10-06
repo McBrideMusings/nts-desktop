@@ -76,13 +76,15 @@ struct ChannelRail: View {
         // redraw both cards on every publish in the app, the twice-a-second
         // position tick included, to read two booleans and a dictionary.
         let active = model.selection == .channel(c.number)
-        return ChannelCard(channel: c,
-                    active: active,
-                    buffering: active && engine.isPlaying && !engine.isRendering,
-                    slotW: w, slotH: h,
-                    genreID: { model.genreID(named: $0) },
-                    browseGenre: { model.browseGenre($0) })
-            .onTapGesture { model.select(.channel(c.number)) }
+        return Button { model.select(.channel(c.number)) } label: {
+            ChannelCard(channel: c,
+                        active: active,
+                        buffering: active && engine.isPlaying && !engine.isRendering,
+                        slotW: w, slotH: h,
+                        genreID: { model.genreID(named: $0) },
+                        browseGenre: { model.browseGenre($0) })
+        }
+        .buttonStyle(.hit)
     }
 }
 
@@ -165,6 +167,10 @@ private struct ChannelCard: View {
             }
         }
         .clipped()
+        // A changeover, and the programme's own photo and genres arriving after
+        // it, cross-fade rather than snap.
+        .animation(Theme.Motion.state, value: channel.onAir?.id)
+        .animation(Theme.Motion.state, value: channel.detail)
         .contentShape(Rectangle())
         .onHover { inside in
             hovering = inside
@@ -240,7 +246,7 @@ private struct ChannelCard: View {
         .buttonStyle(.hit)
         .help(help)
         .opacity(visible ? 1 : 0)
-        .animation(.easeOut(duration: 0.14), value: visible)
+        .animation(Theme.Motion.press, value: visible)
         // A hidden star must not swallow the click that tunes the channel.
         .allowsHitTesting(visible)
     }
@@ -394,7 +400,7 @@ private struct ChannelCard: View {
         .saturation(active || hovering ? 1 : 0.45)
         .brightness(active ? 0 : (hovering ? -0.06 : -0.22))
         .overlay(Color.black.opacity(active ? 0 : (hovering ? 0.08 : 0.28)))
-        .animation(.easeOut(duration: 0.2), value: active)
-        .animation(.easeOut(duration: 0.16), value: hovering)
+        .animation(Theme.Motion.state, value: active)
+        .animation(Theme.Motion.press, value: hovering)
     }
 }

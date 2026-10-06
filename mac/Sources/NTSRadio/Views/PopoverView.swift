@@ -85,7 +85,7 @@ struct PopoverView: View {
                 case .catalog: CatalogOverlay()
                 }
             }
-            .animation(.easeOut(duration: 0.2), value: model.paneState)
+            .animation(Theme.Motion.panel, value: model.paneState)
             // What is playing, over the top of either. The drawer rises from the
             // now-playing bar it belongs to and drops back into it, so it reads
             // as the bar opening up rather than a third place the window went.

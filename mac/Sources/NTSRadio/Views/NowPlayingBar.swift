@@ -46,7 +46,7 @@ struct NowPlayingBar: View {
         }
         .background(Theme.nowBar)
         .overlay(alignment: .top) { Rectangle().fill(Theme.hairline(0.08)).frame(height: 1) }
-        .animation(.easeOut(duration: 0.2), value: engine.isSeekable)
+        .animation(Theme.Motion.state, value: engine.isSeekable)
     }
 
     /// Play was pressed, but no audio is coming out yet — the stream is still

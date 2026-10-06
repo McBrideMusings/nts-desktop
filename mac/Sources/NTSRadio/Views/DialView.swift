@@ -139,7 +139,7 @@ struct DialView: View {
                 .frame(width: g.iconSize, height: g.iconSize)
                 .opacity(lit ? 1 : 0.42)
                 .scaleEffect(lit ? 1.12 : 1)
-                .animation(.easeOut(duration: 0.14), value: lit)
+                .animation(Theme.Motion.press, value: lit)
                 .position(x: g.cx + g.iconRing * cos(a), y: g.cy + g.iconRing * sin(a))
                 .allowsHitTesting(false)
             }
@@ -238,7 +238,7 @@ struct DialView: View {
                 .offset(y: -g.knob / 2 + g.knob * 0.038)
                 .rotationEffect(.degrees(model.knobAngle))
                 .opacity(facing == nil ? 0 : 1)
-                .animation(.spring(response: 0.45, dampingFraction: 0.72), value: model.knobAngle)
+                .animation(Theme.Motion.knob, value: model.knobAngle)
                 // Placed, not turned: the dial is first drawn when the window
                 // first opens, by which time a source may already be tuned, and
                 // the spring would otherwise swing the mark in from 0°.

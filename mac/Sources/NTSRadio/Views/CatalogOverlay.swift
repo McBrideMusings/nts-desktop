@@ -33,7 +33,7 @@ struct CatalogOverlay: View {
                 grid
             }
         }
-        .animation(.easeOut(duration: 0.2), value: model.catalogTab)
+        .animation(Theme.Motion.panel, value: model.catalogTab)
         .background(Theme.popover.opacity(0.97))
         .background(.ultraThinMaterial)
         .transition(.opacity)
@@ -255,7 +255,21 @@ struct Tile: View {
     let row: CatalogRow
     @State private var hovering = false
 
+    // An Explore result is a finished recording, so clicking it starts it —
+    // same as clicking a mixtape on the dial. A schedule slot opens its show
+    // instead: the audio either hasn't been broadcast yet or is already the
+    // live channel you can hear from the rail.
     var body: some View {
+        Button {
+            if case .episode = row.playable { model.play(row) } else { model.open(row) }
+        } label: {
+            face
+        }
+        .buttonStyle(.hit)
+        .onHover { hovering = $0 }
+    }
+
+    private var face: some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .topLeading) {
                 Rectangle()
@@ -300,15 +314,6 @@ struct Tile: View {
                 .foregroundStyle(Theme.inkMuted)
                 .lineLimit(1)
                 .padding(.top, 4)
-        }
-        .contentShape(Rectangle())
-        .onHover { hovering = $0 }
-        // An Explore result is a finished recording, so clicking it starts it —
-        // same as clicking a mixtape on the dial. A schedule slot opens its show
-        // instead: the audio either hasn't been broadcast yet or is already the
-        // live channel you can hear from the rail.
-        .onTapGesture {
-            if case .episode = row.playable { model.play(row) } else { model.open(row) }
         }
     }
 

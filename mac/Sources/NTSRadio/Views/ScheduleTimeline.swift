@@ -75,6 +75,11 @@ struct ScheduleTimeline: View {
         }
     }
 
+    /// What is on air on each channel — changes at a changeover and at no other time.
+    private var onAirIDs: [String?] {
+        ChannelNumber.allCases.map { model.catalog[$0].onAir?.id }
+    }
+
     private var days: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -90,6 +95,11 @@ struct ScheduleTimeline: View {
                         }
                     }
                 }
+                // A changeover drops the finished slot off the head of the grid;
+                // the rows below close up over it instead of jumping. Keyed on
+                // both channels' programmes rather than this list's first row,
+                // which also changes on a channel switch — that one should snap.
+                .animation(Theme.Motion.state, value: onAirIDs)
             }
             .onAppear { scrollTarget = model.timeline.anchor }
             .onChange(of: model.timeline.channel) { scrollTarget = model.timeline.anchor }
@@ -200,10 +210,11 @@ private struct SlotRow: View {
         .background(onAir ? Theme.liveDot.opacity(0.07) : (hovering ? Theme.hairline(0.03) : .clear))
         // The clock is drawn once, as the fill on the programme that is on. At a
         // changeover the finished slot leaves the list and the fill moves down to
-        // its successor; `ScheduleController.advanceSlots` animates that so the
-        // hand-over is something you see happen rather than a jump you have to
-        // notice.
-        .animation(.easeInOut(duration: 0.4), value: onAir)
+        // its successor, animated so the hand-over is something you see happen
+        // rather than a jump you have to notice.
+        .animation(Theme.Motion.state, value: onAir)
+        // The broadcast's photo and genres fade in when their fetch answers.
+        .animation(Theme.Motion.state, value: detail)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Theme.hairline(0.05)).frame(height: 1)
         }
