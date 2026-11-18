@@ -5,9 +5,6 @@ mac/build/
 tmp/
 *.local.*
 
-# Local verify rig — machine-specific, never committed
-.claude/skills/verify-project/
-
 # Mixtape loop animations — large, and not used by the app yet (the dial uses
 # cover art + icons). Kept on disk; fetch/track later if a feature needs them.
 mixtapes/*/animation_*.mp4

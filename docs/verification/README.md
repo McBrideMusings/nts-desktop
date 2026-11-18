@@ -4,7 +4,7 @@
 
 They came out of a product-description pass over the whole app in August 2026: 27 documents written from the code, then driven against the installed build. The 75 rows whose Device includes `script` carry a machine-readable check, and `admin verify` runs them and writes their Result (see **Running the scripted rows**). The rest need a person and are marked `—` until someone runs them.
 
-The machine-specific side of verification — how to build, install and get a handle on the app — is `.claude/skills/verify-project/SKILL.md`, which is deliberately untracked. This directory is the part that is true on any machine.
+The machine-specific side of verification — how to build, install and get a handle on the app — is `.claude/skills/project-verify/SKILL.md`, which is deliberately untracked. This directory is the part that is true on any machine.
 
 **Results are recorded in place.** Fill the Result column when you run something. If a claim turns out to be wrong, the row is what is wrong — fix it, and say so.
 
