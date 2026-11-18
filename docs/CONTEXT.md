@@ -67,7 +67,7 @@ These are where two pieces of code most easily disagree. Define once, use exactl
 | **4.9–5.3s** | Buffered ahead on the NTS 1 live stream | measured |
 | **27.4s** | Buffered ahead on a mixtape HLS stream | measured |
 | **821.7s** | Buffered ahead on a past episode — a finite file, not a live tail | measured |
-| **60s** | Ceiling on the held-track delay; the buffer has never measured near it | `AppModel.swift:539` |
+| **60s** | Ceiling on the held-track delay, counted from the push's arrival; the buffer has never measured near it | `AppModel.swift:519` |
 | **120s** | Per-source tracklist cache, so returning to a channel restores it instantly | `AppModel.swift:275` |
 | **900s** | Schedule age before a re-fetch; matches NTS's own cache | `AppModel.swift:1122` |
 | **60s** | Schedule poll interval — the safety net behind the slot timer | `AppModel.swift:1211` |

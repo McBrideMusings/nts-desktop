@@ -43,7 +43,8 @@ enum TracklistAdapter {
                 : Track(time: hhmm.string(from: t.startTime),
                         title: t.title,
                         artist: t.artists.joined(separator: ", "),
-                        hue: hue)
+                        hue: hue,
+                        startedAt: t.startTime)
         }
     }
 

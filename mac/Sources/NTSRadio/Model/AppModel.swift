@@ -491,10 +491,12 @@ final class AppModel: ObservableObject {
     /// Take a Firestore push, holding a newly started track back until the audio
     /// it names has actually reached the speakers.
     ///
-    /// NTS pushes the track the moment it airs, but AVPlayer is behind the live
-    /// edge by whatever it has buffered — measured at ~5s on the channel streams
-    /// and ~29s on the mixtape HLS. Showing the push immediately lit the top row
-    /// while the previous track was still coming out of the speakers.
+    /// AVPlayer is behind the live edge by whatever it has buffered — measured at
+    /// ~5s on the channel streams and ~29s on the mixtape HLS — so the track
+    /// reaches the speakers that long after NTS's `start_time`, and the deadline
+    /// is `start_time` plus the buffer. The push itself lands ~11s after
+    /// `start_time`, so on a channel the deadline has usually passed already and
+    /// the track shows at once; a mixtape still holds for the remainder.
     private func receive(_ incoming: [Track]) {
         // Nothing to stay behind: the backfill on opening or switching source (an
         // empty list held back half a minute is worse than one that starts
@@ -509,10 +511,14 @@ final class AppModel: ObservableObject {
             // can't keep pushing the reveal further out.
             heldTracks = (incoming, held.deadline)
         } else {
-            // 60s ceiling: the buffer has never measured anywhere near it, and a
-            // wild reading shouldn't be able to freeze the list.
-            let wait = min(engine.bufferedAhead, 60)
-            heldTracks = (incoming, Date().addingTimeInterval(wait))
+            // 60s from now at most: the buffer has never measured anywhere near
+            // it, and neither a wild buffer reading nor a `start_time` skewed
+            // against this Mac's clock should be able to freeze the list.
+            let now = Date()
+            let deadline = min((incoming.first?.startedAt ?? now).addingTimeInterval(engine.bufferedAhead),
+                               now.addingTimeInterval(60))
+            guard deadline > now else { publish(incoming); return }
+            heldTracks = (incoming, deadline)
         }
         scheduleTrackRelease()
     }

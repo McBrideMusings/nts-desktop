@@ -140,6 +140,9 @@ struct Track: Identifiable, Hashable {
     /// out "now playing" in a fixed, known-in-advance list instead of always
     /// being the first row.
     var offsetSeconds: Double? = nil
+    /// When NTS says the track started airing, for a live push only — nil for a
+    /// past episode. What the tracklist's reveal delay counts from.
+    var startedAt: Date? = nil
 
     /// What the track is, rather than which instance it is. Every Firestore push
     /// rebuilds the whole list, so `id` — and `==` along with it — is fresh each
