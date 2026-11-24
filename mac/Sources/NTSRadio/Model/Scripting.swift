@@ -616,14 +616,13 @@ final class NTSShowPaneCommand: NTSCommand {
             // "show" opens — it does not toggle, or a script could not put the
             // drawer up without first reading whether it was already there.
             case "tracks", "tracklist":
-                guard !m.isIdle else {
+                guard m.setTracks(true) else {
                     self.scriptErrorNumber = -1728   // errAENoSuchObject
                     self.scriptErrorString = "Nothing is playing, so there is no tracklist to show."
                     return false
                 }
-                m.tracksOpen = true
             case "none":
-                m.tracksOpen = false
+                m.setTracks(false)
             default:
                 self.scriptErrorNumber = -1703   // errAETypeError
                 self.scriptErrorString =

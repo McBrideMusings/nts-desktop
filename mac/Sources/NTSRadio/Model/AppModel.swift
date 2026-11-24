@@ -104,10 +104,10 @@ final class AppModel: ObservableObject {
 
     // MARK: Catalog surface
 
-    /// Where the window is: live, or the catalog. The two-segment control in the
-    /// now-playing bar writes it and reads it back, so its lit segment and what
-    /// is on screen are the same fact rather than two that have to agree.
-    @Published var pane: Pane = .live
+    /// Where the window is: live, or the catalog. Only `show(_:)` writes it, so
+    /// the two-segment control's lit segment and what is on screen are the same
+    /// fact rather than two that have to agree.
+    @Published private(set) var pane: Pane = .live
     /// Whether the tracklist drawer is covering that pane. A flag rather than a
     /// third `Pane` case because it is a different kind of thing: it does not
     /// change where you are, it lays what is playing over the top of wherever
@@ -115,7 +115,8 @@ final class AppModel: ObservableObject {
     /// `pane` are real, visible states — the drawer over the faceplate and the
     /// drawer over the catalog are both things you can be looking at, and the
     /// segment underneath goes on truthfully saying which one you will get back.
-    @Published var tracksOpen = false
+    /// Written only through `setTracks(_:)`, `show(_:)` and going idle.
+    @Published private(set) var tracksOpen = false
     /// The two together, for the one animation that covers both. Changing pane
     /// while the drawer is up changes both properties in the same tick, and
     /// animating them separately ran two curves over the same region at once.
@@ -701,8 +702,16 @@ final class AppModel: ObservableObject {
     /// Raise or drop the tracklist drawer over whatever pane is up. Nothing
     /// playing means nothing to list, so it will not open.
     func toggleTracks() {
-        if tracksOpen { tracksOpen = false }
-        else if !isIdle { tracksOpen = true }
+        setTracks(!tracksOpen)
+    }
+
+    /// Raise or drop the drawer to a known state. Returns false, leaving it
+    /// shut, when asked to open with nothing playing.
+    @discardableResult
+    func setTracks(_ open: Bool) -> Bool {
+        guard !open || !isIdle else { return false }
+        tracksOpen = open
+        return true
     }
 
     /// Every channel's programmes, in air order — the schedule tab's contents.

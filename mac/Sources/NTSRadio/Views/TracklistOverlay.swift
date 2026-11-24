@@ -39,7 +39,7 @@ struct TracklistOverlay: View {
                         .foregroundStyle(Theme.inkMuted)
                 }
                 Spacer()
-                Button { model.tracksOpen = false } label: {
+                Button { model.setTracks(false) } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(Theme.ink)

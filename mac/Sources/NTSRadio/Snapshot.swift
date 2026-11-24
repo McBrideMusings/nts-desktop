@@ -104,7 +104,7 @@ enum Snapshot {
             $0.catalog.mixtapes = [sampleMix]
             $0.select(.mixtape("rap-house"), autoplay: false)
             $0.tracks = sampleTracks
-            $0.tracksOpen = true
+            $0.setTracks(true)
         }
         // Settings and the account are one real window now, so they are rendered
         // straight rather than through `PopoverView` — its own chrome is the
