@@ -142,6 +142,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Pausing a live channel or mixtape no longer grows memory without limit. The
+  paused stream stayed loaded and AVPlayer kept reading it into memory: one
+  install reached 1685 MB holding 9 hours of unplayed audio. Pause now drops the
+  stream; resume already reconnected at the live head, so nothing audible changes.
 - The now-playing indicator moves only while audio is genuinely coming out. It
   read `isPlaying` — whether Play had been pressed — so through a buffering
   stall, when AVPlayer is sitting in `waitingToPlayAtSpecifiedRate` and the

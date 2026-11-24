@@ -389,13 +389,17 @@ final class PlayerEngine: ObservableObject {
     }
 
     func play() {
-        guard currentURL != nil else { return }
+        guard let currentURL else { return }
+        if player.currentItem == nil { replaceItem(with: currentURL) }
         player.play()
         isPlaying = true
     }
 
+    /// A paused endless stream drops its item: AVPlayer keeps reading a paused
+    /// live socket into memory with no ceiling, and resume rejoins the head anyway.
     func pause() {
         player.pause()
+        if isEndless { player.replaceCurrentItem(with: nil) }
         isPlaying = false
     }
 
