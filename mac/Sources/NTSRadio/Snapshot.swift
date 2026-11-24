@@ -103,7 +103,7 @@ enum Snapshot {
         shot("03-tracklist.png") {
             $0.catalog.mixtapes = [sampleMix]
             $0.select(.mixtape("rap-house"), autoplay: false)
-            $0.tracks = sampleTracks
+            $0.tracklist.publish(sampleTracks)
             $0.setTracks(true)
         }
         // Settings and the account are one real window now, so they are rendered

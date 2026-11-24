@@ -49,8 +49,8 @@ final class NowPlayingCenter {
         // tile has to stop calling it a live stream.
         Publishers.MergeMany([
             model.$selection.map { _ in () }.eraseToAnyPublisher(),
-            model.$tracks.map { _ in () }.eraseToAnyPublisher(),
-            model.$mixtapeEpisode.map { _ in () }.eraseToAnyPublisher(),
+            model.tracklist.$tracks.map { _ in () }.eraseToAnyPublisher(),
+            model.tracklist.$mixtapeEpisode.map { _ in () }.eraseToAnyPublisher(),
             model.engine.$isPlaying.map { _ in () }.eraseToAnyPublisher(),
             model.engine.$duration.map { _ in () }.eraseToAnyPublisher(),
             model.catalog.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
@@ -136,7 +136,7 @@ final class NowPlayingCenter {
     }
 
     private func snapshot() -> Info? {
-        let track = model.tracks.first
+        let track = model.tracklist.tracks.first
         switch model.selection {
         case .idle:
             return nil
@@ -144,7 +144,7 @@ final class NowPlayingCenter {
             guard let mix = model.currentMixtape else { return nil }
             return Info(
                 title: track?.title ?? mix.title,
-                artist: nonEmpty(track?.artist) ?? nonEmpty(model.mixtapeEpisode?.title) ?? mix.subtitle,
+                artist: nonEmpty(track?.artist) ?? nonEmpty(model.tracklist.mixtapeEpisode?.title) ?? mix.subtitle,
                 album: "NTS · \(mix.title)",
                 isPlaying: model.engine.isPlaying,
                 artwork: mix.coverURL.map(ArtworkKey.remote)

@@ -14,7 +14,7 @@ enum Selection: Equatable {
     case episode(show: String, episode: String)
 }
 
-/// The key `AppModel.sourceCache` is keyed by — a mixtape alias or channel
+/// The key `LiveTracklist`'s source cache is keyed by — a mixtape alias or channel
 /// number, the two sources that carry a live tracklist. `nil` for `.idle` and
 /// `.episode`, which have nothing to cache (an episode's tracklist is loaded
 /// whole, not streamed).
@@ -156,49 +156,13 @@ final class AppModel: ObservableObject {
     @Published var episodeError: String?
     private var episodeLoad: Task<Void, Never>?
 
-    /// Tracklist for the current source — populated by the Firestore listener for
-    /// both mixtapes and live channels when signed in (empty when signed out).
-    @Published var tracks: [Track] = []
-
-    /// The current source episode for the playing mixtape (the show episode its
-    /// audio is pulled from), or nil for live channels / before the first push /
-    /// when signed out. Drives the now-playing bar's secondary line + its link.
-    @Published var mixtapeEpisode: MixtapeTitle?
-
-    /// Live tracklist listener for the current source (nil when signed out).
-    /// Recreated whenever the source or auth state changes.
-    private var listener: FirestoreListener?
-    /// The stream the `listener` is currently running, so we can tell a real
-    /// source change from a no-op refresh and avoid churning the connection.
-    private var activeStream: TracklistAdapter.Stream?
-
-    /// Listener for the current mixtape's source episode (`mixtape_titles`), plus
-    /// the alias it's running so a refresh that doesn't change the mixtape is a
-    /// no-op (mirrors the `listener` / `activeStream` pattern above).
-    private var titleListener: MixtapeTitleListener?
-    private var activeTitleAlias: String?
-
-    /// The last published tracks and mixtape episode for a source that isn't
-    /// selected right now, stamped with when they were captured — so switching
-    /// away and back within a couple of minutes shows what was already known
-    /// instead of a blank list until the next Firestore push. In-memory only:
-    /// a stale cache surviving a relaunch is the bug this exists to avoid.
-    private struct SourceCache {
-        let tracks: [Track]
-        let mixtapeEpisode: MixtapeTitle?
-        let capturedAt: Date
-    }
-    private var sourceCache: [SourceKey: SourceCache] = [:]
-    private static let sourceCacheTTL: TimeInterval = 120
-
     /// Publishes what's playing to the system and receives the media keys /
     /// headset buttons. Built last in `init` because it reads this model.
     private var nowPlaying: NowPlayingCenter?
 
-    /// A pushed tracklist waiting for the audio it describes to be heard, and the
-    /// moment it may be shown. See `receive(_:)`.
-    private var heldTracks: (tracks: [Track], deadline: Date)?
-    private var trackRelease: Task<Void, Never>?
+    /// The tracklist and mixtape episode for what is tuned — the listeners, the
+    /// per-source cache and the held-track rule. See `LiveTracklist`.
+    let tracklist: LiveTracklist
 
     /// The raw `live_tracks` feed for every source, written to `tracks.log`
     /// whichever one is playing. See `Diagnostics.swift`.
@@ -211,6 +175,9 @@ final class AppModel: ObservableObject {
         explore = ExploreLoader(preferences: preferences)
         timeline = ScheduleController(catalog: catalog, slotArt: slotArt, showIndex: showIndex)
         showDetail = ShowDetailLoader(showIndex: showIndex)
+        tracklist = LiveTracklist(auth: auth, episodeIndex: episodeIndex,
+                                  bufferedAhead: { [engine] in engine.bufferedAhead },
+                                  isPlaying: { [engine] in engine.isPlaying })
         // Each is an observable object of its own; republish its changes as ours
         // so a view watching the model repaints when the dial's contents move.
         // engine.objectWillChange is deliberately NOT republished here: the
@@ -222,7 +189,8 @@ final class AppModel: ObservableObject {
                          saved.objectWillChange, showIndex.objectWillChange,
                          slotArt.objectWillChange, explore.objectWillChange,
                          timeline.objectWillChange, showDetail.objectWillChange,
-                         backfill.objectWillChange, preferences.objectWillChange] {
+                         backfill.objectWillChange, preferences.objectWillChange,
+                         tracklist.objectWillChange] {
             upstream
                 .sink { [weak self] in self?.objectWillChange.send() }
                 .store(in: &bag)
@@ -250,9 +218,8 @@ final class AppModel: ObservableObject {
             .dropFirst()
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
-                self?.updateTracklist()
-                self?.updateMixtapeTitle()
                 guard let self else { return }
+                self.followTracklist()
                 Task { await self.saved.sync(installationID: self.preferences.installationID) }
             }
             .store(in: &bag)
@@ -272,8 +239,7 @@ final class AppModel: ObservableObject {
             .store(in: &bag)
         Log.app.info("launched, logs in \(LogFiles.directory.path, privacy: .public)")
         Task { await saved.sync(installationID: preferences.installationID) }
-        updateTracklist()
-        updateMixtapeTitle()
+        followTracklist()
         nowPlaying = NowPlayingCenter(model: self)
         Task { await refreshMixtapes() }
         Task {
@@ -342,7 +308,7 @@ final class AppModel: ObservableObject {
             // Source episode (mixed case, as NTS formats it). The feed is
             // supporter-gated: signed-in shows a loading label until the first
             // push; signed-out can't read it, so keep the static descriptor.
-            if let ep = mixtapeEpisode { return ep.title }
+            if let ep = tracklist.mixtapeEpisode { return ep.title }
             return auth.isAuthenticated ? "TUNING IN…" : "24/7 STREAM · NON-STOP"
         }
         if let c = currentChannel {
@@ -362,7 +328,7 @@ final class AppModel: ObservableObject {
     /// the sitemap instead. That match can refuse (also nil) rather than risk
     /// a wrong link.
     var nowPlayingEpisodeURL: URL? {
-        guard currentMixtape != nil, let ep = mixtapeEpisode else { return nil }
+        guard currentMixtape != nil, let ep = tracklist.mixtapeEpisode else { return nil }
         if !ep.showAlias.isEmpty, !ep.episodeAlias.isEmpty {
             return URL(string: "https://www.nts.live/shows/\(ep.showAlias)/episodes/\(ep.episodeAlias)")
         }
@@ -394,9 +360,9 @@ final class AppModel: ObservableObject {
     /// last track whose start the playhead has already passed.
     var currentTrack: Track? {
         if case .episode = selection {
-            return tracks.last { ($0.offsetSeconds ?? 0) <= engine.position }
+            return tracklist.tracks.last { ($0.offsetSeconds ?? 0) <= engine.position }
         }
-        return tracks.first
+        return tracklist.tracks.first
     }
 
     // MARK: Actions
@@ -404,7 +370,6 @@ final class AppModel: ObservableObject {
     /// Tune to a source. Picking one is a request to hear it, so this starts
     /// playback by default; the media keys and the snapshot renderer opt out.
     func select(_ s: Selection, autoplay: Bool = true) {
-        cacheCurrentSource()
         selection = s
         switch s {
         case .mixtape, .channel: preferences.lastSource = ScriptState.sourceID(s)
@@ -428,8 +393,12 @@ final class AppModel: ObservableObject {
             engine.unload()
         }
         loadCurrent(autoplay: autoplay)
-        updateTracklist()
-        updateMixtapeTitle()
+        followTracklist()
+    }
+
+    /// Point the tracklist at what is tuned now.
+    private func followTracklist() {
+        tracklist.follow(selection, mixtape: currentMixtape, channel: currentChannel)
     }
 
     /// Tune back to the source the last session ended on, when Settings ▸
@@ -444,142 +413,6 @@ final class AppModel: ObservableObject {
         default:
             Log.app.info("resume: \(id, privacy: .public) is not a channel or mixtape in the catalog, staying idle")
         }
-    }
-
-    /// Stash the outgoing source's tracks/episode before `selection` moves on,
-    /// so a return within `sourceCacheTTL` can restore them. See `SourceCache`.
-    private func cacheCurrentSource() {
-        guard let key = SourceKey(selection) else { return }
-        sourceCache[key] = SourceCache(tracks: tracks, mixtapeEpisode: mixtapeEpisode, capturedAt: Date())
-    }
-
-    /// The cached tracks/episode for `selection`, if any and still fresh.
-    private func cachedSource() -> SourceCache? {
-        guard let key = SourceKey(selection), let cached = sourceCache[key],
-              Date().timeIntervalSince(cached.capturedAt) < Self.sourceCacheTTL else { return nil }
-        return cached
-    }
-
-    /// Open (or tear down) the live tracklist stream for the current source.
-    /// Signed in → a Firestore `live_tracks` listener for the current mixtape or
-    /// channel; signed out → cleared (both feeds are supporter-gated). The public
-    /// REST tracklist endpoint is empty for an in-progress channel show, so live
-    /// channel tracks come from Firestore too, not REST.
-    func updateTracklist() {
-        let wanted = auth.isAuthenticated
-            ? TracklistAdapter.stream(for: selection, mixtape: currentMixtape, channel: currentChannel)
-            : nil
-        // Already streaming the right source — don't churn the connection (this
-        // also makes a catalog rebuild a no-op unless the first mixtape changed).
-        if listener != nil, wanted == activeStream { return }
-        listener?.stop()
-        listener = nil
-        publish(cachedSource()?.tracks ?? [])
-        activeStream = wanted
-        guard let wanted else { return }
-        let hue = wanted.hue
-        let listener = FirestoreListener(
-            filter: wanted.filter,
-            tokenProvider: { [auth] in try await auth.validToken() },
-            onUpdate: { [weak self] live in
-                self?.receive(TracklistAdapter.tracks(from: live, hue: hue))
-            }
-        )
-        self.listener = listener
-        listener.start()
-    }
-
-    /// Take a Firestore push, holding a newly started track back until the audio
-    /// it names has actually reached the speakers.
-    ///
-    /// AVPlayer is behind the live edge by whatever it has buffered — measured at
-    /// ~5s on the channel streams and ~29s on the mixtape HLS — so the track
-    /// reaches the speakers that long after NTS's `start_time`, and the deadline
-    /// is `start_time` plus the buffer. The push itself lands ~11s after
-    /// `start_time`, so on a channel the deadline has usually passed already and
-    /// the track shows at once; a mixtape still holds for the remainder.
-    private func receive(_ incoming: [Track]) {
-        // Nothing to stay behind: the backfill on opening or switching source (an
-        // empty list held back half a minute is worse than one that starts
-        // correct), a push that only revises rows further down, or a paused
-        // player with no audio in flight.
-        guard incoming.first?.key != tracks.first?.key, !tracks.isEmpty, engine.isPlaying else {
-            publish(incoming); return
-        }
-        if let held = heldTracks, held.tracks.first?.key == incoming.first?.key {
-            // Same track, pushed again with revised details — take the new
-            // contents but keep the original deadline, so a run of revisions
-            // can't keep pushing the reveal further out.
-            heldTracks = (incoming, held.deadline)
-        } else {
-            // 60s from now at most: the buffer has never measured anywhere near
-            // it, and neither a wild buffer reading nor a `start_time` skewed
-            // against this Mac's clock should be able to freeze the list.
-            let now = Date()
-            let deadline = min((incoming.first?.startedAt ?? now).addingTimeInterval(engine.bufferedAhead),
-                               now.addingTimeInterval(60))
-            guard deadline > now else { publish(incoming); return }
-            heldTracks = (incoming, deadline)
-        }
-        scheduleTrackRelease()
-    }
-
-    /// The track that has started but isn't being shown yet, and how long it has
-    /// left to wait. Without this the delay can't be observed from outside at all —
-    /// its whole effect is that nothing happens for a few seconds.
-    var pendingTrack: (name: String, seconds: Double)? {
-        guard let held = heldTracks, let first = held.tracks.first else { return nil }
-        return ("\(first.artist) — \(first.title)",
-                (max(0, held.deadline.timeIntervalSinceNow) * 10).rounded() / 10)
-    }
-
-    /// Show a tracklist now, dropping anything held.
-    private func publish(_ incoming: [Track]) {
-        trackRelease?.cancel()
-        trackRelease = nil
-        heldTracks = nil
-        tracks = incoming
-    }
-
-    private func scheduleTrackRelease() {
-        trackRelease?.cancel()
-        guard let held = heldTracks else { return }
-        let delay = max(0, held.deadline.timeIntervalSinceNow)
-        trackRelease = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-            guard !Task.isCancelled, let self, let held = self.heldTracks else { return }
-            self.publish(held.tracks)
-        }
-    }
-
-    /// Open (or tear down) the current-episode stream for the playing mixtape.
-    /// Signed in + a mixtape selected → a Firestore `mixtape_titles` listener;
-    /// otherwise cleared (live channels have no source episode, and the feed is
-    /// supporter-gated). Mirrors `updateTracklist`'s no-churn guard.
-    func updateMixtapeTitle() {
-        let alias = (auth.isAuthenticated ? currentMixtape?.alias : nil)
-        if titleListener != nil, alias == activeTitleAlias { return }
-        titleListener?.stop()
-        titleListener = nil
-        mixtapeEpisode = cachedSource()?.mixtapeEpisode
-        activeTitleAlias = alias
-        guard let alias else { return }
-        let listener = MixtapeTitleListener(
-            mixtapeAlias: alias,
-            tokenProvider: { [auth] in try await auth.validToken() },
-            // Ignore a late emit from a listener we've since switched away from, so
-            // a fast A→B switch can't briefly show A's episode under B.
-            onUpdate: { [weak self] episode in
-                guard let self, self.activeTitleAlias == alias else { return }
-                self.mixtapeEpisode = episode
-                if let episode, episode.showAlias.isEmpty || episode.episodeAlias.isEmpty {
-                    let resolved = self.episodeIndex.resolve(title: episode.title)
-                    Log.api.debug("mixtape_titles for \(alias, privacy: .public) sent no alias for \"\(episode.title, privacy: .public)\" — EpisodeIndex resolved: \(resolved.map { "\($0.show)/\($0.episode)" } ?? "refused", privacy: .public)")
-                }
-            }
-        )
-        titleListener = listener
-        listener.start()
     }
 
     func loadCurrent(autoplay: Bool, force: Bool = false) {
@@ -615,8 +448,8 @@ final class AppModel: ObservableObject {
                 self.episode = detail
                 // Not a Firestore stream — the whole tracklist is already here,
                 // known in advance rather than revealed as it airs, so it goes
-                // straight in rather than through `receive`'s live-buffer delay.
-                self.publish(TracklistAdapter.tracks(from: detail.tracklist, hue: 0))
+                // straight in rather than through the live-buffer hold.
+                self.tracklist.publish(TracklistAdapter.tracks(from: detail.tracklist, hue: 0))
                 self.engine.load(stream, endless: false, autoplay: autoplay)
             } catch {
                 guard !Task.isCancelled, let self else { return }
@@ -952,7 +785,6 @@ final class AppModel: ObservableObject {
         // The first mixtape's alias is only known once the catalog loads (cold
         // start), and the live feed can reorder it; these are no-ops unless the
         // target stream actually changed.
-        updateTracklist()
-        updateMixtapeTitle()
+        followTracklist()
     }
 }

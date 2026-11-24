@@ -124,7 +124,7 @@ extension NSApplication {
 
     @objc var ntsCurrentTrack: String {
         MainActor.assumeIsolated {
-            guard let t = AppModel.shared.tracks.first else { return "" }
+            guard let t = AppModel.shared.tracklist.tracks.first else { return "" }
             return "\(t.artist) — \(t.title)"
         }
     }

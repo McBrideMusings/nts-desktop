@@ -28,6 +28,12 @@ let package = Package(
             name: "StallWatch",
             path: "Sources/StallWatch"
         ),
+        // When a pushed tracklist may be shown, with no listener, player or
+        // clock, so the hold-back rule is tested without Firestore or audio.
+        .target(
+            name: "TrackHold",
+            path: "Sources/TrackHold"
+        ),
         // The two live channels as a type, shared so NTSFirestore's filter can
         // take one without depending on the app.
         .target(
@@ -55,6 +61,7 @@ let package = Package(
                 "NTSFirestore",
                 "EpisodeMatch",
                 "StallWatch",
+                "TrackHold",
                 .product(name: "Sparkle", package: "Sparkle"),
             ],
             path: "Sources/NTSRadio",
@@ -99,6 +106,11 @@ let package = Package(
             name: "StallWatchTests",
             dependencies: ["StallWatch"],
             path: "Tests/StallWatchTests"
+        ),
+        .testTarget(
+            name: "TrackHoldTests",
+            dependencies: ["TrackHold"],
+            path: "Tests/TrackHoldTests"
         ),
     ]
 )

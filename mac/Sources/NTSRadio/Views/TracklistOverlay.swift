@@ -16,7 +16,7 @@ struct TracklistOverlay: View {
     private var currentIndex: Int? {
         _ = engine.position
         guard let current = model.currentTrack else { return nil }
-        return model.tracks.firstIndex(of: current)
+        return model.tracklist.tracks.firstIndex(of: current)
     }
 
     var body: some View {
@@ -50,7 +50,7 @@ struct TracklistOverlay: View {
             }
             .padding(EdgeInsets(top: 18, leading: 22, bottom: 14, trailing: 22))
 
-            if model.tracks.isEmpty {
+            if model.tracklist.tracks.isEmpty {
                 Spacer()
                 Text("No tracklist available")
                     .font(Theme.mono(11, .regular))
@@ -60,7 +60,7 @@ struct TracklistOverlay: View {
                 columnHeader
                 ScrollView {
                     VStack(spacing: 0) {
-                        ForEach(Array(model.tracks.enumerated()), id: \.element.id) { idx, track in
+                        ForEach(Array(model.tracklist.tracks.enumerated()), id: \.element.id) { idx, track in
                             TrackRow(track: track, playing: idx == currentIndex, lead: model.preferences.trackLead)
                         }
                     }

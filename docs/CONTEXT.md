@@ -44,7 +44,7 @@ These are where two pieces of code most easily disagree. Define once, use exactl
 
 **Seekable** means the loaded item has a real duration. The app never has to be told which kind of source is playing — endless streams report an indefinite duration, which is the truth rather than a failure to load.
 
-**Held track.** A track NTS has pushed that the app is deliberately not showing yet, because the audio it names has not reached the speakers. See the numbers below.
+**Held track.** A track NTS has pushed that the app is deliberately not showing yet, because the audio it names has not reached the speakers. The rule is `TrackHold`, tested in `TrackHoldTests`; see the numbers below.
 
 **Saved.** A show, episode or mixtape the user kept. Local-first, works signed out, and **also synced two ways** with the account's nts.live favourites when signed in.
 
@@ -67,8 +67,8 @@ These are where two pieces of code most easily disagree. Define once, use exactl
 | **4.9–5.3s** | Buffered ahead on the NTS 1 live stream | measured |
 | **27.4s** | Buffered ahead on a mixtape HLS stream | measured |
 | **821.7s** | Buffered ahead on a past episode — a finite file, not a live tail | measured |
-| **60s** | Ceiling on the held-track delay, counted from the push's arrival; the buffer has never measured near it | `AppModel.swift:519` |
-| **120s** | Per-source tracklist cache, so returning to a channel restores it instantly | `AppModel.swift:275` |
+| **60s** | Ceiling on the held-track delay, counted from the push's arrival; the buffer has never measured near it | `TrackHold.swift:19` |
+| **120s** | Per-source tracklist cache, so returning to a channel restores it instantly | `LiveTracklist.swift:59` |
 | **900s** | Schedule age before a re-fetch; matches NTS's own cache | `AppModel.swift:1122` |
 | **60s** | Schedule poll interval — the safety net behind the slot timer | `AppModel.swift:1211` |
 | **+1s** | Slot advance fires this far past the boundary, so the slot has genuinely ended | `AppModel.swift:1189` |
@@ -107,9 +107,9 @@ Recorded so they stop being re-raised. Each was investigated and is correct.
 
 **Every window open peaks near 275MB.** Drawing the radio window's SwiftUI content takes ~200MB of GPU-driver memory for about a second, on each open. The window is built on its first show and holds no SwiftUI content while closed, so nothing that changes while it is closed draws it.
 
-**An episode's audio is resolved on every play.** The signed playlist's signature expires; caching it would produce dead links. `AppModel.swift:614-618`.
+**An episode's audio is resolved on every play.** The signed playlist's signature expires; caching it would produce dead links. `AppModel.swift:434-443`.
 
-**A pane switch always closes the drawer**, including a switch to the pane already showing. The guarded version was tried and reverted — it left the tracklist covering the very pane whose segment had just been pressed, so the button looked broken. `AppModel.swift:705-709`.
+**A pane switch always closes the drawer**, including a switch to the pane already showing. The guarded version was tried and reverted — it left the tracklist covering the very pane whose segment had just been pressed, so the button looked broken. `AppModel.swift:520-524`.
 
 **A locally installed copy never checks for updates automatically.** `Info.plist` ships `CFBundleVersion: 1`, which `NTSRadioApp.swift:168` correctly treats as a development build. CI rewrites it at `.github/workflows/ci-cd.yml:45`, so releases do check. The consequence worth knowing: a developer's own machine is the one machine that cannot exercise the update path.
 
