@@ -83,7 +83,7 @@ osascript -e 'tell application "NTS Radio" to seek to 1800'
 
 `tune to` is the same code path a click takes; `skip by` is the one the media keys take, so a script and a hand cannot produce different results.
 
-**`stop` puts the app back where it launched.** Nothing tuned (`source` is `idle`), no stream open, `playing` and `rendering` false, the tracklist empty and its drawer down, `knobAngle` 0. `pause` keeps the source loaded; use `stop` to leave things as you found them.
+**`stop` puts the app back where it launched.** Nothing tuned (`source` is `idle`), no stream open, `playing` and `rendering` false, the tracklist empty and its drawer down, `knobAngle` 0. `pause` keeps the source tuned (a live channel or mixtape closes its stream and reconnects at the live head on `play`); use `stop` to leave things as you found them.
 
 **`skip by` moves to the neighbouring *source*, not the next track.** Mixtapes walk the dial and the two channels toggle; counts past either end wrap around, so with 16 mixtapes `skip by 17` is the same as `skip by 1`, and on a channel any even count lands where it started. An episode and idle have no neighbours, so `skip` fails there instead of answering with an unchanged state:
 
